@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(python test_sp_compliance.py)",
+      "WebSearch",
+      "PowerShell(python -c \"import ast; ast.parse\\(open\\(r'D:\\\\hydrolib\\\\core\\\\hydraulics.py', encoding='utf-8'\\).read\\(\\)\\); print\\('hydraulics.py: OK'\\)\")",
+      "PowerShell(python -c \"import ast; ast.parse\\(open\\(r'D:\\\\hydrolib\\\\core\\\\stats\\\\frequency.py', encoding='utf-8'\\).read\\(\\)\\); print\\('frequency.py: OK'\\)\")",
+      "PowerShell(pip install *)",
+      "PowerShell(New-Item *)",
+      "PowerShell(Get-Content D:\\\\hydrolib\\\\gui\\\\widget_work2.py -Tail 5 | ForEach-Object { \"> $\\($_.Length\\) $\\($_.StartsWith\\(' '\\) ? 'SPACES' : \\($_.StartsWith\\(\"`t\"\\) ? 'TABS' : 'OTHER'\\)\\): $_\" })"
+    ]
+  }
+}

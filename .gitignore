@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+build/
+dist/
+main_window.dist/
+*.spec
+*.ico
+*.log
+.DS_Store
+Thumbs.db
+*.egg-info/
+.env
+*.xlsx
+*.docx
+data/
