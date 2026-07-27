@@ -235,6 +235,9 @@ def time_of_concentration(
     Returns:
         Время концентрации, мин
     """
+    if L <= 0 or I <= 0:
+        raise ValueError("Длина русла L и уклон I должны быть положительными")
+
     if method == 'kirpich':
         t_c = 0.0195 * (L ** 0.77) * (I ** (-0.385))
     elif method == 'babuškin':
@@ -256,7 +259,7 @@ def check_rational_validity(
     Метод рациона применим при:
     - F < 50–200 км² (в зависимости от зоны)
     - t > 5 мин
-    - Не适用于 больших бассейнов
+    - Не подходит для больших бассейнов
 
     Returns:
         Dict: is_valid, warnings, F_max_recommended

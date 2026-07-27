@@ -37,6 +37,9 @@ def normal_depth(
     Returns:
         Нормальная глубина, м
     """
+    if Q <= 0 or B <= 0 or n <= 0 or I <= 0:
+        raise ValueError("Q, B, n, I должны быть положительными")
+
     def manning_Q(h):
         if h <= 0:
             return 0
@@ -77,6 +80,9 @@ def critical_depth(
     Returns:
         Критическая глубина, м
     """
+    if Q <= 0 or B <= 0:
+        raise ValueError("Q и B должны быть положительными")
+
     def discharge_number(h):
         if h <= 0:
             return 0
@@ -129,7 +135,7 @@ def backwater_curve_step(
         H_downstream: глубина на нижнем конце (напор от водохранилища), м
 
     Returns:
-        Dict: distances, depths, velocities, energy_heads
+        Dict: distances_m, depths_m, normal_depth, L_total, dx
     """
     g = 9.81
     h_n = normal_depth(Q, B, m, n, I)
@@ -209,7 +215,7 @@ def backwater_from_reservoir(
 
     result = backwater_curve_step(Q, B, m, n, I, L_max, dx, H_reservoir)
 
-    for i, d in enumerate(result['depths']):
+    for i, d in enumerate(result['depths_m']):
         if abs(d - h_n) < 0.05:
             L_backwater = result['distances_m'][i]
             break

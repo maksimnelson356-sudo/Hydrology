@@ -209,7 +209,9 @@ def compute_composite_curve(
     Q1 = pearson3_ppf(P_arr, stats1['mean'], stats1['cv'], stats1['cs'])
     Q2 = pearson3_ppf(P_arr, stats2['mean'], stats2['cv'], stats2['cs'])
 
-    Q_composite = np.minimum(Q1, Q2)
+    n1, n2 = len(v1), len(v2)
+    n_total = n1 + n2
+    Q_composite = (Q1 * n1 + Q2 * n2) / n_total if n_total > 0 else np.minimum(Q1, Q2)
 
     curve_df = pd.DataFrame({
         'P_%': np.round(P_arr * 100, 3),

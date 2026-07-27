@@ -11,6 +11,8 @@ import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_resize_table
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QGroupBox, QFormLayout, QLineEdit,
@@ -44,7 +46,7 @@ class Work9Widget(QWidget):
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
         tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #FFCC80; border-radius: 4px; background: white; }
+            QTabWidget::pane { border: 1px solid #FFCC80; border-radius: 4px; }
             QTabBar::tab {
                 background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #FFF3E0, stop:1 #FFE0B2);
                 border: 1px solid #FFA726; border-bottom: none;
@@ -88,7 +90,7 @@ class Work9Widget(QWidget):
         form.addRow("Напор H:", self.sp_H)
 
         self.sp_type = QComboBox()
-        self.sp_type.addItems(["Тонкостенная (Cd=1.84)", "Тrapeция (Cd=1.50)", "Ogee (Cd=2.20)", "Шахта (орифиция)"])
+        self.sp_type.addItems(["Тонкостенная (Cd=1.84)", "Трапеция (Cd=1.50)", "Оgee-профиль (Cd=2.20)", "Шахта (орифиция)"])
         form.addRow("Тип:", self.sp_type)
 
         lay.addWidget(grp)
@@ -204,6 +206,7 @@ class Work9Widget(QWidget):
 
         self.reg_table = QTableWidget()
         self.reg_table.setMaximumHeight(200)
+        auto_resize_table(self.reg_table)
         lay.addWidget(self.reg_table)
 
         return w
@@ -312,4 +315,13 @@ class Work9Widget(QWidget):
         ax.legend()
         ax.grid(True, alpha=0.5)
         self.reg_figure.tight_layout()
-        self.reg_canvas = FigureCanvas(self.reg_figure)
+        self.reg_canvas.draw()
+
+    def set_data(self, daily_df=None, Q=None, B=None, slope=None):
+        """Приём данных из единого загрузчика."""
+        if Q is not None and hasattr(self, 'sp_Q'):
+            self.sp_Q.setValue(float(Q))
+            if hasattr(self, 'bw_Q'):
+                self.bw_Q.setValue(float(Q))
+        if B is not None and hasattr(self, 'bw_B'):
+            self.bw_B.setValue(float(B))

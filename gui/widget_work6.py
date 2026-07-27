@@ -15,6 +15,8 @@ from PyQt6.QtWidgets import (
     QLineEdit, QTableWidget, QTableWidgetItem, QComboBox
 )
 from PyQt6.QtGui import QFont
+
+from gui.plot_style import auto_resize_table
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -103,6 +105,7 @@ class Work6Widget(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(2)
         self.table.setHorizontalHeaderLabels(["Параметр", "Значение"])
+        auto_resize_table(self.table)
         layout.addWidget(self.table)
 
     def calc_water_balance(self):
@@ -118,9 +121,9 @@ class Work6Widget(QWidget):
             self.result_box.clear()
             self.result_box.append("=== ВОДНЫЙ БАЛАНС ===")
             self.result_box.append(f"P = {P} мм, E = {E} мм, R = {R} мм")
-            self.result_box.append(f"Баланс: {result.get('balance_equation', 'N/A')}")
-            self.result_box.append(f"Остаток: {result.get('residual_mm', 'N/A')} мм")
-            self.result_box.append(f"Отклонение: {result.get('residual_pct', 'N/A')}%")
+            self.result_box.append(f"Баланс: {result.get('balance_equation', 'Н/Д')}")
+            self.result_box.append(f"Остаток: {result.get('residual_mm', 'Н/Д')} мм")
+            self.result_box.append(f"Отклонение: {result.get('residual_pct', 'Н/Д')}%")
             self.result_box.append(f"Сбалансирован: {'да' if result.get('is_balanced') else 'нет'}")
             self.result_box.append(f"Коэффициент стока α = {alpha:.3f}")
             self.result_box.append(f"Водоносный коэффициент β = {beta:.3f}")
@@ -130,8 +133,8 @@ class Work6Widget(QWidget):
                 ("Осадки (P)", f"{P} мм/год"),
                 ("Испарение (E)", f"{E} мм/год"),
                 ("Сток (R)", f"{R} мм/год"),
-                ("Остаток (W)", f"{result.get('residual_mm', 'N/A')} мм"),
-                ("Отклонение", f"{result.get('residual_pct', 'N/A')}%"),
+                ("Остаток (W)", f"{result.get('residual_mm', 'Н/Д')} мм"),
+                ("Отклонение", f"{result.get('residual_pct', 'Н/Д')}%"),
                 ("Коэфф. стока (α)", f"{alpha:.3f}"),
                 ("Водоносный коэфф. (β)", f"{beta:.3f}")
             ]
@@ -188,14 +191,14 @@ class Work6Widget(QWidget):
             self.result_box.append("=== ЭКОСИСТЕМНЫЙ МИНИМУМ ===")
             self.result_box.append(f"Qср = {Q_mean} м³/с")
             self.result_box.append(f"10% от Qср = {Q_mean * 0.1:.2f} м³/с")
-            self.result_box.append(f"Q_экосистемный: {result_10pct.get('Q_ecosystem', 'N/A')} м³/с")
-            self.result_box.append(f"Статус: {result_10pct.get('compliance_status', 'N/A')}")
+            self.result_box.append(f"Q_экосистемный: {result_10pct.get('Q_ecosystem', 'Н/Д')} м³/с")
+            self.result_box.append(f"Статус: {result_10pct.get('compliance_status', 'Н/Д')}")
 
             self.table.setRowCount(3)
             items = [
                 ("Qср годовой", f"{Q_mean} м³/с"),
-                ("Q_экосистемный", f"{result_10pct.get('Q_ecosystem', 'N/A')} м³/с"),
-                ("Статус соответствия", str(result_10pct.get('compliance_status', 'N/A')))
+                ("Q_экосистемный", f"{result_10pct.get('Q_ecosystem', 'Н/Д')} м³/с"),
+                ("Статус соответствия", str(result_10pct.get('compliance_status', 'Н/Д')))
             ]
             for i, (k, v) in enumerate(items):
                 self.table.setItem(i, 0, QTableWidgetItem(k))
@@ -207,3 +210,8 @@ class Work6Widget(QWidget):
     def set_data(self, daily_df=None):
         if daily_df is not None:
             self.daily_data = daily_df
+
+    def set_qsr(self, q_mean=None):
+        """Авто-заполнение Qср из Work1."""
+        if q_mean is not None:
+            self.edit_q_mean.setText(f"{q_mean:.2f}")

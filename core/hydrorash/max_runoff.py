@@ -183,6 +183,9 @@ def index_year_method(
     Returns:
         DataFrame: P_%, K_p, Q_max
     """
+    if gauged_mean_annual <= 0:
+        raise ValueError("Среднегодовой расход струментного участка должен быть > 0")
+
     if P_values is None:
         P_values = [0.1, 1.0, 3.0, 5.0, 10.0, 20.0, 33.0, 50.0]
 
@@ -280,6 +283,6 @@ def level_from_discharge(Q: float, params: Dict) -> float:
     a = params["a"]
     b = params["b"]
     H0 = params["H0"]
-    if Q <= 0 or a <= 0:
+    if Q <= 0 or a <= 0 or b == 0:
         return H0
     return float(H0 + (Q / a) ** (1.0 / b))

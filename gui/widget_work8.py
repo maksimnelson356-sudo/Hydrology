@@ -12,6 +12,8 @@ import pandas as pd
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_resize_table
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QGroupBox, QFormLayout, QComboBox,
@@ -49,7 +51,7 @@ class Work8Widget(QWidget):
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
         tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #A5D6A7; border-radius: 4px; background: white; }
+            QTabWidget::pane { border: 1px solid #A5D6A7; border-radius: 4px; }
             QTabBar::tab {
                 background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #E8F5E9, stop:1 #C8E6C9);
                 border: 1px solid #66BB6A; border-bottom: none;
@@ -89,6 +91,7 @@ class Work8Widget(QWidget):
 
         self.fdc_table = QTableWidget()
         self.fdc_table.setMaximumHeight(150)
+        auto_resize_table(self.fdc_table)
         lay.addWidget(self.fdc_table)
 
         self.fdc_result = QTextEdit()
@@ -130,6 +133,7 @@ class Work8Widget(QWidget):
         lay.addWidget(btn)
 
         self.reg_table = QTableWidget()
+        auto_resize_table(self.reg_table)
         lay.addWidget(self.reg_table)
 
         return w
@@ -148,6 +152,7 @@ class Work8Widget(QWidget):
         lay.addWidget(self.adv_canvas)
 
         self.adv_table = QTableWidget()
+        auto_resize_table(self.adv_table)
         lay.addWidget(self.adv_table)
 
         self.adv_result = QTextEdit()
@@ -324,6 +329,18 @@ class Work8Widget(QWidget):
         self.adv_canvas.draw()
 
         self.adv_result.clear()
-        self.adv_result.append(f"MLE: mean={mle['mean']:.3f}, Cv={mle['cv']:.3f}, Cs={mle['cs']:.3f} (AIC={mle['aic']:.1f})")
-        self.adv_result.append(f"L-моменты: mean={lmom['mean']:.3f}, Cv={lmom['cv']:.3f}, Cs={lmom['cs']:.3f}")
+        self.adv_result.append(f"MLE: среднее={mle['mean']:.3f}, Cv={mle['cv']:.3f}, Cs={mle['cs']:.3f} (AIC={mle['aic']:.1f})")
+        self.adv_result.append(f"L-моменты: среднее={lmom['mean']:.3f}, Cv={lmom['cv']:.3f}, Cs={lmom['cs']:.3f}")
         self.adv_result.append(f"GEV: ξ={gev['shape_xi']:.4f}, μ={gev['location_mu']:.3f}, σ={gev['scale_sigma']:.3f}")
+
+    def set_data(self, daily_df=None, values=None):
+        """Приём данных из единого загрузчика."""
+        if values is not None:
+            self._data = np.asarray(values, dtype=float)
+        elif daily_df is not None:
+            if 'value' in daily_df.columns:
+                self._data = pd.to_numeric(daily_df['value'], errors='coerce').dropna().values
+            elif len(daily_df.columns) >= 2:
+                self._data = pd.to_numeric(daily_df.iloc[:, 1], errors='coerce').dropna().values
+        if self._data is not None and len(self._data) >= 5:
+            self._plot_fdc()

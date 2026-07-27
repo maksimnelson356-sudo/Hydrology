@@ -11,6 +11,8 @@ import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from gui.plot_style import apply_global_style, setup_axes_style, COLORS
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QGroupBox, QFormLayout, QLineEdit,
@@ -45,7 +47,7 @@ class Work7Widget(QWidget):
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
         tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #CE93D8; border-radius: 4px; background: white; }
+            QTabWidget::pane { border: 1px solid #CE93D8; border-radius: 4px; }
             QTabBar::tab {
                 background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #F3E5F5, stop:1 #E1BEE7);
                 border: 1px solid #BA68C8; border-bottom: none;
@@ -322,3 +324,12 @@ class Work7Widget(QWidget):
         ax2.grid(True, alpha=0.5)
         self.sm_figure.tight_layout()
         self.sm_canvas.draw()
+
+    def set_data(self, daily_df=None, F=None, zone=None):
+        """Приём данных из единого загрузчика."""
+        if F is not None and hasattr(self, 'spin_F'):
+            self.spin_F.setValue(float(F))
+        if zone is not None and hasattr(self, 'zone_combo'):
+            idx = self.zone_combo.findData(zone)
+            if idx >= 0:
+                self.zone_combo.setCurrentIndex(idx)

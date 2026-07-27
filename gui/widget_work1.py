@@ -12,12 +12,14 @@ import pandas as pd
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from gui.plot_style import apply_global_style, setup_axes_style, COLORS
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QLineEdit, QFileDialog, QMessageBox, QGroupBox,
     QFormLayout, QTableWidget, QTableWidgetItem, QSplitter
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 
 from core.hydrorash.utils import (
     compute_basic_stats, linear_regression_reduction,
@@ -27,6 +29,8 @@ from core.hydrorash.utils import (
 
 class Work1Widget(QWidget):
     """Вкладка «Работа 1: Норма годового стока»."""
+
+    calculation_done = pyqtSignal(dict)
 
     def __init__(self):
         super().__init__()
@@ -192,6 +196,8 @@ class Work1Widget(QWidget):
                 self.result_box.append(f"  {w}")
 
             self.result_box.append("\n═══ Рекомендуется: приведённый ряд ═══")
+
+            self.calculation_done.emit(self.last_result)
 
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))

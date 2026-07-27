@@ -12,6 +12,8 @@ import pandas as pd
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_resize_table
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem
@@ -65,6 +67,7 @@ class Work3Widget(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(["Сезон", "n", "Qmin", "Cv", "Cs/Cv", "eps,%"])
+        auto_resize_table(self.table)
         layout.addWidget(self.table)
 
         self.result_box = QTextEdit()

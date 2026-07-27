@@ -177,8 +177,9 @@ def lmom_pearson3(
     mean = l1
     cv = l2 / l1 if l1 != 0 else 0
 
-    # Приближение cs из tau3 (Келли, 1977)
-    cs = tau3 * np.pi  # приближение для Пирсона III
+    # Приближение cs из tau3
+    # Для Пирсона III: Cs ≈ tau3 / Cv (по关系系е L-моментов, Bobee & Robitaille 1977)
+    cs = tau3 / cv if abs(cv) > 1e-10 else 0
 
     return {
         'mean': round(float(mean), 4),

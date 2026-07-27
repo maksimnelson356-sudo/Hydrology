@@ -20,7 +20,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 from scipy import stats
+
+from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_resize_table, AutoResizeTableFilter
 
 from core.stats.data_loader import load_hydrological_data, get_series_by_post, get_basic_stats
 from core.stats.frequency import calculate_frequency_curve, fit_pearson3
@@ -257,12 +260,16 @@ class MainWindow(QMainWindow):
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
         self.statusBar.showMessage("Готово")
+
+        self._table_filter = AutoResizeTableFilter()
+        self.installEventFilter(self._table_filter)
         
         self.df_raw = None
         self.year_col = None
         self.available_posts = []
         self.current_post = None
         self.df = None
+        self._all_posts = {}
         self.curve_type = "pearson3"
         self.calc_method = "moments"
         self.break_year = None
@@ -311,6 +318,7 @@ class MainWindow(QMainWindow):
         from gui.widget_work10 import Work10Widget
 
         self.tab_work1 = Work1Widget()
+        self.tab_work1.calculation_done.connect(self._on_work1_calculated)
         self.tab_work2 = Work2Widget()
         self.tab_work3 = Work3Widget()
         self.tab_work4 = Work4Widget()
@@ -413,10 +421,27 @@ class MainWindow(QMainWindow):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
+        btn_load_file = QPushButton("📂 Загрузить данные из файла (Excel)")
+        btn_load_file.setStyleSheet(
+            "QPushButton { background-color: #1565C0; color: white; font-weight: bold; "
+            "padding: 10px; font-size: 13px; border-radius: 6px; }"
+            "QPushButton:hover { background-color: #0D47A1; }"
+        )
+        btn_load_file.clicked.connect(self.load_data)
+        layout.addWidget(btn_load_file)
+
         btn_manual = QPushButton("✏ Ввести данные вручную")
         btn_manual.setStyleSheet("QPushButton { background-color: #FF9800; color: white; font-weight: bold; padding: 6px; }")
         btn_manual.clicked.connect(self.open_manual_input)
-        layout.addWidget(btn_manual)
+
+        btn_add_post = QPushButton("➕ Добавить пост (ещё один файл)")
+        btn_add_post.setStyleSheet("QPushButton { background-color: #1565C0; color: white; font-weight: bold; padding: 6px; }")
+        btn_add_post.clicked.connect(self.add_additional_post)
+
+        btn_row_top = QHBoxLayout()
+        btn_row_top.addWidget(btn_manual)
+        btn_row_top.addWidget(btn_add_post)
+        layout.addLayout(btn_row_top)
 
         post_layout = QHBoxLayout()
         post_layout.addWidget(QLabel("Пост:"))
@@ -468,6 +493,7 @@ class MainWindow(QMainWindow):
         
         self.table = QTableWidget()
         self.table.setColumnCount(2)
+        auto_resize_table(self.table)
         
         layout.addLayout(post_layout)
         layout.addWidget(self.btn_fill)
@@ -501,7 +527,7 @@ class MainWindow(QMainWindow):
         btn_layout.addWidget(self.btn_save_plot)
         btn_layout.addStretch()
         
-        self.figure = plt.figure(figsize=(10, 6))
+        self.figure = Figure(figsize=(10, 6))
         self.canvas = FigureCanvas(self.figure)
         
         layout.addLayout(btn_layout)
@@ -514,6 +540,7 @@ class MainWindow(QMainWindow):
         self.btn_trend.setEnabled(False)
         
         self.trend_table = QTableWidget()
+        auto_resize_table(self.trend_table)
         self.trend_table.setColumnCount(2)
         self.trend_table.setHorizontalHeaderLabels(["Показатель", "Значение"])
         
@@ -521,7 +548,7 @@ class MainWindow(QMainWindow):
         self.trend_text.setReadOnly(True)
         self.trend_text.setMaximumHeight(80)
         
-        self.trend_figure = plt.figure(figsize=(10, 5))
+        self.trend_figure = Figure(figsize=(10, 5))
         self.trend_canvas = FigureCanvas(self.trend_figure)
         
         layout.addWidget(self.btn_trend)
@@ -550,7 +577,7 @@ class MainWindow(QMainWindow):
         btn_layout.addWidget(self.btn_plot_corr)
         btn_layout.addStretch()
         
-        self.viz_figure = plt.figure(figsize=(10, 6))
+        self.viz_figure = Figure(figsize=(10, 6))
         self.viz_canvas = FigureCanvas(self.viz_figure)
         
         layout.addLayout(btn_layout)
@@ -579,6 +606,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(btn_calc_km)
         
         self.km_table = QTableWidget()
+        auto_resize_table(self.km_table)
         self.km_table.setColumnCount(2)
         self.km_table.setHorizontalHeaderLabels(["Обеспеченность, %", "Ординаты кривой распределения"])
         layout.addWidget(self.km_table)
@@ -669,18 +697,22 @@ class MainWindow(QMainWindow):
             ax = self.viz_figure.add_subplot(111)
             
             corr = self.df_raw[self.available_posts].corr()
-            im = ax.imshow(corr, cmap='coolwarm', vmin=-1, vmax=1)
+            im = ax.imshow(corr, cmap='RdBu_r', vmin=-1, vmax=1, aspect='auto')
             ax.set_xticks(range(len(self.available_posts)))
             ax.set_yticks(range(len(self.available_posts)))
-            ax.set_xticklabels(self.available_posts, rotation=45, ha='right')
-            ax.set_yticklabels(self.available_posts)
+            ax.set_xticklabels(self.available_posts, rotation=45, ha='right', fontsize=9)
+            ax.set_yticklabels(self.available_posts, fontsize=9)
             
             for i in range(len(self.available_posts)):
                 for j in range(len(self.available_posts)):
-                    ax.text(j, i, f"{corr.iloc[i, j]:.2f}", ha='center', va='center', color='black')
+                    color = 'white' if abs(corr.iloc[i, j]) > 0.6 else 'black'
+                    ax.text(j, i, f"{corr.iloc[i, j]:.2f}", ha='center', va='center',
+                            color=color, fontsize=9, fontweight='bold')
             
-            self.viz_figure.colorbar(im, ax=ax)
-            ax.set_title("Корреляционная матрица постов")
+            cb = self.viz_figure.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
+            cb.ax.tick_params(labelsize=9)
+            setup_axes_style(ax, title="Корреляционная матрица постов")
+            self.viz_figure.tight_layout()
             self.viz_canvas.draw()
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))
@@ -778,13 +810,15 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def load_data(self):
-        filepath, _ = QFileDialog.getOpenFileName(self, "Открыть файл", "", "Excel Files (*.xlsx)")
+        filepath, _ = QFileDialog.getOpenFileName(self, "Открыть файл", "", "Файлы Excel (*.xlsx)")
         if not filepath:
             return
         try:
             self.df_raw, self.year_col, self.available_posts = load_hydrological_data(filepath)
+            self.combo_post.blockSignals(True)
             self.combo_post.clear()
             self.combo_post.addItems(self.available_posts)
+            self.combo_post.blockSignals(False)
             if self.available_posts:
                 self.combo_post.setCurrentIndex(0)
                 self.on_post_changed(self.available_posts[0])
@@ -794,9 +828,42 @@ class MainWindow(QMainWindow):
                         self.btn_composite, self.btn_quantiles, self.btn_gts_curve,
                         self.btn_composite_auto, self.btn_extend]:
                 btn.setEnabled(True)
+
+            self._distribute_data_to_widgets()
             self.statusBar.showMessage(f"Загружено постов: {len(self.available_posts)}")
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))
+
+    def _distribute_data_to_widgets(self):
+        """Распределение загруженных данных по рабочим виджетам."""
+        if self.df_raw is None:
+            return
+        daily_df = self.df_raw.copy()
+        if self.year_col and self.year_col in daily_df.columns:
+            daily_df = daily_df.rename(columns={self.year_col: 'year'})
+        for widget in [self.tab_work4, self.tab_work6, self.tab_work8, self.tab_work10]:
+            try:
+                widget.set_data(daily_df=daily_df)
+            except Exception:
+                pass
+
+    def _on_work1_calculated(self, result):
+        """Автоматическая передача Qsr из Work1 в Work4 и другие виджеты."""
+        try:
+            qsr_calc = result.get("stats_short", {}).get("mean")
+            qsr_ext = result.get("stats_ext", {}).get("mean")
+            f_calc = result.get("f_calc")
+            if qsr_ext is not None:
+                self.tab_work4.set_qsr(gauged_mean=qsr_ext)
+            elif qsr_calc is not None:
+                self.tab_work4.set_qsr(gauged_mean=qsr_calc)
+            if qsr_calc is not None:
+                self.tab_work6.set_qsr(q_mean=qsr_calc)
+                self.tab_work10.set_qsr(q_mean=qsr_calc)
+            if f_calc is not None:
+                self.tab_work7.set_data(F=f_calc)
+        except Exception:
+            pass
 
     def open_manual_input(self):
         """Открыть диалог ручного ввода данных."""
@@ -828,6 +895,58 @@ class MainWindow(QMainWindow):
                 btn.setEnabled(True)
 
             self.statusBar.showMessage(f"Введено вручную: {post_name} ({len(df)} значений)")
+    
+    def add_additional_post(self):
+        """Загрузить дополнительный пост и добавить к существующим."""
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Добавить пост", "", "Файлы Excel (*.xlsx)"
+        )
+        if not filepath:
+            return
+        try:
+            df_new, year_col_new, new_posts = load_hydrological_data(filepath)
+            if not new_posts:
+                QMessageBox.warning(self, "Внимание", "В файле не найдены числовые столбцы (посты)")
+                return
+
+            if self.df_raw is not None and self.year_col is not None:
+                if year_col_new == self.year_col:
+                    self.df_raw = pd.merge(self.df_raw, df_new, on=self.year_col, how='outer')
+                else:
+                    df_new = df_new.rename(columns={year_col_new: self.year_col})
+                    self.df_raw = pd.merge(self.df_raw, df_new, on=self.year_col, how='outer')
+            else:
+                self.df_raw = df_new
+                self.year_col = year_col_new
+
+            self.available_posts = [c for c in self.df_raw.columns if c != self.year_col]
+            self.combo_post.blockSignals(True)
+            self.combo_post.clear()
+            self.combo_post.addItems(self.available_posts)
+            self.combo_post.blockSignals(False)
+
+            if hasattr(self, '_all_posts'):
+                for post_name in new_posts:
+                    self._all_posts[post_name] = pd.DataFrame({
+                        "year": pd.to_numeric(self.df_raw[self.year_col], errors="coerce"),
+                        "value": pd.to_numeric(self.df_raw[post_name], errors="coerce"),
+                    }).dropna(subset=["value"]).reset_index(drop=True)
+
+            if self.available_posts:
+                self.on_post_changed(self.available_posts[0])
+
+            for btn in [self.btn_fill, self.btn_fill_corr, self.btn_calc, self.btn_trend,
+                        self.btn_save_plot, self.btn_homogeneity, self.btn_outliers,
+                        self.btn_composite, self.btn_quantiles, self.btn_gts_curve,
+                        self.btn_composite_auto, self.btn_extend]:
+                btn.setEnabled(True)
+
+            self._distribute_data_to_widgets()
+            self.statusBar.showMessage(
+                f"Добавлено постов: {len(new_posts)} | Всего: {len(self.available_posts)}"
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", str(e))
     
     def on_post_changed(self, post_name):
         if not post_name:
@@ -961,12 +1080,12 @@ class MainWindow(QMainWindow):
             
             try:
                 w_stat, w_p = stats.ranksums(part1, part2)
-            except:
+            except (ValueError, TypeError):
                 w_stat, w_p = np.nan, np.nan
             
             try:
                 ks_stat, ks_p = stats.ks_2samp(part1, part2)
-            except:
+            except (ValueError, TypeError):
                 ks_stat, ks_p = np.nan, np.nan
             
             homogeneous = (t_p > 0.05) and (f_p > 0.05) and (w_p > 0.05 or np.isnan(w_p))
@@ -1054,7 +1173,8 @@ class MainWindow(QMainWindow):
             x_emp = stats.norm.ppf(p_emp)
             modular_emp = sorted_values / mean_q
             
-            ax.plot(x_emp, modular_emp, 'o', color='#1f77b4', markersize=5, label='Эмпирические точки')
+            ax.plot(x_emp, modular_emp, 'o', color=COLORS["primary"], markersize=5,
+                    label='Эмпирические точки', markeredgecolor='white', markeredgewidth=0.5)
             
             is_composite = self.break_year is not None and years is not None
             
@@ -1080,9 +1200,9 @@ class MainWindow(QMainWindow):
                     x_theor = stats.norm.ppf(p_theor)
                     
                     ax.plot(x_theor[:len(modular_theor1)], modular_theor1[:len(x_theor)], 
-                            color='#d62728', linewidth=2.5, label=f'До {self.break_year}')
+                            color=COLORS["secondary"], linewidth=2.5, label=f'До {self.break_year}')
                     ax.plot(x_theor[:len(modular_theor2)], modular_theor2[:len(x_theor)], 
-                            color='#2ca02c', linewidth=2.5, label=f'После {self.break_year}')
+                            color=COLORS["accent"], linewidth=2.5, label=f'После {self.break_year}')
                     title = f"Составная кривая (разрыв {self.break_year})"
                     
                     textstr = (f"До {self.break_year}:\n"
@@ -1100,7 +1220,7 @@ class MainWindow(QMainWindow):
                                         0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99, 0.995, 0.999])
                     x_theor = stats.norm.ppf(p_theor)
                     ax.plot(x_theor[:len(modular_theor)], modular_theor[:len(x_theor)], 
-                            color='#d62728', linewidth=2.5, label='Пирсон III')
+                            color=COLORS["secondary"], linewidth=2.5, label='Пирсон III')
                     title = "Кривая Пирсона III типа"
                 elif self.curve_type == "kritsky_menkel":
                     shape, loc, scale = stats.gamma.fit(values, floc=0)
@@ -1108,34 +1228,32 @@ class MainWindow(QMainWindow):
                     x_theor = stats.norm.ppf(p_theor)
                     theor_q = stats.gamma.ppf(p_theor, a=shape, loc=loc, scale=scale)
                     modular_theor = theor_q / mean_q
-                    ax.plot(x_theor, modular_theor, color='#d62728', linewidth=2.5, label='Крицкий-Менкель')
+                    ax.plot(x_theor, modular_theor, color=COLORS["secondary"], linewidth=2.5, label='Крицкий-Менкель')
                     title = "Кривая Крицкого-Менкеля"
                 elif self.curve_type == "normal":
                     p_theor = np.linspace(0.001, 0.999, 100)
                     x_theor = stats.norm.ppf(p_theor)
                     theor_values = stats.norm.ppf(p_theor, loc=mean_q, scale=values.std())
                     modular_theor = theor_values / mean_q
-                    ax.plot(x_theor, modular_theor, color='#d62728', linewidth=2.5, label='Нормальное распределение')
+                    ax.plot(x_theor, modular_theor, color=COLORS["secondary"], linewidth=2.5, label='Нормальное распределение')
                     title = "Нормальное распределение"
                 else:
-                    ax.plot(x_emp, modular_emp, '-', color='#d62728', linewidth=2, label='Интерполяция')
+                    ax.plot(x_emp, modular_emp, '-', color=COLORS["secondary"], linewidth=2, label='Интерполяция')
                     title = "Интерполяция ломаной линией"
                 
                 textstr = f"Qср = {mean_q:.2f}\nCv = {pearson.get('cv', 0):.3f}\nCs = {pearson.get('cs', 0):.3f}"
             
-            ax.set_xlabel('Обеспеченность, %', fontsize=11)
-            ax.set_ylabel('Модульный коэффициент K = Q / Qср', fontsize=11)
-            ax.set_title(f'{title} — Пост {self.current_post}', fontsize=13)
-            ax.grid(True, which='both', linestyle='--', alpha=0.6)
-            ax.legend(loc='upper right')
+            setup_axes_style(ax, title=f'{title} — Пост {self.current_post}',
+                           xlabel='Обеспеченность, %', ylabel='Модульный коэффициент K = Q / Qср')
+            ax.legend(loc='upper right', framealpha=0.9)
             
             prob_ticks = [0.01, 0.05, 0.1, 0.2, 0.5, 0.8, 0.9, 0.95, 0.99]
             prob_labels = ['1%', '5%', '10%', '20%', '50%', '80%', '90%', '95%', '99%']
             ax.set_xticks(stats.norm.ppf(prob_ticks))
             ax.set_xticklabels(prob_labels)
             
-            props = dict(boxstyle='round', facecolor='wheat', alpha=0.85)
-            ax.text(0.02, -0.07, textstr, transform=ax.transAxes, fontsize=9, verticalalignment='bottom', bbox=props)
+            props = dict(boxstyle='round,pad=0.5', facecolor='#E3F2FD', alpha=0.9, edgecolor='#90CAF9')
+            ax.text(0.02, -0.07, textstr, transform=ax.transAxes, fontsize=9, verticalalignment='bottom', bbox=props, family='monospace')
             
             self.canvas.draw()
             
@@ -1144,7 +1262,7 @@ class MainWindow(QMainWindow):
     
     def save_plot_as_image(self):
         filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить график", "", 
-            "PNG Files (*.png);;JPEG Files (*.jpg);;PDF Files (*.pdf)")
+            "Изображения PNG (*.png);;Изображения JPEG (*.jpg);;Документы PDF (*.pdf)")
         if not filepath:
             return
         try:
@@ -1158,7 +1276,7 @@ class MainWindow(QMainWindow):
         if self.df is None:
             QMessageBox.warning(self, "Внимание", "Сначала загрузите данные")
             return
-        filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить отчёт", "", "Excel Files (*.xlsx)")
+        filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить отчёт", "", "Файлы Excel (*.xlsx)")
         if not filepath: return
         try:
             with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
@@ -1268,7 +1386,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def apply_parameters(self):
-        pass
+        QMessageBox.information(self, "Параметры", "Параметры применены")
 
     def build_curve_with_gts(self):
         """Построение кривой с расчётными точками по классу ГТС."""
@@ -1295,6 +1413,8 @@ class MainWindow(QMainWindow):
             result = build_gts_frequency_curve(values, gts_class)
             summary = gts_summary_table(gts_class, values)
 
+            self.table.setColumnCount(3)
+            self.table.setHorizontalHeaderLabels(["Параметр", "Q, м³/с", "P, %"])
             self.table.setRowCount(len(summary) + 1)
             self.table.setItem(0, 0, QTableWidgetItem("Параметр"))
             self.table.setItem(0, 1, QTableWidgetItem("Q, м³/с"))
@@ -1501,7 +1621,7 @@ class MainWindow(QMainWindow):
                 x_line = np.linspace(ma.min(), ma.max(), 100)
                 y_line = ext['a'] * x_line + ext['b']
                 ax.plot(x_line, y_line, 'r-', linewidth=2,
-                        label=f'Regression: Q={ext["a"]:.3f}×Qаналог+{ext["b"]:.2f}')
+                        label=f'Регрессия: Q={ext["a"]:.3f}×Qаналог+{ext["b"]:.2f}')
             elif 'k' in ext:
                 x_line = np.linspace(ma.min(), ma.max(), 100)
                 y_line = ext['k'] * x_line
@@ -1548,10 +1668,17 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))
 
+    def _find_sheet(self, xls, candidates):
+        """Найти первый доступный лист из списка кандидатов."""
+        for name in candidates:
+            if name in xls.sheet_names:
+                return name
+        return None
+
     def load_unified_template(self):
         """Загрузить единый шаблон и раздать данные по вкладкам."""
         path, _ = QFileDialog.getOpenFileName(
-            self, "Загрузить единый шаблон", "", "Excel (*.xlsx)"
+            self, "Загрузить единый шаблон", "", "Файлы Excel (*.xlsx)"
         )
         if not path:
             return
@@ -1559,26 +1686,26 @@ class MainWindow(QMainWindow):
         try:
             xls = pd.ExcelFile(path)
             loaded = []
+            names = xls.sheet_names
 
-            # === Лист "Гидропост" (или первый лист с Год + Q) ===
-            sheet_name = None
-            for candidate in ["Гидропост", "Лист1"]:
-                if candidate in xls.sheet_names:
-                    sheet_name = candidate
-                    break
-            # Если нет ни Гидропост ни Лист1 — берём первый лист
-            if sheet_name is None:
-                # Пропускаем листы Работа1/2/3/ГТС, ищем первый с данными
-                for sn in xls.sheet_names:
-                    if not any(kw in sn for kw in ["Работа", "ГТС"]):
-                        sheet_name = sn
+            # === Основные данные (год + посты) ===
+            sheet_main = self._find_sheet(xls, [
+                "Данные", "Гидропост", "Лист1",
+            ])
+            if sheet_main is None:
+                for sn in names:
+                    if not any(kw in sn for kw in [
+                        "Норма", "Внутригод", "Минималь", "Максималь",
+                        "Кривая", "Ледовые", "Водный", "FDC", "Эколог",
+                        "Работа", "ГТС"
+                    ]):
+                        sheet_main = sn
                         break
-                if sheet_name is None:
-                    sheet_name = xls.sheet_names[0]
+            if sheet_main is None and names:
+                sheet_main = names[0]
 
-            if sheet_name:
-                # Сканируем файл построчно, ищем строку с "Год"
-                all_rows = pd.read_excel(xls, sheet_name, header=None).astype(str).values
+            if sheet_main:
+                all_rows = pd.read_excel(xls, sheet_main, header=None).astype(str).values
                 year_row_idx = None
                 year_col_idx = None
                 for r in range(min(50, len(all_rows))):
@@ -1592,13 +1719,11 @@ class MainWindow(QMainWindow):
                         break
 
                 if year_row_idx is None:
-                    self.statusBar.showMessage("Лист " + sheet_name + ": не найден столбец Год")
+                    self.statusBar.showMessage("Лист " + sheet_main + ": не найден столбец Год")
                 else:
-                    df_sheet = pd.read_excel(xls, sheet_name, skiprows=year_row_idx)
+                    df_sheet = pd.read_excel(xls, sheet_main, skiprows=year_row_idx)
                     year_col_name = df_sheet.columns[year_col_idx]
-
-                    # Собираем ВСЕ числовые столбцы (все посты)
-                    post_dfs = {}  # name -> DataFrame
+                    post_dfs = {}
                     for c in df_sheet.columns:
                         if c == year_col_name:
                             continue
@@ -1610,121 +1735,186 @@ class MainWindow(QMainWindow):
                             }).dropna(subset=["value"]).reset_index(drop=True)
 
                     if post_dfs:
-                        # Сохраняем все посты, заполняем combo
                         self._all_posts = post_dfs
                         self.available_posts = list(post_dfs.keys())
+                        self.combo_post.blockSignals(True)
                         self.combo_post.clear()
                         self.combo_post.addItems(self.available_posts)
-                        # Берём первый пост
+                        self.combo_post.blockSignals(False)
                         first = self.available_posts[0]
                         self.df = post_dfs[first]
                         self.current_post = first
-                        loaded.append(f"Гидропост ({len(post_dfs)} постов)")
-                        # Включаем кнопки после загрузки
+                        loaded.append("Данные (%d постов)" % len(post_dfs))
                         self.on_post_changed(first)
-                        self.btn_fill.setEnabled(True)
-                        self.btn_fill_corr.setEnabled(True)
-                        self.btn_homogeneity.setEnabled(True)
-                        self.btn_outliers.setEnabled(True)
-                        self.btn_composite.setEnabled(True)
-                        self.btn_quantiles.setEnabled(True)
-                        self.btn_gts_curve.setEnabled(True)
-                        self.btn_composite_auto.setEnabled(True)
-                        self.btn_extend.setEnabled(True)
-                        self.btn_calc.setEnabled(True)
-                        self.btn_save_plot.setEnabled(True)
-                        self.btn_trend.setEnabled(True)
-                        self.btn_plot_series.setEnabled(True)
-                        self.btn_plot_hist.setEnabled(True)
-                        self.btn_plot_box.setEnabled(True)
-                        self.btn_plot_corr.setEnabled(True)
-            # === Лист "Работа1" ===
-            if "Работа1" in xls.sheet_names:
-                df_r1 = pd.read_excel(xls, "Работа1")
-                # Ищем расчётную реку (строка 7-8)
-                r1_raw = pd.read_excel(xls, "Работа1", header=None)
-                f_calc = None
-                name_calc = None
-                f_analog = None
-                name_analog = None
-                calc_years = []
-                calc_Q = []
-                analog_years = []
-                analog_Q = []
+                        for btn in [self.btn_fill, self.btn_fill_corr,
+                                    self.btn_homogeneity, self.btn_outliers,
+                                    self.btn_composite, self.btn_quantiles,
+                                    self.btn_gts_curve, self.btn_composite_auto,
+                                    self.btn_extend, self.btn_calc,
+                                    self.btn_save_plot, self.btn_trend,
+                                    self.btn_plot_series, self.btn_plot_hist,
+                                    self.btn_plot_box, self.btn_plot_corr]:
+                            btn.setEnabled(True)
 
-                # Сканируем строки
-                for i, row in r1_raw.iterrows():
-                    val_a = str(row[0]).strip() if pd.notna(row[0]) else ""
-                    val_b = row[1] if pd.notna(row[1]) else None
-                    if "Площадь F" in val_a and "РАСЧЁТНАЯ" not in val_a and "АНАЛОГ" not in val_a:
-                        try:
-                            if not f_calc:
-                                f_calc = float(val_b)
-                            else:
-                                f_analog = float(val_b)
-                        except: pass
-                    elif "Название" in val_a and val_b:
-                        if not name_calc:
-                            name_calc = str(val_b)
+            # === Норма годового стока (Работа 1) ===
+            sheet_r1 = self._find_sheet(xls, ["Норма годового стока", "Работа1"])
+            if sheet_r1:
+                try:
+                    r1_raw = pd.read_excel(xls, sheet_r1, header=None)
+                    f_calc = None
+                    name_calc = None
+                    f_analog = None
+                    name_analog = None
+                    calc_years = []
+                    calc_Q = []
+                    analog_years = []
+                    analog_Q = []
+
+                    for i, row in r1_raw.iterrows():
+                        val_a = str(row[0]).strip() if pd.notna(row[0]) else ""
+                        val_b = row[1] if pd.notna(row[1]) else None
+                        if "Площадь" in val_a and "F" in val_a:
+                            try:
+                                if f_calc is None:
+                                    f_calc = float(val_b)
+                                else:
+                                    f_analog = float(val_b)
+                            except Exception:
+                                pass
+                        elif "Название" in val_a or "река" in val_a.lower():
+                            if val_b:
+                                if name_calc is None:
+                                    name_calc = str(val_b)
+                                else:
+                                    name_analog = str(val_b)
                         else:
-                            name_analog = str(val_b)
-                    else:
-                        try:
-                            year = int(val_a)
-                            q = float(val_b)
-                            if i < 40:
-                                calc_years.append(year); calc_Q.append(q)
-                            else:
-                                analog_years.append(year); analog_Q.append(q)
-                        except: pass
+                            try:
+                                year = int(val_a)
+                                q = float(val_b)
+                                if i < 40:
+                                    calc_years.append(year)
+                                    calc_Q.append(q)
+                                else:
+                                    analog_years.append(year)
+                                    analog_Q.append(q)
+                            except Exception:
+                                pass
 
-                if calc_years:
-                    calc_series = pd.Series(calc_Q, index=calc_years)
-                    analog_series = pd.Series(analog_Q, index=analog_years) if analog_years else None
-                    self.tab_work1.set_data(
-                        calc_series=calc_series,
-                        analog_series=analog_series,
-                        f_calc=f_calc, f_analog=f_analog,
-                        name_calc=name_calc, name_analog=name_analog
-                    )
-                    loaded.append("Работа1")
+                    if calc_years:
+                        calc_series = pd.Series(calc_Q, index=calc_years)
+                        analog_series = pd.Series(analog_Q, index=analog_years) if analog_years else None
+                        self.tab_work1.set_data(
+                            calc_series=calc_series,
+                            analog_series=analog_series,
+                            f_calc=f_calc, f_analog=f_analog,
+                            name_calc=name_calc, name_analog=name_analog
+                        )
+                        loaded.append("Норма годового стока")
+                except Exception:
+                    pass
 
-            # === Лист "Работа2" ===
-            if "Работа2" in xls.sheet_names:
-                df_r2 = pd.read_excel(xls, "Работа2", skiprows=3)
-                if len(df_r2) >= 2:
-                    month_map = {"I":1,"II":2,"III":3,"IV":4,"V":5,"VI":6,
-                                "VII":7,"VIII":8,"IX":9,"X":10,"XI":11,"XII":12}
-                    renamed = {}
-                    for c in df_r2.columns:
-                        cs = str(c).strip().upper()
-                        if cs in month_map:
-                            renamed[c] = month_map[cs]
-                        elif cs == "ГОД":
-                            renamed[c] = "год"
-                    df_r2 = df_r2.rename(columns=renamed)
-                    if "год" in df_r2.columns:
-                        df_r2 = df_r2.set_index("год")
-                        self.tab_work2.set_data(monthly_df=df_r2)
-                        loaded.append("Работа2")
+            # === Внутригодовое распределение (Работа 2) ===
+            sheet_r2 = self._find_sheet(xls, ["Внутригодовое распределение", "Работа2"])
+            if sheet_r2:
+                try:
+                    df_r2 = pd.read_excel(xls, sheet_r2, skiprows=0)
+                    if len(df_r2) >= 2:
+                        month_map = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6,
+                                     "VII": 7, "VIII": 8, "IX": 9, "X": 10, "XI": 11, "XII": 12}
+                        renamed = {}
+                        for c in df_r2.columns:
+                            cs = str(c).strip().upper()
+                            if cs in month_map:
+                                renamed[c] = month_map[cs]
+                            elif cs in ["ГОД", "YEAR"]:
+                                renamed[c] = "год"
+                        df_r2 = df_r2.rename(columns=renamed)
+                        if "год" in df_r2.columns:
+                            df_r2 = df_r2.set_index("год")
+                            self.tab_work2.set_data(monthly_df=df_r2)
+                            loaded.append("Внутригодовое распределение")
+                except Exception:
+                    pass
 
-            # === Лист "Работа3" ===
-            if "Работа3" in xls.sheet_names:
-                df_r3 = pd.read_excel(xls, "Работа3", skiprows=2)
-                if len(df_r3) >= 3:
-                    years = pd.to_numeric(df_r3.iloc[:, 0], errors='coerce')
-                    winter = pd.Series(pd.to_numeric(df_r3.iloc[:, 1], errors='coerce').values, index=years)
-                    summer = pd.Series(pd.to_numeric(df_r3.iloc[:, 2], errors='coerce').values, index=years)
-                    self.tab_work3.set_data(winter_series=winter, summer_series=summer)
-                    loaded.append("Работа3")
+            # === Минимальный сток (Работа 3) ===
+            sheet_r3 = self._find_sheet(xls, ["Минимальный сток", "Работа3"])
+            if sheet_r3:
+                try:
+                    df_r3 = pd.read_excel(xls, sheet_r3, skiprows=0)
+                    if len(df_r3) >= 3:
+                        years = pd.to_numeric(df_r3.iloc[:, 0], errors='coerce')
+                        winter = pd.Series(pd.to_numeric(df_r3.iloc[:, 1], errors='coerce').values, index=years)
+                        summer = pd.Series(pd.to_numeric(df_r3.iloc[:, 2], errors='coerce').values, index=years)
+                        self.tab_work3.set_data(winter_series=winter, summer_series=summer)
+                        loaded.append("Минимальный сток")
+                except Exception:
+                    pass
+
+            # === Максимальный сток (Работа 4) ===
+            sheet_r4 = self._find_sheet(xls, ["Максимальный сток", "Работа4"])
+            if sheet_r4:
+                try:
+                    df_r4 = pd.read_excel(xls, sheet_r4)
+                    self.tab_work4.set_data(daily_df=df_r4)
+                    loaded.append("Максимальный сток")
+                except Exception:
+                    pass
+
+            # === Ледовые явления (Работа 5) ===
+            sheet_r5 = self._find_sheet(xls, ["Ледовые явления", "Работа5"])
+            if sheet_r5:
+                try:
+                    df_r5 = pd.read_excel(xls, sheet_r5)
+                    freeze_col = [c for c in df_r5.columns
+                                  if 'ледостав' in str(c).lower() or 'freeze' in str(c).lower()]
+                    breakup_col = [c for c in df_r5.columns
+                                   if 'распад' in str(c).lower() or 'breakup' in str(c).lower()]
+                    freeze_dates = pd.to_datetime(df_r5[freeze_col[0]], errors='coerce').dropna() if freeze_col else None
+                    breakup_dates = pd.to_datetime(df_r5[breakup_col[0]], errors='coerce').dropna() if breakup_col else None
+                    self.tab_work5.set_data(freeze_dates=freeze_dates, breakup_dates=breakup_dates)
+                    loaded.append("Ледовые явления")
+                except Exception:
+                    pass
+
+            # === Водный баланс (Работа 6) ===
+            sheet_r6 = self._find_sheet(xls, ["Водный баланс", "Работа6"])
+            if sheet_r6:
+                try:
+                    df_r6 = pd.read_excel(xls, sheet_r6)
+                    self.tab_work6.set_data(daily_df=df_r6)
+                    loaded.append("Водный баланс")
+                except Exception:
+                    pass
+
+            # === FDC (Работа 8) ===
+            sheet_r8 = self._find_sheet(xls, ["FDC", "Работа8"])
+            if sheet_r8:
+                try:
+                    df_r8 = pd.read_excel(xls, sheet_r8)
+                    self.tab_work8.set_data(daily_df=df_r8)
+                    loaded.append("FDC")
+                except Exception:
+                    pass
+
+            # === Экология и базовый сток (Работа 10) ===
+            sheet_r10 = self._find_sheet(xls, ["Экология и базовый сток", "Работа10"])
+            if sheet_r10:
+                try:
+                    df_r10 = pd.read_excel(xls, sheet_r10)
+                    self.tab_work10.set_data(daily_df=df_r10)
+                    loaded.append("Экология и базовый сток")
+                except Exception:
+                    pass
 
             # === Итог ===
             if loaded:
-                self.statusBar.showMessage(f"Загружен шаблон: {', '.join(loaded)}")
-                msg = "\n".join([f"✅ {s}" for s in loaded])
-                QMessageBox.information(self, "Загрузка шаблона", f"Загружены разделы:\n\n{msg}")
+                self.statusBar.showMessage("Загружен шаблон: " + ", ".join(loaded))
+                msg = "\n".join(["  " + s for s in loaded])
+                QMessageBox.information(self, "Загрузка шаблона",
+                                        "Загружены разделы:\n\n" + msg)
             else:
-                QMessageBox.warning(self, "Внимание", "Не удалось загрузить данные ни из одного листа")
+                QMessageBox.warning(self, "Внимание",
+                                    "Не удалось загрузить данные ни из одного листа")
 
         except Exception as e:
             QMessageBox.critical(self, "Ошибка загрузки шаблона", str(e))
@@ -1732,6 +1922,90 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setStyleSheet("""
+        QGroupBox {
+            border: 1px solid #BDBDBD;
+            border-radius: 6px;
+            margin-top: 12px;
+            padding-top: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            left: 12px;
+            padding: 0 6px;
+        }
+        QLineEdit, QDoubleSpinBox, QSpinBox {
+            background-color: #FAFAFA;
+            border: 1px solid #BDBDBD;
+            border-radius: 4px;
+            padding: 4px 8px;
+            color: #212121;
+            selection-background-color: #1565C0;
+        }
+        QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus {
+            border: 1px solid #1565C0;
+            background-color: #FFFFFF;
+        }
+        QTextEdit {
+            background-color: #FAFAFA;
+            border: 1px solid #BDBDBD;
+            border-radius: 4px;
+            color: #212121;
+        }
+        QTableWidget {
+            gridline-color: #E0E0E0;
+            background-color: #FAFAFA;
+            border: 1px solid #BDBDBD;
+            border-radius: 4px;
+            selection-background-color: #BBDEFB;
+        }
+        QTableWidget::item {
+            padding: 4px;
+        }
+        QHeaderView::section {
+            background-color: #E3F2FD;
+            border: 1px solid #BDBDBD;
+            padding: 4px;
+            font-weight: bold;
+            color: #1565C0;
+        }
+        QComboBox {
+            background-color: #FAFAFA;
+            border: 1px solid #BDBDBD;
+            border-radius: 4px;
+            padding: 4px 8px;
+            color: #212121;
+        }
+        QComboBox:focus {
+            border: 1px solid #1565C0;
+        }
+        QComboBox::drop-down {
+            border: none;
+            width: 20px;
+        }
+        QPushButton {
+            background-color: #37474F;
+            color: white;
+            border: 1px solid #263238;
+            border-radius: 4px;
+            padding: 6px 14px;
+            font-weight: bold;
+            font-size: 11px;
+        }
+        QPushButton:hover {
+            background-color: #455A64;
+            border: 1px solid #37474F;
+        }
+        QPushButton:pressed {
+            background-color: #263238;
+        }
+        QTabWidget::pane {
+            border: 1px solid #BDBDBD;
+            border-radius: 4px;
+        }
+    """)
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

@@ -100,7 +100,7 @@ def calculate_statistical_parameters(
     corrected_cv = cv
     corrected_cs = cs
 
-    if apply_autocorr_correction and r1 > 0.1 and n > 10:
+    if apply_autocorr_correction and 0.1 < r1 < 1.0 and n > 10:
         # Простая, но часто используемая корректировка
         factor = np.sqrt((1 + r1) / (1 - r1))
         corrected_cv = cv * factor

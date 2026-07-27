@@ -16,6 +16,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont
 
+from gui.plot_style import auto_resize_table
+
 from core.hydrorash.ice_phenomena import (
     compute_ice_cover_stats, estimate_max_ice_thickness,
     ice_jam_rise, ice_jam_flood_level, ice_cover_duration,
@@ -23,6 +25,20 @@ from core.hydrorash.ice_phenomena import (
     get_ice_parameters_by_zone, estimate_ice_thickness_by_formula,
     ClimateZone
 )
+
+_ZONE_PARAM_LABELS = {
+    "zone": "Зона",
+    "max_thickness_range_m": "Макс. толщина, м",
+    "freeze_period_days": "Период ледостава, сут",
+    "ice_duration_days": "Длительность льда, сут",
+    "typical_rise_m": "Типичный подъём, м",
+    "freeze_up_doy_range": "Ледостав (день года)",
+    "breakup_doy_range": "Распад льда (день года)",
+    "zone_coefficient": "Зональный коэффициент",
+    "snow_correction": "Снеговая поправка",
+    "description": "Описание",
+    "normative": "Норматив",
+}
 
 
 class Work5Widget(QWidget):
@@ -92,6 +108,7 @@ class Work5Widget(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(2)
         self.table.setHorizontalHeaderLabels(["Параметр", "Значение"])
+        auto_resize_table(self.table)
         layout.addWidget(self.table)
 
     def show_zone_params(self):
@@ -110,11 +127,13 @@ class Work5Widget(QWidget):
             self.result_box.clear()
             self.result_box.append(f"Параметры для зоны: {zone.value}")
             for k, v in params.items():
-                self.result_box.append(f"  {k}: {v}")
+                label = _ZONE_PARAM_LABELS.get(k, k)
+                self.result_box.append(f"  {label}: {v}")
 
             self.table.setRowCount(len(params))
             for i, (k, v) in enumerate(params.items()):
-                self.table.setItem(i, 0, QTableWidgetItem(str(k)))
+                label = _ZONE_PARAM_LABELS.get(k, k)
+                self.table.setItem(i, 0, QTableWidgetItem(str(label)))
                 self.table.setItem(i, 1, QTableWidgetItem(str(v)))
 
         except Exception as e:
@@ -151,18 +170,18 @@ class Work5Widget(QWidget):
 
             self.result_box.clear()
             self.result_box.append("=== ТОЛЩИНА ЛЬДА ===")
-            self.result_box.append(f"Методический диапазон: {thickness.get('thickness_range_m', 'N/A')}")
-            self.result_box.append(f"Взвешенная оценка: {thickness.get('thickness_m', 'N/A')} м")
+            self.result_box.append(f"Методический диапазон: {thickness.get('thickness_range_m', 'Н/Д')}")
+            self.result_box.append(f"Взвешенная оценка: {thickness.get('thickness_m', 'Н/Д')} м")
             self.result_box.append(f"По формуле Кондратьева: {formula_thick:.3f} м")
-            self.result_box.append(f"Формула: {thickness.get('formula_used', 'N/A')}")
+            self.result_box.append(f"Формула: {thickness.get('formula_used', 'Н/Д')}")
             self.result_box.append(f"Ширина русла: {width} м")
             self.result_box.append(f"Скорость: {velocity} м/с")
 
             self.table.setRowCount(5)
             items = [
-                ("Взвешенная оценка", f"{thickness.get('thickness_m', 'N/A')} м"),
+                ("Взвешенная оценка", f"{thickness.get('thickness_m', 'Н/Д')} м"),
                 ("Формула Кондратьева", f"{formula_thick:.3f} м"),
-                ("Формула РД 52-26-2008", thickness.get("formula_used", "N/A")),
+                ("Формула РД 52-26-2008", thickness.get("formula_used", "Н/Д")),
                 ("Ширина русла", f"{width} м"),
                 ("Скорость течения", f"{velocity} м/с")
             ]
@@ -201,10 +220,10 @@ class Work5Widget(QWidget):
             self.result_box.clear()
             self.result_box.append("=== ЗАТОРНЫЙ ПАВОДК ===")
             self.result_box.append(f"Толщина льда: {ice_thickness:.3f} м")
-            self.result_box.append(f"Повышение уровня: {rise.get('rise_m', 'N/A')} м")
-            self.result_box.append(f"Вероятность затора: {rise.get('jam_probability', 'N/A')}")
-            self.result_box.append(f"Опасность: {rise.get('severity', 'N/A')}")
-            self.result_box.append(f"Формула: {rise.get('formula_used', 'N/A')}")
+            self.result_box.append(f"Повышение уровня: {rise.get('rise_m', 'Н/Д')} м")
+            self.result_box.append(f"Вероятность затора: {rise.get('jam_probability', 'Н/Д')}")
+            self.result_box.append(f"Опасность: {rise.get('severity', 'Н/Д')}")
+            self.result_box.append(f"Формула: {rise.get('formula_used', 'Н/Д')}")
 
             flood = ice_jam_flood_level(
                 H_normal=0.0,
@@ -212,16 +231,16 @@ class Work5Widget(QWidget):
                 ice_thickness=ice_thickness,
                 flow_velocity=velocity
             )
-            self.result_box.append(f"\nРасчётный уровень при заторе: {flood.get('H_ice_m', 'N/A')} м")
-            self.result_box.append(f"Коэффициент k_P: {flood.get('k_P', 'N/A')}")
+            self.result_box.append(f"\nРасчётный уровень при заторе: {flood.get('H_ice_m', 'Н/Д')} м")
+            self.result_box.append(f"Коэффициент k_P: {flood.get('k_P', 'Н/Д')}")
 
             self.table.setRowCount(5)
             items = [
                 ("Толщина льда", f"{ice_thickness:.3f} м"),
-                ("Повышение уровня", f"{rise.get('rise_m', 'N/A')} м"),
-                ("Вероятность затора", str(rise.get('jam_probability', 'N/A'))),
-                ("Опасность", str(rise.get('severity', 'N/A'))),
-                ("Расчётный уровень H_ice", f"{flood.get('H_ice_m', 'N/A')} м")
+                ("Повышение уровня", f"{rise.get('rise_m', 'Н/Д')} м"),
+                ("Вероятность затора", str(rise.get('jam_probability', 'Н/Д'))),
+                ("Опасность", str(rise.get('severity', 'Н/Д'))),
+                ("Расчётный уровень H_ice", f"{flood.get('H_ice_m', 'Н/Д')} м")
             ]
             for i, (k, v) in enumerate(items):
                 self.table.setItem(i, 0, QTableWidgetItem(k))
@@ -238,8 +257,17 @@ class Work5Widget(QWidget):
             return
         try:
             df = pd.read_excel(path)
-            self.result_box.append(f"Загружено дат: {len(df)}")
-            self.result_box.append(f"Столбцы: {list(df.columns)}")
+            freeze_col = [c for c in df.columns if 'ледостав' in str(c).lower() or 'freeze' in str(c).lower()]
+            breakup_col = [c for c in df.columns if 'распад' in str(c).lower() or 'breakup' in str(c).lower()]
+            if freeze_col:
+                self.freeze_dates = pd.to_datetime(df[freeze_col[0]], errors='coerce').dropna()
+                self.result_box.append(f"Загружены даты ледостава: {len(self.freeze_dates)}")
+            if breakup_col:
+                self.breakup_dates = pd.to_datetime(df[breakup_col[0]], errors='coerce').dropna()
+                self.result_box.append(f"Загружены даты вскрытия: {len(self.breakup_dates)}")
+            if not freeze_col and not breakup_col:
+                self.result_box.append(f"Столбцы: {list(df.columns)}")
+                self.result_box.append("Не найдены столбцы с датами ледостава/вскрытия")
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))
 

@@ -12,6 +12,8 @@ import pandas as pd
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_resize_table
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QFileDialog, QMessageBox, QGroupBox, QFormLayout,
@@ -48,7 +50,7 @@ class Work4Widget(QWidget):
 
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #90CAF9; border-radius: 4px; background: white; }
+            QTabWidget::pane { border: 1px solid #90CAF9; border-radius: 4px; }
             QTabBar::tab {
                 background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #E3F2FD, stop:1 #BBDEFB);
                 border: 1px solid #64B5F6; border-bottom: none;
@@ -106,6 +108,7 @@ class Work4Widget(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(3)
         self.table.setHorizontalHeaderLabels(["Обеспеченность, %", "Q_max, м³/с", "kp"])
+        auto_resize_table(self.table)
         layout.addWidget(self.table)
 
         self.result_box = QTextEdit()
@@ -143,6 +146,7 @@ class Work4Widget(QWidget):
         self.rating_table.setColumnCount(4)
         self.rating_table.setHorizontalHeaderLabels(["a", "b", "H0", "R²"])
         self.rating_table.setMaximumHeight(50)
+        auto_resize_table(self.rating_table)
         layout.addWidget(self.rating_table)
 
         self.rating_result = QTextEdit()
@@ -183,6 +187,7 @@ class Work4Widget(QWidget):
         self.index_table = QTableWidget()
         self.index_table.setColumnCount(3)
         self.index_table.setHorizontalHeaderLabels(["Обеспеченность, %", "Kp", "Q_max, м³/с"])
+        auto_resize_table(self.index_table)
         layout.addWidget(self.index_table)
 
         self.index_result = QTextEdit()
@@ -491,6 +496,13 @@ class Work4Widget(QWidget):
         if daily_df is not None:
             self.daily_data = daily_df
             self.result_box.append(f"Получены данные: {len(daily_df)} строк")
+
+    def set_qsr(self, gauged_mean=None, target_mean=None):
+        """Авто-заполнение Qsr из Work1."""
+        if gauged_mean is not None:
+            self.edit_gauged_mean.setText(f"{gauged_mean:.2f}")
+        if target_mean is not None:
+            self.edit_target_mean.setText(f"{target_mean:.2f}")
 
     def save_report(self):
         if self.max_series is None:

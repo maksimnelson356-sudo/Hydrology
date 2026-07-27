@@ -228,7 +228,7 @@ def min_flow_comparison(
         q710 = q7_10(Q_min_series)
         methods.append({
             'Метод': '7Q10',
-            'Q_эколог_м3_с': round(q710, 2),
+            'Q_эколог_м3_с': round(q710['Q7_10_value'], 2),
             'Ссылка': 'СП 32, Р 9.1.11',
         })
 

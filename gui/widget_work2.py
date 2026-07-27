@@ -16,6 +16,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QFont
 
+from gui.plot_style import auto_resize_table
+
 from core.hydrorash.hydrological_periods import HydrologicalPeriods
 from core.hydrorash.intra_annual import (
     calculate_water_year_sums, compute_intra_annual_stats,
@@ -81,6 +83,7 @@ class Work2Widget(QWidget):
         self.table = QTableWidget()
         self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(["Параметр", "Среднее", "Cv", "ε, %"])
+        auto_resize_table(self.table)
         layout.addWidget(self.table)
 
         # Текст
@@ -202,4 +205,19 @@ class Work2Widget(QWidget):
             self.result_box.append(f"Загружено: {len(monthly_df)} строк из шаблона")
 
     def save_report(self):
-        QMessageBox.information(self, "Информация", "Функция сохранения отчёта")
+        if self.sums_df is None:
+            QMessageBox.warning(self, "Внимание", "Сначала рассчитайте внутригодовое распределение")
+            return
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Сохранить отчёт", "Отчёт_Работа2.xlsx", "Excel (*.xlsx)"
+        )
+        if not filepath:
+            return
+        try:
+            with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
+                self.sums_df.to_excel(writer, sheet_name="Водногодовые суммы", index=False)
+                if self.distributed_df is not None:
+                    self.distributed_df.to_excel(writer, sheet_name="Распределение", index=False)
+            QMessageBox.information(self, "Готово", f"Отчёт сохранён:\n{filepath}")
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", str(e))

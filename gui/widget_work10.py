@@ -8,8 +8,11 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
+import pandas as pd
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+
+from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_resize_table
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
@@ -47,7 +50,7 @@ class Work10Widget(QWidget):
         layout = QVBoxLayout(self)
         tabs = QTabWidget()
         tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #EF9A9A; border-radius: 4px; background: white; }
+            QTabWidget::pane { border: 1px solid #EF9A9A; border-radius: 4px; }
             QTabBar::tab {
                 background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #FFEBEE, stop:1 #FFCDD2);
                 border: 1px solid #EF5350; border-bottom: none;
@@ -98,6 +101,7 @@ class Work10Widget(QWidget):
 
         self.eco_table = QTableWidget()
         self.eco_table.setMaximumHeight(250)
+        auto_resize_table(self.eco_table)
         lay.addWidget(self.eco_table)
 
         return w
@@ -356,3 +360,18 @@ class Work10Widget(QWidget):
         self.dr_result.clear()
         self.dr_result.append(f"Засух: {freq['n_droughts']} | Средняя длительность: {freq['mean_duration_months']} мес.")
         self.dr_result.append(f"Макс. тяжесть: {freq['max_severity']} | Без засух: {freq['drought_free_percent']}%")
+
+    def set_data(self, daily_df=None, values=None):
+        """Приём данных из единого загрузчика."""
+        if values is not None:
+            self._data = np.asarray(values, dtype=float)
+        elif daily_df is not None:
+            if 'value' in daily_df.columns:
+                self._data = pd.to_numeric(daily_df['value'], errors='coerce').dropna().values
+            elif len(daily_df.columns) >= 2:
+                self._data = pd.to_numeric(daily_df.iloc[:, 1], errors='coerce').dropna().values
+
+    def set_qsr(self, q_mean=None):
+        """Авто-заполнение Qср из Work1."""
+        if q_mean is not None and hasattr(self, 'eco_Qmean'):
+            self.eco_Qmean.setValue(float(q_mean))

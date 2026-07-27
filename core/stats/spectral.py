@@ -33,7 +33,7 @@ def fft_analysis(
 
     N = len(Q)
     if N < 4:
-        return {'frequencies': [], 'amplitudes': [], 'periods': [], 'power': []}
+        return {'frequencies': [], 'amplitudes': [], 'periods_years': [], 'power': [], 'n': 0, 'dt': dt}
 
     fft_vals = np.fft.rfft(Q)
     amplitudes = np.abs(fft_vals) * 2 / N

@@ -53,7 +53,7 @@ ICE_PARAMS_BY_ZONE: Dict[ClimateZone, Dict] = {
         "ice_duration_days": (200, 260),
         "zone_coefficient": 1.0,
         "snow_correction": 0.8,
-        "description": "Северная зона с永久ным или многолетним льдом",
+        "description": "Северная зона с постоянным или многолетним льдом",
     },
     ClimateZone.SUBARCTIC: {
         "max_thickness_range_m": (1.0, 2.0),

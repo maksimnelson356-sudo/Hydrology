@@ -54,7 +54,7 @@ def triangular_hydrograph(
 
     Q = np.maximum(Q, 0)
 
-    volume_m3 = float(np.trapz(Q, t) * 3600)
+    volume_m3 = float(np.trapezoid(Q, t) * 3600)
     volume_km3 = volume_m3 / 1e9
 
     return {
@@ -108,7 +108,7 @@ def gamma_hydrograph(
 
     Q = np.maximum(Q, 0)
 
-    volume_m3 = float(np.trapz(Q, t) * 3600)
+    volume_m3 = float(np.trapezoid(Q, t) * 3600)
     volume_km3 = volume_m3 / 1e9
 
     return {
@@ -203,7 +203,7 @@ def flood_volume(
     Returns:
         Dict: volume_m3, volume_km3, volume_mln_m3
     """
-    volume_m3 = float(np.trapz(Q, dt * np.ones_like(Q)) * 3600)
+    volume_m3 = float(np.trapezoid(Q, dx=dt) * 3600)
 
     return {
         'volume_m3': volume_m3,
