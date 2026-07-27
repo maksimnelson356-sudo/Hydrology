@@ -76,9 +76,9 @@ args = [
 
 if os.path.exists("icon.ico"):
     args.append("--icon=icon.ico")
-    print("✅ Иконка добавлена")
+    print("OK Иконка добавлена")
 else:
-    print("⚠️ Файл icon.ico не найден")
+    print("WARN Файл icon.ico не найден")
 
 PyInstaller.__main__.run(args)
 
