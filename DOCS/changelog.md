@@ -1,5 +1,28 @@
 # Changelog — ГидроСтатика 2026
 
+## v2026.07.28 — Code review: исправление ошибок и улучшение качества
+
+### Исправлено
+
+#### Критические ошибки
+- **4 bare `except:` заменены** на конкретные типы исключений:
+  - `create_unified_template.py:81` — `(FileNotFoundError, ValueError, KeyError, TypeError)`
+  - `core/profile.py:82` — `(ValueError, TypeError, KeyError)`
+  - `core/stats/data_loader.py:35` — `(ValueError, TypeError)`
+  - `core/stats/data_loader.py:98` — `(ValueError, TypeError, AttributeError)`
+- **ZeroDivisionError в `run_stats_demo.py:39`** — добавлена проверка `if len(df) > 0` перед делением
+
+#### Обработка ошибок
+- **`gui/main_window.py`** — 12 `except Exception: pass` заменены на конкретные исключения + print warning
+- **`core/stats/advanced_frequency.py`** — 6 `except Exception:` заменены на `(ValueError, FloatingPointError, ZeroDivisionError, TypeError, RuntimeError)`
+- **`core/stats/frequency.py`** — 6 `except Exception:` заменены на `(ImportError, ValueError, TypeError, RuntimeError)`
+- **`core/stats/confidence_bands.py`** — `(ValueError, TypeError, ZeroDivisionError)`
+- **`core/hydrorash/utils.py`** — `(ValueError, TypeError)`
+
+#### Структура и документация
+- **`core/stats/__init__.py`** — добавлен `__all__` со списком 19 модулей
+- **`build.py`** — кроссплатформенные пути: `os.path.join()`, `sys.platform` для разделителя `--add-data`
+
 ## v2026.07.27 — Текущая версия
 
 ### 🐛 Исправленные ошибки

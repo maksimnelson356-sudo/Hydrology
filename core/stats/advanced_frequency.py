@@ -85,13 +85,13 @@ def mle_pearson3(
         beta = sigma / np.sqrt(alpha) if alpha > 0 else 1
         shift = mu - alpha * beta
 
-        try:
-            ll = np.sum(stats.gamma.logpdf(data - shift, a=alpha, scale=beta))
-            if np.isnan(ll) or np.isinf(ll):
-                return 1e10
-            return -ll
-        except Exception:
+    try:
+        ll = np.sum(stats.gamma.logpdf(data - shift, a=alpha, scale=beta))
+        if np.isnan(ll) or np.isinf(ll):
             return 1e10
+        return -ll
+    except (ValueError, FloatingPointError, ZeroDivisionError):
+        return 1e10
 
     result = minimize(neg_loglik, x0, method='Nelder-Mead',
                       options={'maxiter': max_iter})
@@ -105,7 +105,7 @@ def mle_pearson3(
 
         try:
             loglik = np.sum(stats.gamma.logpdf(data - shift, a=alpha, scale=beta))
-        except Exception:
+        except (ValueError, FloatingPointError):
             loglik = -result.fun
 
         k = 3
@@ -391,7 +391,7 @@ def goodness_of_fit(
             stats.kstest(data, distribution)
         results['ks_stat'] = round(float(ks_stat), 4)
         results['ks_p'] = round(float(ks_p), 6)
-    except Exception:
+    except (ValueError, TypeError):
         results['ks_stat'] = 0
         results['ks_p'] = 1
 
@@ -399,7 +399,7 @@ def goodness_of_fit(
         ad_stat = stats.anderson(data, dist=distribution if distribution != 'pearson3' else 'norm')
         results['ad_stat'] = round(float(ad_stat.statistic), 4)
         results['ad_critical_values'] = [round(float(x), 3) for x in ad_stat.critical_values]
-    except Exception:
+    except (ValueError, TypeError):
         results['ad_stat'] = 0
         results['ad_critical_values'] = []
 
@@ -430,7 +430,7 @@ def goodness_of_fit(
 
             results['chi2_stat'] = round(float(chi2_stat), 4)
             results['chi2_p'] = round(float(chi2_p), 6)
-        except Exception:
+        except (ValueError, ZeroDivisionError):
             results['chi2_stat'] = 0
             results['chi2_p'] = 1
 
@@ -559,8 +559,8 @@ def compare_distributions(
             'AIC': np.nan,
             'BIC': np.nan,
         })
-    except Exception:
-        pass
+    except (ValueError, TypeError, RuntimeError):
+        pass  # Log-Pearson III не подходит для данных — пропускаем
 
     gev = fit_gev(data)
     results.append({

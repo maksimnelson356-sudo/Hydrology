@@ -32,8 +32,8 @@ def load_hydrological_data(filepath):
             try:
                 pd.to_numeric(df_raw[col], errors='raise')
                 available_posts.append(col)
-            except:
-                pass
+            except (ValueError, TypeError):
+                pass  # столбец не является числовым — пропускаем
     
     return df_raw, year_col, available_posts
 
@@ -95,8 +95,8 @@ def parse_hydro_data(xlsx_path: str) -> dict:
             val_a4 = ws0['A4'].value
             if non_empty >= 4 and val_a4 and str(val_a4).lower() in ['river', 'река']:
                 is_universal = True
-    except:
-        pass
+    except (ValueError, TypeError, AttributeError):
+        pass  # не удалось определить формат — пробуем как листовой
 
     if is_universal:
         for sheet_name in wb.sheetnames:

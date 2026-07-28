@@ -186,7 +186,7 @@ def kritsky_menkel_quantiles(
     for P in P_list:
         try:
             t = pearson3.ppf(1 - P / 100, skew=Cs, loc=0, scale=1)
-        except Exception:
+        except (ValueError, TypeError):
             t = 0.0
         kp = 1 + Cv * t
         results.append({"P_%": P, "Φp": t, "kp": kp, "Q_p": mean * kp})

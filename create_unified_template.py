@@ -78,8 +78,8 @@ def create_unified_template(path="unified_template.xlsx"):
                     q = row[first_post]
                     if pd.notna(y) and pd.notna(q):
                         post_data[int(y)] = round(float(q), 2)
-    except:
-        pass
+    except (FileNotFoundError, ValueError, KeyError, TypeError):
+        pass  # шаблон создаётся с дефолтными данными
 
     if not post_data:
         ws1['A4'] = "Название поста:"

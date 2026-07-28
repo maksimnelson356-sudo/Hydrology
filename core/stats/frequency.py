@@ -88,8 +88,8 @@ def kritsky_menkel_ppf(probabilities: np.ndarray, mean: float, cv: float, cs: fl
         # Проверяем разумность (все квантили > 0 для расходов)
         if np.all(quantiles > 0):
             return quantiles
-    except Exception:
-        pass
+    except (ImportError, ValueError, TypeError):
+        pass  # табличный метод недоступен — используем формулу
 
     # --- Трёхпараметрическое гамма-распределение ---
     alpha = 4.0 / (cs ** 2)                          # параметр формы
@@ -98,7 +98,7 @@ def kritsky_menkel_ppf(probabilities: np.ndarray, mean: float, cv: float, cs: fl
 
     try:
         quantiles = A0 + stats.gamma.ppf(1 - probabilities, a=alpha, scale=beta)
-    except Exception:
+    except (ValueError, TypeError, RuntimeError):
         # Fallback на формулу Корниша-Фишера
         quantiles = pearson3_ppf(probabilities, mean, cv, cs)
 
@@ -122,28 +122,28 @@ def fit_theoretical_distributions(Q: np.ndarray, p_prob: np.ndarray) -> dict:
     try:
         params = stats.pearson3.fit(Q)
         p3 = stats.pearson3.ppf(1 - probabilities, *params)
-    except Exception:
+    except (ValueError, TypeError):
         p3 = None
 
     # Gamma
     try:
         params = stats.gamma.fit(Q, floc=0)
         g = stats.gamma.ppf(1 - probabilities, *params)
-    except Exception:
+    except (ValueError, TypeError):
         g = None
 
     # Lognormal
     try:
         params = stats.lognorm.fit(Q, floc=0)
         ln = stats.lognorm.ppf(1 - probabilities, *params)
-    except Exception:
+    except (ValueError, TypeError):
         ln = None
 
     # Normal
     try:
         params = stats.norm.fit(Q)
         n = stats.norm.ppf(1 - probabilities, *params)
-    except Exception:
+    except (ValueError, TypeError):
         n = None
 
     return {

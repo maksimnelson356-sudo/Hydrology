@@ -79,8 +79,8 @@ class MorphoProfile:
                 n = float(row[col_n]) if col_n in df.columns and pd.notna(row[col_n]) else None
                 alpha = float(row[col_alpha]) if col_alpha in df.columns and pd.notna(row[col_alpha]) else None
                 points.append(ProfilePoint(b=b, h=h, code=code, n=n, alpha_deg=alpha))
-            except:
-                continue
+            except (ValueError, TypeError, KeyError):
+                continue  # пропускаем битую строку данных
         name = profile_name or f"Профиль из {filepath}"
         return cls(name=name, points=points)
 

@@ -36,7 +36,10 @@ except FileNotFoundError:
 
 # ==================== АНАЛИЗ ПРОПУСКОВ ====================
 missing_count = detect_missing(df, 'value')
-print(f"\nПропущено значений: {missing_count} ({missing_count / len(df) * 100:.1f}%)")
+if len(df) > 0:
+    print(f"\nПропущено значений: {missing_count} ({missing_count / len(df) * 100:.1f}%)")
+else:
+    print("\nНет данных для анализа пропусков.")
 
 # ==================== ЗАПОЛНЕНИЕ ПРОПУСКОВ ====================
 df_filled = fill_missing_interpolation(df, target_col='value')

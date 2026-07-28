@@ -35,6 +35,7 @@ cmd = [
 
 if os.path.exists("icon.ico"):
     cmd.append("--windows-icon-from-ico=icon.ico")
+    cmd.append("--include-data-files=icon.ico;.")
     print("✅ Иконка добавлена")
 else:
     print("⚠️ icon.ico не найден")

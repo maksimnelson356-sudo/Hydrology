@@ -4,8 +4,9 @@ build.py — сборка в папку (с иконкой)
 
 import PyInstaller.__main__
 import os
+import sys
 
-script = "gui/main_window.py"
+script = os.path.join("gui", "main_window.py")
 name = "ГидроСтатистика_2026"
 
 args = [
@@ -75,6 +76,9 @@ args = [
 ]
 
 if os.path.exists("icon.ico"):
+    # Кроссплатформенный разделитель: ; для Windows, : для Linux/macOS
+    sep = ";" if sys.platform == "win32" else ":"
+    args.append(f"--add-data=icon.ico{sep}.")
     args.append("--icon=icon.ico")
     print("OK Иконка добавлена")
 else:
@@ -83,5 +87,5 @@ else:
 PyInstaller.__main__.run(args)
 
 print("\nСборка завершена!")
-print(f"Папка: dist\\{name}\\")
-print("Запускай файл: dist\\ГидроСтатистика_2026\\ГидроСтатистика_2026.exe")
+print(f"Папка: dist/{name}/")
+print(f"Запускай файл: dist/{name}/{name}.exe")

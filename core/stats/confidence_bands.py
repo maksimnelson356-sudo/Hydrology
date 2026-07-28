@@ -56,7 +56,7 @@ def pearson3_confidence_bands(
         try:
             sp = calculate_statistical_parameters(sample)
             Q_boot[b] = pearson3_ppf(P_arr, sp['mean'], sp['corrected_cv'], sp['corrected_cs'])
-        except Exception:
+        except (ValueError, TypeError, ZeroDivisionError):
             Q_boot[b] = Q_mean
 
     alpha = 1 - confidence

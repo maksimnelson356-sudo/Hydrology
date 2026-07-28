@@ -253,7 +253,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("ГидроСтатистика 2026")
         self.setGeometry(60, 30, 1600, 950)
         
-        icon_path = "icon.ico" if os.path.exists("icon.ico") else "icon.png"
+        if getattr(sys, 'frozen', False):
+            base_path = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+        else:
+            base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        icon_path = os.path.join(base_path, "icon.ico")
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         
@@ -844,8 +848,8 @@ class MainWindow(QMainWindow):
         for widget in [self.tab_work4, self.tab_work6, self.tab_work8, self.tab_work10]:
             try:
                 widget.set_data(daily_df=daily_df)
-            except Exception:
-                pass
+            except (ValueError, TypeError, AttributeError) as e:
+                print(f"[WARN] Ошибка передачи данных в виджет: {e}")
 
     def _on_work1_calculated(self, result):
         """Автоматическая передача Qsr из Work1 в Work4 и другие виджеты."""
@@ -862,8 +866,8 @@ class MainWindow(QMainWindow):
                 self.tab_work10.set_qsr(q_mean=qsr_calc)
             if f_calc is not None:
                 self.tab_work7.set_data(F=f_calc)
-        except Exception:
-            pass
+        except (ValueError, TypeError, AttributeError) as e:
+            print(f"[WARN] Ошибка передачи Qsr в модули: {e}")
 
     def open_manual_input(self):
         """Открыть диалог ручного ввода данных."""
@@ -1779,8 +1783,8 @@ class MainWindow(QMainWindow):
                                     f_calc = float(val_b)
                                 else:
                                     f_analog = float(val_b)
-                            except Exception:
-                                pass
+                            except (ValueError, TypeError):
+                                pass  # нечисловое значение — пропускаем
                         elif "Название" in val_a or "река" in val_a.lower():
                             if val_b:
                                 if name_calc is None:
@@ -1797,8 +1801,8 @@ class MainWindow(QMainWindow):
                                 else:
                                     analog_years.append(year)
                                     analog_Q.append(q)
-                            except Exception:
-                                pass
+                            except (ValueError, TypeError):
+                                pass  # пропускаем строки с нечисловыми данными
 
                     if calc_years:
                         calc_series = pd.Series(calc_Q, index=calc_years)
@@ -1810,8 +1814,8 @@ class MainWindow(QMainWindow):
                             name_calc=name_calc, name_analog=name_analog
                         )
                         loaded.append("Норма годового стока")
-                except Exception:
-                    pass
+                except (ValueError, TypeError, KeyError, AttributeError) as e:
+                    print(f"[WARN] Ошибка загрузки листа 'Норма годового стока': {e}")
 
             # === Внутригодовое распределение (Работа 2) ===
             sheet_r2 = self._find_sheet(xls, ["Внутригодовое распределение", "Работа2"])
@@ -1833,8 +1837,8 @@ class MainWindow(QMainWindow):
                             df_r2 = df_r2.set_index("год")
                             self.tab_work2.set_data(monthly_df=df_r2)
                             loaded.append("Внутригодовое распределение")
-                except Exception:
-                    pass
+                except (ValueError, TypeError, KeyError, AttributeError) as e:
+                    print(f"[WARN] Ошибка загрузки 'Внутригодовое распределение': {e}")
 
             # === Минимальный сток (Работа 3) ===
             sheet_r3 = self._find_sheet(xls, ["Минимальный сток", "Работа3"])
@@ -1847,8 +1851,8 @@ class MainWindow(QMainWindow):
                         summer = pd.Series(pd.to_numeric(df_r3.iloc[:, 2], errors='coerce').values, index=years)
                         self.tab_work3.set_data(winter_series=winter, summer_series=summer)
                         loaded.append("Минимальный сток")
-                except Exception:
-                    pass
+                except (ValueError, TypeError, KeyError, AttributeError) as e:
+                    print(f"[WARN] Ошибка загрузки 'Минимальный сток': {e}")
 
             # === Максимальный сток (Работа 4) ===
             sheet_r4 = self._find_sheet(xls, ["Максимальный сток", "Работа4"])
@@ -1857,8 +1861,8 @@ class MainWindow(QMainWindow):
                     df_r4 = pd.read_excel(xls, sheet_r4)
                     self.tab_work4.set_data(daily_df=df_r4)
                     loaded.append("Максимальный сток")
-                except Exception:
-                    pass
+                except (ValueError, TypeError, KeyError, AttributeError) as e:
+                    print(f"[WARN] Ошибка загрузки 'Максимальный сток': {e}")
 
             # === Ледовые явления (Работа 5) ===
             sheet_r5 = self._find_sheet(xls, ["Ледовые явления", "Работа5"])
@@ -1873,8 +1877,8 @@ class MainWindow(QMainWindow):
                     breakup_dates = pd.to_datetime(df_r5[breakup_col[0]], errors='coerce').dropna() if breakup_col else None
                     self.tab_work5.set_data(freeze_dates=freeze_dates, breakup_dates=breakup_dates)
                     loaded.append("Ледовые явления")
-                except Exception:
-                    pass
+                except (ValueError, TypeError, KeyError, IndexError, AttributeError) as e:
+                    print(f"[WARN] Ошибка загрузки 'Ледовые явления': {e}")
 
             # === Водный баланс (Работа 6) ===
             sheet_r6 = self._find_sheet(xls, ["Водный баланс", "Работа6"])
@@ -1883,8 +1887,8 @@ class MainWindow(QMainWindow):
                     df_r6 = pd.read_excel(xls, sheet_r6)
                     self.tab_work6.set_data(daily_df=df_r6)
                     loaded.append("Водный баланс")
-                except Exception:
-                    pass
+                except (ValueError, TypeError, KeyError, AttributeError) as e:
+                    print(f"[WARN] Ошибка загрузки 'Водный баланс': {e}")
 
             # === FDC (Работа 8) ===
             sheet_r8 = self._find_sheet(xls, ["FDC", "Работа8"])
@@ -1893,8 +1897,8 @@ class MainWindow(QMainWindow):
                     df_r8 = pd.read_excel(xls, sheet_r8)
                     self.tab_work8.set_data(daily_df=df_r8)
                     loaded.append("FDC")
-                except Exception:
-                    pass
+                except (ValueError, TypeError, KeyError, AttributeError) as e:
+                    print(f"[WARN] Ошибка загрузки 'FDC': {e}")
 
             # === Экология и базовый сток (Работа 10) ===
             sheet_r10 = self._find_sheet(xls, ["Экология и базовый сток", "Работа10"])
@@ -1903,8 +1907,8 @@ class MainWindow(QMainWindow):
                     df_r10 = pd.read_excel(xls, sheet_r10)
                     self.tab_work10.set_data(daily_df=df_r10)
                     loaded.append("Экология и базовый сток")
-                except Exception:
-                    pass
+                except (ValueError, TypeError, KeyError, AttributeError) as e:
+                    print(f"[WARN] Ошибка загрузки 'Экология и базовый сток': {e}")
 
             # === Итог ===
             if loaded:
