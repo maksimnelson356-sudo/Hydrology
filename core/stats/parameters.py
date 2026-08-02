@@ -66,7 +66,8 @@ def calculate_statistical_parameters(
 
     Параметры:
         data: массив значений
-        apply_autocorr_correction: применять ли поправки на автокорреляцию
+        apply_autocorr_correction: не используется (оставлен для совместимости; эталон
+            Cv не корректирует)
         min_probability: минимальная обеспеченность для проверки длины ряда (например, 0.01)
         show_warnings: выводить ли предупреждения о длине ряда
     """
@@ -96,15 +97,13 @@ def calculate_statistical_parameters(
     else:
         r1 = 0.0
 
-    # === Поправки на автокорреляцию ===
+    # === Поправки ===
+    # Эталон (HydroStatCalc ГГИ, сверено по «Варианты подбора.txt»): Cv_расч ≡ Cv_выб,
+    # поправка на автокорреляцию к Cv НЕ применяется (9215: 0.11→0.11; 74425: 1.22→1.22).
+    # Cs_расч в эталоне получается подбором кривой, а не явной формулой — открытый вопрос.
+    # (Ранее здесь стояла поправка √((1+r1)/(1−r1)) к Cv и Cs — удалена как несоответствующая.)
     corrected_cv = cv
     corrected_cs = cs
-
-    if apply_autocorr_correction and 0.1 < r1 < 1.0 and n > 10:
-        # Простая, но часто используемая корректировка
-        factor = np.sqrt((1 + r1) / (1 - r1))
-        corrected_cv = cv * factor
-        corrected_cs = cs * factor
 
     # Статистики для Крицкого-Менкеля
     if std == 0:
@@ -125,7 +124,7 @@ def calculate_statistical_parameters(
         'lambda2': round(lambda2, 4),
         'lambda3': round(lambda3, 4),
         'n': n,
-        'autocorr_correction_applied': apply_autocorr_correction and r1 > 0.1,
+        'autocorr_correction_applied': False,
         'length_warnings': length_warnings
     }
 

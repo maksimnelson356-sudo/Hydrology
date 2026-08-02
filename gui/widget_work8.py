@@ -18,9 +18,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QGroupBox, QFormLayout, QComboBox,
     QTableWidget, QTableWidgetItem, QDoubleSpinBox, QFileDialog,
-    QTabWidget
+    QTabWidget, QSplitter
 )
 from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 from scipy import stats
 
 from core.stats.flow_duration import (
@@ -87,17 +88,22 @@ class Work8Widget(QWidget):
 
         self.fdc_figure = Figure(figsize=(10, 4))
         self.fdc_canvas = FigureCanvas(self.fdc_figure)
-        lay.addWidget(self.fdc_canvas)
 
         self.fdc_table = QTableWidget()
-        self.fdc_table.setMaximumHeight(150)
         auto_resize_table(self.fdc_table)
-        lay.addWidget(self.fdc_table)
 
         self.fdc_result = QTextEdit()
-        self.fdc_result.setMaximumHeight(80)
         self.fdc_result.setReadOnly(True)
-        lay.addWidget(self.fdc_result)
+
+        fdc_splitter = QSplitter(Qt.Orientation.Vertical)
+        fdc_splitter.addWidget(self.fdc_canvas)
+        fdc_splitter.addWidget(self.fdc_table)
+        fdc_splitter.addWidget(self.fdc_result)
+        fdc_splitter.setStretchFactor(0, 3)
+        fdc_splitter.setStretchFactor(1, 1)
+        fdc_splitter.setStretchFactor(2, 1)
+        fdc_splitter.setSizes([260, 140, 120])
+        lay.addWidget(fdc_splitter)
 
         return w
 
@@ -149,16 +155,22 @@ class Work8Widget(QWidget):
 
         self.adv_figure = Figure(figsize=(10, 5))
         self.adv_canvas = FigureCanvas(self.adv_figure)
-        lay.addWidget(self.adv_canvas)
 
         self.adv_table = QTableWidget()
         auto_resize_table(self.adv_table)
-        lay.addWidget(self.adv_table)
 
         self.adv_result = QTextEdit()
-        self.adv_result.setMaximumHeight(100)
         self.adv_result.setReadOnly(True)
-        lay.addWidget(self.adv_result)
+
+        adv_splitter = QSplitter(Qt.Orientation.Vertical)
+        adv_splitter.addWidget(self.adv_canvas)
+        adv_splitter.addWidget(self.adv_table)
+        adv_splitter.addWidget(self.adv_result)
+        adv_splitter.setStretchFactor(0, 3)
+        adv_splitter.setStretchFactor(1, 1)
+        adv_splitter.setStretchFactor(2, 1)
+        adv_splitter.setSizes([280, 140, 120])
+        lay.addWidget(adv_splitter)
 
         return w
 

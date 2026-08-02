@@ -16,9 +16,11 @@ from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_re
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTextEdit, QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem
+    QTextEdit, QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem,
+    QSplitter
 )
 from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 
 from core.hydrorash.minimal_runoff import (
     prepare_minimal_series, compute_minimal_stats,
@@ -73,12 +75,18 @@ class Work3Widget(QWidget):
         self.result_box = QTextEdit()
         self.result_box.setReadOnly(True)
         self.result_box.setFont(QFont("Consolas", 10))
-        self.result_box.setMaximumHeight(150)
         layout.addWidget(self.result_box)
 
         self.figure = Figure(figsize=(12, 4))
         self.canvas = FigureCanvas(self.figure)
-        layout.addWidget(self.canvas)
+
+        self.splitter = QSplitter(Qt.Orientation.Vertical)
+        self.splitter.addWidget(self.result_box)
+        self.splitter.addWidget(self.canvas)
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 3)
+        self.splitter.setSizes([160, 240])
+        layout.addWidget(self.splitter)
 
     def load_data(self):
         path, _ = QFileDialog.getOpenFileName(self, "Загрузить", "", "Excel (*.xlsx)")

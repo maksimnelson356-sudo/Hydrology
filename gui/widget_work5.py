@@ -12,9 +12,10 @@ import pandas as pd
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QFileDialog, QMessageBox, QGroupBox, QFormLayout,
-    QLineEdit, QTableWidget, QTableWidgetItem, QComboBox
+    QLineEdit, QTableWidget, QTableWidgetItem, QComboBox, QSplitter
 )
 from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 
 from gui.plot_style import auto_resize_table
 
@@ -103,13 +104,19 @@ class Work5Widget(QWidget):
         self.result_box = QTextEdit()
         self.result_box.setReadOnly(True)
         self.result_box.setFont(QFont("Consolas", 10))
-        layout.addWidget(self.result_box)
 
         self.table = QTableWidget()
         self.table.setColumnCount(2)
         self.table.setHorizontalHeaderLabels(["Параметр", "Значение"])
         auto_resize_table(self.table)
-        layout.addWidget(self.table)
+
+        results_splitter = QSplitter(Qt.Orientation.Vertical)
+        results_splitter.addWidget(self.result_box)
+        results_splitter.addWidget(self.table)
+        results_splitter.setStretchFactor(0, 2)
+        results_splitter.setStretchFactor(1, 1)
+        results_splitter.setSizes([220, 140])
+        layout.addWidget(results_splitter)
 
     def show_zone_params(self):
         try:

@@ -150,11 +150,15 @@ def empirical_probability(Q: pd.Series) -> pd.DataFrame:
     """
     Эмпирическая кривая обеспеченностей.
 
+    Ряд сортируется по убыванию (m=1 — максимальный член),
+    обеспеченность по формуле Каннана: P_m = (m - 0.3)/(n + 0.4).
+
     Returns:
         DataFrame с колонками Q, P_%
     """
     Q_sorted = Q.sort_values(ascending=False).reset_index(drop=True)
-    P = np.arange(1, len(Q_sorted) + 1) / len(Q_sorted) * 100
+    n = len(Q_sorted)
+    P = (np.arange(1, n + 1) - 0.3) / (n + 0.4) * 100
     return pd.DataFrame({"Q": Q_sorted, "P_%": P})
 
 

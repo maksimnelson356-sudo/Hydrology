@@ -307,3 +307,146 @@ def full_extension_workflow(
         'extended_series': ext_result.get('extended_series'),
         'method': method
     }
+
+
+def multi_analog_extension(
+    Q_calc: pd.Series,
+    analogs: Dict[str, pd.Series],
+    n_min: int = 6,
+    ro_cr: float = 0.7,
+    ro_over_sigma: float = 2.0,
+    k_over_sigma: float = 2.0,
+    y_over_sigma: float = 0.2,
+    max_analogs: int = 3,
+    exclude_negative: bool = True,
+) -> Dict:
+    """
+    Удлинение ряда множественной регрессией по рекам-аналогам.
+
+    Модель (как в протоколе «Продление» ГГИ HydroStatCalc):
+        Q = k0 + k1·Q1 + k2·Q2 + k3·Q3   (до max_analogs аналогов)
+
+    Критерии применимости (строка критериев протокола):
+        Nобщих >= n_min;  Ro >= ro_cr;  Ro/σRo >= ro_over_sigma;
+        ki/σki >= k_over_sigma (для каждого коэффициента);
+        |Yср|/σY <= y_over_sigma (систематическая погрешность);
+        число аналогов <= max_analogs.
+
+    σRo = (1 − R²) / √n  — совпадает с протоколом (n = число общих лет).
+
+    Parameters:
+        Q_calc: ряд расчётной реки (короткий, с пропусками)
+        analogs: {имя_аналога: ряд} — ряды рек-аналогов
+        n_min: минимальное число общих лет (Nmin)
+        ro_cr: критическое значение коэффициента корреляции (RoCr)
+        ro_over_sigma: минимальное отношение Ro/σRo
+        k_over_sigma: минимальное отношение ki/σki
+        y_over_sigma: допустимое отношение |Yср|/σY
+        max_analogs: максимальное число аналогов в уравнении
+        exclude_negative: исключать отрицательные восстановленные значения (Y(−)искл)
+
+    Returns:
+        Dict: R, σRo, n_common, коэффициенты k0..k3, σki, S(σY), Y/σY,
+              флаги критериев, extended_series, строки протокола
+    """
+    if not analogs:
+        raise ValueError("Не задан ни один ряд-аналог")
+
+    analog_names = list(analogs.keys())[:max_analogs]
+
+    common = Q_calc.dropna().index
+    for name in analog_names:
+        common = common.intersection(analogs[name].dropna().index)
+
+    n_common = len(common)
+    if n_common < n_min:
+        return {
+            'success': False,
+            'n_common': n_common,
+            'n_min': n_min,
+            'reason': f'Мало общих лет ({n_common} < {n_min})'
+        }
+
+    y = Q_calc.loc[common].values.astype(float)
+    X = np.column_stack([
+        np.ones(n_common),
+        *[analogs[name].loc[common].values.astype(float) for name in analog_names]
+    ])
+
+    beta, *_ = np.linalg.lstsq(X, y, rcond=None)
+    k0 = beta[0]
+    k = beta[1:]
+
+    y_pred = X @ beta
+    residuals = y - y_pred
+
+    ss_res = float(np.sum(residuals ** 2))
+    ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    R = float(np.sqrt(max(r2, 0.0)))
+
+    sigma_ro = (1.0 - r2) / np.sqrt(n_common) if n_common > 0 else np.nan
+
+    p = X.shape[1]
+    dof = max(n_common - p, 1)
+    sigma2 = ss_res / dof
+    cov = np.linalg.inv(X.T @ X) * sigma2
+    sigma_k = np.sqrt(np.abs(np.diag(cov)))
+
+    k_all = np.concatenate([[k0], k])
+    ratio_k = k_all / sigma_k
+
+    y_mean = float(np.mean(residuals))
+    y_std = float(np.std(residuals, ddof=1)) if n_common > 1 else 0.0
+    ratio_y = abs(y_mean) / y_std if y_std > 0 else np.nan
+
+    checks = {
+        'n_common_ok': n_common >= n_min,
+        'R_ok': R >= ro_cr,
+        'ro_over_sigma_ok': (R / sigma_ro) >= ro_over_sigma if sigma_ro > 0 else False,
+        'k_over_sigma_ok': bool(np.all(ratio_k[1:] >= k_over_sigma)),
+        'y_over_sigma_ok': ratio_y <= y_over_sigma,
+    }
+
+    extended = Q_calc.copy().astype(float)
+    for year in analogs[analog_names[0]].dropna().index:
+        if pd.isna(extended.loc[year]):
+            xs = np.array([1.0] + [
+                analogs[name].loc[year] for name in analog_names
+            ])
+            val = float(xs @ beta)
+            if exclude_negative and val < 0:
+                extended.loc[year] = np.nan
+            else:
+                extended.loc[year] = val
+
+    coeffs = {'k0': round(k0, 4)}
+    sigma_coeffs = {'s_k0': round(float(sigma_k[0]), 4)}
+    ratios = {'r_k0': round(float(ratio_k[0]), 2)}
+    for i, name in enumerate(analog_names):
+        coeffs[f'k{i + 1}'] = round(float(k[i]), 4)
+        sigma_coeffs[f's_k{i + 1}'] = round(float(sigma_k[i + 1]), 4)
+        ratios[f'r_k{i + 1}'] = round(float(ratio_k[i + 1]), 2)
+
+    return {
+        'success': True,
+        'n_common': n_common,
+        'n_min': n_min,
+        'R': round(R, 4),
+        'sigma_Ro': round(float(sigma_ro), 4),
+        'R_over_sigmaRo': round(R / sigma_ro, 2) if sigma_ro > 0 else np.nan,
+        'S': round(y_std, 4),
+        'Y_mean': round(y_mean, 4),
+        'Y_over_sigmaY': round(ratio_y, 3) if not np.isnan(ratio_y) else np.nan,
+        'analogs': analog_names,
+        'coeffs': coeffs,
+        'sigma_coeffs': sigma_coeffs,
+        'k_over_sigma': ratios,
+        'criteria': checks,
+        'all_criteria_ok': all(checks.values()),
+        'extended_series': extended,
+        'formula': f'Q = {coeffs["k0"]}' + ''.join(
+            f' {"+" if k[i] >= 0 else "-"} {abs(k[i]):.4f}·{name}'
+            for i, name in enumerate(analog_names)
+        )
+    }

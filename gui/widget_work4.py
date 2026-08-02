@@ -18,9 +18,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QFileDialog, QMessageBox, QGroupBox, QFormLayout,
     QLineEdit, QTableWidget, QTableWidgetItem, QComboBox, QTabWidget,
-    QPlainTextEdit, QDialog, QDialogButtonBox
+    QPlainTextEdit, QDialog, QDialogButtonBox, QSplitter
 )
 from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 from scipy import stats
 
 from core.hydrorash.max_runoff import (
@@ -28,7 +29,7 @@ from core.hydrorash.max_runoff import (
     max_runoff_frequency_curve, index_year_method,
     build_rating_curve, discharge_from_level, level_from_discharge
 )
-from core.stats.frequency import pearson3_ppf
+from core.stats.frequency import pearson3_ppf, empirical_plotting_positions
 
 
 class Work4Widget(QWidget):
@@ -114,12 +115,18 @@ class Work4Widget(QWidget):
         self.result_box = QTextEdit()
         self.result_box.setReadOnly(True)
         self.result_box.setFont(QFont("Consolas", 10))
-        self.result_box.setMaximumHeight(120)
         layout.addWidget(self.result_box)
 
         self.figure = Figure(figsize=(10, 5))
         self.canvas = FigureCanvas(self.figure)
-        layout.addWidget(self.canvas)
+
+        self.splitter = QSplitter(Qt.Orientation.Vertical)
+        self.splitter.addWidget(self.result_box)
+        self.splitter.addWidget(self.canvas)
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 3)
+        self.splitter.setSizes([140, 260])
+        layout.addWidget(self.splitter)
 
     def _setup_rating_tab(self):
         layout = QVBoxLayout(self.tab_rating)
@@ -145,19 +152,24 @@ class Work4Widget(QWidget):
         self.rating_table = QTableWidget()
         self.rating_table.setColumnCount(4)
         self.rating_table.setHorizontalHeaderLabels(["a", "b", "H0", "R²"])
-        self.rating_table.setMaximumHeight(50)
         auto_resize_table(self.rating_table)
         layout.addWidget(self.rating_table)
 
         self.rating_result = QTextEdit()
         self.rating_result.setReadOnly(True)
         self.rating_result.setFont(QFont("Consolas", 10))
-        self.rating_result.setMaximumHeight(80)
         layout.addWidget(self.rating_result)
 
         self.rating_figure = Figure(figsize=(10, 4))
         self.rating_canvas = FigureCanvas(self.rating_figure)
-        layout.addWidget(self.rating_canvas)
+
+        rating_splitter = QSplitter(Qt.Orientation.Vertical)
+        rating_splitter.addWidget(self.rating_result)
+        rating_splitter.addWidget(self.rating_canvas)
+        rating_splitter.setStretchFactor(0, 1)
+        rating_splitter.setStretchFactor(1, 3)
+        rating_splitter.setSizes([120, 240])
+        layout.addWidget(rating_splitter)
 
     def _setup_index_tab(self):
         layout = QVBoxLayout(self.tab_index)
@@ -193,7 +205,6 @@ class Work4Widget(QWidget):
         self.index_result = QTextEdit()
         self.index_result.setReadOnly(True)
         self.index_result.setFont(QFont("Consolas", 10))
-        self.index_result.setMaximumHeight(80)
         layout.addWidget(self.index_result)
 
     def manual_input(self):
@@ -269,10 +280,9 @@ class Work4Widget(QWidget):
 
         self.figure.clear()
         ax = self.figure.add_subplot(111)
-        p_emp = (np.arange(1, len(self.max_series) + 1) - 0.375) / (len(self.max_series) + 0.25)
+        q_desc, p_emp = empirical_plotting_positions(self.max_series.values)
         x_emp = stats.norm.ppf(p_emp)
-        sorted_max = np.sort(self.max_series.values)
-        modular_emp = sorted_max / params['mean']
+        modular_emp = q_desc / params['mean']
 
         ax.plot(x_emp, modular_emp, 'o', color='#C62828', markersize=5, label='Эмпирические')
 
@@ -283,8 +293,8 @@ class Work4Widget(QWidget):
 
         ax.plot(x_theor, modular_theor, color='#1565C0', linewidth=2, label='Пирсон III')
 
-        prob_ticks = [0.01, 0.05, 0.1, 0.2, 0.5, 0.8, 0.9, 0.95, 0.99]
-        prob_labels = ['0.1%', '5%', '10%', '20%', '50%', '80%', '90%', '95%', '99%']
+        prob_ticks = [0.001, 0.01, 0.05, 0.1, 0.2, 0.5, 0.8, 0.9, 0.95, 0.99]
+        prob_labels = ['0.1%', '1%', '5%', '10%', '20%', '50%', '80%', '90%', '95%', '99%']
         ax.set_xticks(stats.norm.ppf(prob_ticks))
         ax.set_xticklabels(prob_labels)
 
@@ -364,10 +374,9 @@ class Work4Widget(QWidget):
         ax = self.figure.add_subplot(111)
 
         n = len(self.max_series)
-        p_emp = (np.arange(1, n + 1) - 0.375) / (n + 0.25)
+        q_desc, p_emp = empirical_plotting_positions(self.max_series.values)
         x_emp = stats.norm.ppf(p_emp)
-        sorted_max = np.sort(self.max_series.values)
-        modular_emp = sorted_max / params["mean"]
+        modular_emp = q_desc / params["mean"]
 
         ax.plot(x_emp, modular_emp, "o", color="#C62828", markersize=5, label="Эмпирические")
 
@@ -378,8 +387,8 @@ class Work4Widget(QWidget):
 
         ax.plot(x_theor, modular_theor, color="#1565C0", linewidth=2, label="Пирсон III")
 
-        prob_ticks = [0.01, 0.05, 0.1, 0.2, 0.5, 0.8, 0.9, 0.95, 0.99]
-        prob_labels = ["0.1%", "5%", "10%", "20%", "50%", "80%", "90%", "95%", "99%"]
+        prob_ticks = [0.001, 0.01, 0.05, 0.1, 0.2, 0.5, 0.8, 0.9, 0.95, 0.99]
+        prob_labels = ["0.1%", "1%", "5%", "10%", "20%", "50%", "80%", "90%", "95%", "99%"]
         ax.set_xticks(stats.norm.ppf(prob_ticks))
         ax.set_xticklabels(prob_labels)
 

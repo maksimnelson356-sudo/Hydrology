@@ -26,7 +26,7 @@ from scipy import stats
 from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_resize_table, AutoResizeTableFilter
 
 from core.stats.data_loader import load_hydrological_data, get_series_by_post, get_basic_stats
-from core.stats.frequency import calculate_frequency_curve, fit_pearson3
+from core.stats.frequency import calculate_frequency_curve, fit_pearson3, empirical_plotting_positions
 from core.stats.missing_data import fill_missing_interpolation, detect_missing
 from core.stats.trends import full_trend_analysis
 from core.stats.gts_integration import build_gts_frequency_curve, gts_summary_table
@@ -339,7 +339,6 @@ class MainWindow(QMainWindow):
             "Анализ трендов",
             "Визуализация",
             "Крицкий-Менкель (ординаты)",
-            "Параметры",
             "Норма годового стока",
             "Внутригодовое распределение",
             "Минимальный сток",
@@ -350,19 +349,22 @@ class MainWindow(QMainWindow):
             "FDC + Регрессии + Статистика",
             "ППУ + ГВП + Регулирование",
             "Экология + Базовый сток",
+            "Параметры",
         ]
         self._nav_pages = [
             self.tab_data, self.tab_graph, self.tab_trend, self.tab_viz,
-            self.tab_kritsky, self.tab_params,
+            self.tab_kritsky,
             self.tab_work1, self.tab_work2, self.tab_work3, self.tab_work4,
             self.tab_work5, self.tab_work6, self.tab_work7, self.tab_work8,
             self.tab_work9, self.tab_work10,
+            self.tab_params,
         ]
         self._nav_colors = [
-            "#1565C0", "#1565C0", "#1565C0", "#1565C0", "#1565C0", "#1565C0",
+            "#1565C0", "#1565C0", "#1565C0", "#1565C0", "#1565C0",
             "#2E7D32", "#00695C", "#E65100", "#C62828",
             "#4527A0", "#00838F", "#6A1B9A", "#2E7D32",
             "#EF6C00", "#880E4F",
+            "#1565C0",
         ]
 
         self._nav_list = QListWidget()
@@ -550,17 +552,22 @@ class MainWindow(QMainWindow):
         
         self.trend_text = QTextEdit()
         self.trend_text.setReadOnly(True)
-        self.trend_text.setMaximumHeight(80)
         
         self.trend_figure = Figure(figsize=(10, 5))
         self.trend_canvas = FigureCanvas(self.trend_figure)
-        
+
+        trend_splitter = QSplitter(Qt.Orientation.Vertical)
+        trend_splitter.addWidget(self.trend_text)
+        trend_splitter.addWidget(self.trend_canvas)
+        trend_splitter.setStretchFactor(0, 1)
+        trend_splitter.setStretchFactor(1, 3)
+        trend_splitter.setSizes([140, 300])
+
         layout.addWidget(self.btn_trend)
         layout.addWidget(QLabel("Результаты анализа тренда:"))
         layout.addWidget(self.trend_table)
-        layout.addWidget(QLabel("Интерпретация:"))
-        layout.addWidget(self.trend_text)
-        layout.addWidget(self.trend_canvas)
+        layout.addWidget(QLabel("Интерпретация + график:"))
+        layout.addWidget(trend_splitter)
     
     def setup_viz_tab(self):
         layout = QVBoxLayout(self.tab_viz)
@@ -1172,13 +1179,16 @@ class MainWindow(QMainWindow):
             ax = self.figure.add_subplot(111)
             
             n = len(values)
-            sorted_values = np.sort(values)
-            p_emp = (np.arange(1, n + 1) - 0.375) / (n + 0.25)
+            q_desc, p_emp = empirical_plotting_positions(values)
             x_emp = stats.norm.ppf(p_emp)
-            modular_emp = sorted_values / mean_q
+            modular_emp = q_desc / mean_q
             
             ax.plot(x_emp, modular_emp, 'o', color=COLORS["primary"], markersize=5,
                     label='Эмпирические точки', markeredgecolor='white', markeredgewidth=0.5)
+            
+            p_theor = np.array([0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5,
+                                0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99, 0.995, 0.999])
+            x_theor = stats.norm.ppf(p_theor)
             
             is_composite = self.break_year is not None and years is not None
             
@@ -1193,51 +1203,42 @@ class MainWindow(QMainWindow):
                     p1 = fit_pearson3(values1)
                     p2 = fit_pearson3(values2)
                     
-                    curve1 = calculate_frequency_curve(values1)
-                    curve2 = calculate_frequency_curve(values2)
+                    curve1 = calculate_frequency_curve(values1, probabilities=p_theor)
+                    curve2 = calculate_frequency_curve(values2, probabilities=p_theor)
                     
                     modular_theor1 = curve1['Q'].values / p1['mean']
                     modular_theor2 = curve2['Q'].values / p2['mean']
                     
-                    p_theor = np.array([0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5,
-                                        0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99, 0.995, 0.999])
-                    x_theor = stats.norm.ppf(p_theor)
-                    
-                    ax.plot(x_theor[:len(modular_theor1)], modular_theor1[:len(x_theor)], 
+                    ax.plot(x_theor, modular_theor1, 
                             color=COLORS["secondary"], linewidth=2.5, label=f'До {self.break_year}')
-                    ax.plot(x_theor[:len(modular_theor2)], modular_theor2[:len(x_theor)], 
+                    ax.plot(x_theor, modular_theor2, 
                             color=COLORS["accent"], linewidth=2.5, label=f'После {self.break_year}')
                     title = f"Составная кривая (разрыв {self.break_year})"
                     
                     textstr = (f"До {self.break_year}:\n"
-                               f"Qср={p1['mean']:.2f}  Cv={p1.get('cv',0):.3f}  Cs={p1.get('cs',0):.3f}\n\n"
+                               f"Qср={p1['mean']:.2f}  Cv={p1['cv']:.3f}  Cs={p1['skew']:.3f}\n\n"
                                f"После {self.break_year}:\n"
-                               f"Qср={p2['mean']:.2f}  Cv={p2.get('cv',0):.3f}  Cs={p2.get('cs',0):.3f}")
+                               f"Qср={p2['mean']:.2f}  Cv={p2['cv']:.3f}  Cs={p2['skew']:.3f}")
                 else:
                     title = "Составная кривая (недостаточно данных в частях)"
-                    textstr = f"Qср = {mean_q:.2f}\nCv = {pearson.get('cv', 0):.3f}\nCs = {pearson.get('cs', 0):.3f}"
+                    textstr = f"Qср = {mean_q:.2f}\nCv = {pearson['cv']:.3f}\nCs = {pearson['skew']:.3f}"
             else:
                 if self.curve_type == "pearson3":
-                    curve = calculate_frequency_curve(values)
+                    curve = calculate_frequency_curve(values, probabilities=p_theor)
                     modular_theor = curve['Q'].values / mean_q
-                    p_theor = np.array([0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5,
-                                        0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99, 0.995, 0.999])
-                    x_theor = stats.norm.ppf(p_theor)
-                    ax.plot(x_theor[:len(modular_theor)], modular_theor[:len(x_theor)], 
+                    ax.plot(x_theor, modular_theor, 
                             color=COLORS["secondary"], linewidth=2.5, label='Пирсон III')
                     title = "Кривая Пирсона III типа"
                 elif self.curve_type == "kritsky_menkel":
-                    shape, loc, scale = stats.gamma.fit(values, floc=0)
-                    p_theor = np.linspace(0.001, 0.999, 200)
-                    x_theor = stats.norm.ppf(p_theor)
-                    theor_q = stats.gamma.ppf(p_theor, a=shape, loc=loc, scale=scale)
+                    from core.stats.frequency import kritsky_menkel_ppf
+                    theor_q = kritsky_menkel_ppf(p_theor, mean_q, pearson['cv'], pearson['skew'])
                     modular_theor = theor_q / mean_q
                     ax.plot(x_theor, modular_theor, color=COLORS["secondary"], linewidth=2.5, label='Крицкий-Менкель')
                     title = "Кривая Крицкого-Менкеля"
                 elif self.curve_type == "normal":
-                    p_theor = np.linspace(0.001, 0.999, 100)
-                    x_theor = stats.norm.ppf(p_theor)
-                    theor_values = stats.norm.ppf(p_theor, loc=mean_q, scale=values.std())
+                    from core.stats.parameters import calculate_statistical_parameters
+                    params = calculate_statistical_parameters(values)
+                    theor_values = stats.norm.ppf(1 - p_theor, loc=params['mean'], scale=params['std'])
                     modular_theor = theor_values / mean_q
                     ax.plot(x_theor, modular_theor, color=COLORS["secondary"], linewidth=2.5, label='Нормальное распределение')
                     title = "Нормальное распределение"
@@ -1245,7 +1246,7 @@ class MainWindow(QMainWindow):
                     ax.plot(x_emp, modular_emp, '-', color=COLORS["secondary"], linewidth=2, label='Интерполяция')
                     title = "Интерполяция ломаной линией"
                 
-                textstr = f"Qср = {mean_q:.2f}\nCv = {pearson.get('cv', 0):.3f}\nCs = {pearson.get('cs', 0):.3f}"
+                textstr = f"Qср = {mean_q:.2f}\nCv = {pearson['cv']:.3f}\nCs = {pearson['skew']:.3f}"
             
             setup_axes_style(ax, title=f'{title} — Пост {self.current_post}',
                            xlabel='Обеспеченность, %', ylabel='Модульный коэффициент K = Q / Qср')
@@ -1429,21 +1430,18 @@ class MainWindow(QMainWindow):
                 self.table.setItem(i+1, 2, QTableWidgetItem(f"{row['Обеспеченность_%']:.3f}"))
 
             n = len(values)
-            sorted_values = np.sort(values)
-            p_emp = (np.arange(1, n + 1) - 0.375) / (n + 0.25)
+            q_desc, p_emp = empirical_plotting_positions(values)
             x_emp = stats.norm.ppf(p_emp)
-            modular_emp = sorted_values / mean_q
+            modular_emp = q_desc / mean_q
 
             self.figure.clear()
             ax = self.figure.add_subplot(111)
             ax.plot(x_emp, modular_emp, 'o', color='#1f77b4', markersize=5, label='Эмпирические точки')
 
-            p_theor = np.array([0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5,
-                                0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99, 0.995, 0.999])
-            x_theor = stats.norm.ppf(p_theor)
             curve = result['curve_df']
+            x_theor = stats.norm.ppf(curve['P_%'].values / 100)
             modular_curve = curve['Q'].values / mean_q
-            ax.plot(x_theor[:len(modular_curve)], modular_curve[:len(x_theor)],
+            ax.plot(x_theor, modular_curve,
                     color='#d62728', linewidth=2.5, label=f'Пирсон III ({item})')
 
             gts_pts = result['gts_points']
@@ -1530,11 +1528,10 @@ class MainWindow(QMainWindow):
             cs2 = change['part2_stats']['cs']
 
             n = len(values)
-            sorted_values = np.sort(values)
-            p_emp = (np.arange(1, n + 1) - 0.375) / (n + 0.25)
+            q_desc, p_emp = empirical_plotting_positions(values)
             x_emp = stats.norm.ppf(p_emp)
             mean_total = np.mean(values)
-            modular_emp = sorted_values / mean_total
+            modular_emp = q_desc / mean_total
 
             self.figure.clear()
             ax = self.figure.add_subplot(111)
@@ -1924,10 +1921,8 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка загрузки шаблона", str(e))
 
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    app.setStyleSheet("""
-        QGroupBox {
+APP_STYLESHEET = """
+    QGroupBox {
             border: 1px solid #BDBDBD;
             border-radius: 6px;
             margin-top: 12px;
@@ -2009,7 +2004,12 @@ if __name__ == "__main__":
             border: 1px solid #BDBDBD;
             border-radius: 4px;
         }
-    """)
+    """
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    app.setStyleSheet(APP_STYLESHEET)
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

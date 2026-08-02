@@ -90,7 +90,6 @@ class Work2Widget(QWidget):
         self.result_box = QTextEdit()
         self.result_box.setReadOnly(True)
         self.result_box.setFont(QFont("Consolas", 10))
-        self.result_box.setMaximumHeight(150)
         layout.addWidget(self.result_box)
 
     def load_data(self):

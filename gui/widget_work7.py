@@ -17,9 +17,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QGroupBox, QFormLayout, QLineEdit,
     QTableWidget, QTableWidgetItem, QComboBox, QTabWidget,
-    QDoubleSpinBox, QSpinBox
+    QDoubleSpinBox, QSpinBox, QSplitter
 )
 from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 
 from core.hydrorash.rational_method import (
     rational_method, idf_curve, design_rainfall,
@@ -114,12 +115,17 @@ class Work7Widget(QWidget):
 
         self.figure = Figure(figsize=(10, 4))
         self.canvas = FigureCanvas(self.figure)
-        lay.addWidget(self.canvas)
 
         self.result_box = QTextEdit()
-        self.result_box.setMaximumHeight(120)
         self.result_box.setReadOnly(True)
-        lay.addWidget(self.result_box)
+
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.addWidget(self.canvas)
+        splitter.addWidget(self.result_box)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([260, 140])
+        lay.addWidget(splitter)
 
         return w
 
@@ -163,12 +169,17 @@ class Work7Widget(QWidget):
 
         self.hg_figure = Figure(figsize=(10, 4))
         self.hg_canvas = FigureCanvas(self.hg_figure)
-        lay.addWidget(self.hg_canvas)
 
         self.hg_result = QTextEdit()
-        self.hg_result.setMaximumHeight(80)
         self.hg_result.setReadOnly(True)
-        lay.addWidget(self.hg_result)
+
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.addWidget(self.hg_canvas)
+        splitter.addWidget(self.hg_result)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([260, 140])
+        lay.addWidget(splitter)
 
         return w
 
@@ -214,12 +225,17 @@ class Work7Widget(QWidget):
 
         self.sm_figure = Figure(figsize=(10, 4))
         self.sm_canvas = FigureCanvas(self.sm_figure)
-        lay.addWidget(self.sm_canvas)
 
         self.sm_result = QTextEdit()
-        self.sm_result.setMaximumHeight(100)
         self.sm_result.setReadOnly(True)
-        lay.addWidget(self.sm_result)
+
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.addWidget(self.sm_canvas)
+        splitter.addWidget(self.sm_result)
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([260, 140])
+        lay.addWidget(splitter)
 
         return w
 

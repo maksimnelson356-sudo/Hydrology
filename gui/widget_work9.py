@@ -17,9 +17,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QGroupBox, QFormLayout, QLineEdit,
     QTableWidget, QTableWidgetItem, QComboBox,
-    QDoubleSpinBox, QSpinBox, QFileDialog, QTabWidget
+    QDoubleSpinBox, QSpinBox, QFileDialog, QTabWidget, QSplitter
 )
 from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 
 from core.hydrorash.spillway import (
     free_overfall, weir_flow, orifice_flow,
@@ -101,7 +102,6 @@ class Work9Widget(QWidget):
         lay.addWidget(btn)
 
         self.sp_result = QTextEdit()
-        self.sp_result.setMaximumHeight(100)
         self.sp_result.setReadOnly(True)
         lay.addWidget(self.sp_result)
 
@@ -165,12 +165,17 @@ class Work9Widget(QWidget):
 
         self.bw_figure = Figure(figsize=(10, 4))
         self.bw_canvas = FigureCanvas(self.bw_figure)
-        lay.addWidget(self.bw_canvas)
 
         self.bw_result = QTextEdit()
-        self.bw_result.setMaximumHeight(80)
         self.bw_result.setReadOnly(True)
-        lay.addWidget(self.bw_result)
+
+        bw_splitter = QSplitter(Qt.Orientation.Vertical)
+        bw_splitter.addWidget(self.bw_canvas)
+        bw_splitter.addWidget(self.bw_result)
+        bw_splitter.setStretchFactor(0, 3)
+        bw_splitter.setStretchFactor(1, 1)
+        bw_splitter.setSizes([260, 140])
+        lay.addWidget(bw_splitter)
 
         return w
 
@@ -202,12 +207,17 @@ class Work9Widget(QWidget):
 
         self.reg_figure = Figure(figsize=(10, 4))
         self.reg_canvas = FigureCanvas(self.reg_figure)
-        lay.addWidget(self.reg_canvas)
 
         self.reg_table = QTableWidget()
-        self.reg_table.setMaximumHeight(200)
         auto_resize_table(self.reg_table)
-        lay.addWidget(self.reg_table)
+
+        reg_splitter = QSplitter(Qt.Orientation.Vertical)
+        reg_splitter.addWidget(self.reg_canvas)
+        reg_splitter.addWidget(self.reg_table)
+        reg_splitter.setStretchFactor(0, 3)
+        reg_splitter.setStretchFactor(1, 1)
+        reg_splitter.setSizes([260, 160])
+        lay.addWidget(reg_splitter)
 
         return w
 

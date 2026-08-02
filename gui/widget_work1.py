@@ -94,18 +94,23 @@ class Work1Widget(QWidget):
         top.addWidget(form_group)
         layout.addLayout(top)
 
-        # === Текст результатов ===
+        # === Текст результатов + график (разделитель) ===
         self.result_box = QTextEdit()
         self.result_box.setReadOnly(True)
         self.result_box.setFont(__import__("PyQt6.QtGui", fromlist=["QFont"]).QFont("Consolas", 10))
-        self.result_box.setMaximumHeight(220)
-        layout.addWidget(QLabel("Результаты расчёта:"))
-        layout.addWidget(self.result_box)
 
-        # === График ===
-        self.figure = Figure(figsize=(12, 5))
+        self.figure = Figure(figsize=(12, 3.6))
         self.canvas = FigureCanvas(self.figure)
-        layout.addWidget(self.canvas)
+
+        self.splitter = QSplitter(Qt.Orientation.Vertical)
+        self.splitter.addWidget(self.result_box)
+        self.splitter.addWidget(self.canvas)
+        self.splitter.setStretchFactor(0, 2)
+        self.splitter.setStretchFactor(1, 3)
+        self.splitter.setSizes([260, 240])
+
+        layout.addWidget(QLabel("Результаты расчёта:"))
+        layout.addWidget(self.splitter)
 
     def load_calc_data(self):
         path, _ = QFileDialog.getOpenFileName(self, "Загрузить данные", "", "Excel (*.xlsx)")

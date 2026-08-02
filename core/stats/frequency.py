@@ -1,8 +1,8 @@
 """
 core/stats/frequency.py
 Расчёт кривых обеспеченности:
-- Пирсона III типа (формула Корниша-Фишера)
-- Крицкого-Менкеля (табличный метод + трёхпараметрическое гамма)
+- Пирсона III типа (точная функция распределения scipy)
+- Крицкого-Менкеля (трёхпараметрическое гамма-распределение)
 - Нормальное распределение
 - Эмпирическая кривая
 """
@@ -36,60 +36,65 @@ def fit_pearson3(data: np.ndarray) -> Dict:
     }
 
 
+def empirical_plotting_positions(data: np.ndarray) -> tuple:
+    """
+    Эмпирические точки кривой обеспеченности (формула Каннана).
+
+    Ряд сортируется по убыванию (m=1 — максимальный член),
+    обеспеченность каждого члена: P_m = (m - 0.3)/(n + 0.4) [0..1].
+
+    Returns:
+        (q_desc, p_exceed): отсортированный по убыванию ряд и его
+        эмпирические обеспеченности (вероятности превышения).
+    """
+    data = np.asarray(data, dtype=float)
+    q_desc = np.sort(data)[::-1]
+    n = len(q_desc)
+    p_exceed = (np.arange(1, n + 1) - 0.3) / (n + 0.4)
+    return q_desc, p_exceed
+
+
 def pearson3_ppf(probabilities: np.ndarray, mean: float, cv: float, cs: float) -> np.ndarray:
     """
-    Квантили распределения Пирсона III типа (Крицкий-Менкель)
-    через формулу Корниша-Фишера.
+    Квантили распределения Пирсона III типа.
 
-    X_p = X̄ · (1 + Cv · Φ_mod)
+    X_p = X̄ + σ · z_p,  σ = X̄ · Cv
 
-    где Φ_mod — модифицированный нормальный квантиль с учётом Cs:
-    Φ_mod = Φ + (Cs/6)·(Φ²-1) + (Cs²/36)·(2Φ³-5Φ) - (Cs³/216)·(Φ⁴-17Φ²+16)
+    где z_p — квантиль стандартизированного распределения Пирсона III
+    (с нулевым средним, единичным СКО и заданной асимметрией Cs).
+    Используется точная функция распределения scipy (в отличие от
+    приближения Корниша-Фишера, которое не работает при больших Cs).
+
+    Отрицательные квантили (нижний хвост при Cs < 0 и больших P)
+    обрезаются до нуля, как это делает эталонная программа.
     """
     probabilities = np.asarray(probabilities, dtype=float)
     cv = max(abs(cv), 0.001)
     cs = float(cs)
 
-    # Квантили нормального распределения (1 - P для перевода из обеспеченности)
-    phi = stats.norm.ppf(1 - probabilities)
+    quantiles = stats.pearson3.ppf(
+        1 - probabilities, skew=cs, loc=mean, scale=mean * cv
+    )
 
-    # Формула Корниша-Фишера (расширение до 4-го порядка)
-    phi_mod = (phi
-               + (cs / 6.0) * (phi ** 2 - 1.0)
-               + (cs ** 2 / 36.0) * (2.0 * phi ** 3 - 5.0 * phi)
-               - (cs ** 3 / 216.0) * (2.0 * phi ** 4 - 17.0 * phi ** 2 + 16.0))
-
-    return mean * (1.0 + cv * phi_mod)
+    return np.maximum(quantiles, 0.0)
 
 
 def kritsky_menkel_ppf(probabilities: np.ndarray, mean: float, cv: float, cs: float) -> np.ndarray:
     """
     Квантили распределения Крицкого-Менкеля.
 
-    1) Если Cs/Cv ∈ поддерживаемым таблицам — используем табличный метод
-       (интерполяция из kritsky_tables.py, наиболее точный).
-    2) Иначе — трёхпараметрическое гамма-распределение:
+    Основной метод — трёхпараметрическое гамма-распределение:
        α = 4/Cs²,  β = X̄·Cv·Cs/2,  A₀ = X̄·(1 - 2Cv/Cs)
        X_p = A₀ + Gamma(α, β)
+
+    Совпадает с эталонной программой HydroStatCalc (таблицы KritkMenc.bin)
+    в пределах погрешности таблиц. Отрицательные квантили обрезаются до нуля.
     """
     probabilities = np.asarray(probabilities, dtype=float)
     cv = max(abs(cv), 0.001)
     cs = float(cs)
     if abs(cs) < 0.001:
         cs = 0.001
-
-    # --- Попытка табличного метода ---
-    cs_cv = abs(cs / cv) if cv > 0 else 2.0
-    try:
-        from core.stats.kritsky_tables import get_ordinates, PROBS
-        ordinates = get_ordinates(cs_cv, cv)
-        # Интерполяция по обеспеченностям
-        quantiles = mean * np.interp(probabilities, PROBS, ordinates)
-        # Проверяем разумность (все квантили > 0 для расходов)
-        if np.all(quantiles > 0):
-            return quantiles
-    except (ImportError, ValueError, TypeError):
-        pass  # табличный метод недоступен — используем формулу
 
     # --- Трёхпараметрическое гамма-распределение ---
     alpha = 4.0 / (cs ** 2)                          # параметр формы
@@ -102,7 +107,7 @@ def kritsky_menkel_ppf(probabilities: np.ndarray, mean: float, cv: float, cs: fl
         # Fallback на формулу Корниша-Фишера
         quantiles = pearson3_ppf(probabilities, mean, cv, cs)
 
-    return quantiles
+    return np.maximum(quantiles, 0.0)
 
 
 def fit_theoretical_distributions(Q: np.ndarray, p_prob: np.ndarray) -> dict:
@@ -186,10 +191,13 @@ def calculate_frequency_curve(
         quantiles = kritsky_menkel_ppf(probabilities, mean, cv, cs)
 
     elif curve_type == "empirical":
-        sorted_data = np.sort(data)
-        n = len(sorted_data)
+        # Ряд сортируется по убыванию: m=1 — максимальный член ряда,
+        # эмпирическая обеспеченность P_m = (m - 0.3)/(n + 0.4).
+        q_desc = np.sort(data)[::-1]
+        n = len(q_desc)
         emp_probs = (np.arange(1, n + 1) - 0.3) / (n + 0.4)
-        quantiles = np.interp(probabilities, emp_probs, sorted_data)
+        quantiles = np.interp(probabilities, emp_probs, q_desc,
+                              left=q_desc[0], right=q_desc[-1])
 
     elif curve_type == "none":
         quantiles = np.full_like(probabilities, np.nan)

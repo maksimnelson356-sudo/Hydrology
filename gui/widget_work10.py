@@ -18,9 +18,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QGroupBox, QFormLayout,
     QTableWidget, QTableWidgetItem, QComboBox,
-    QDoubleSpinBox, QSpinBox, QFileDialog, QTabWidget
+    QDoubleSpinBox, QSpinBox, QFileDialog, QTabWidget, QSplitter
 )
 from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 
 from core.hydrorash.ecological_flow import (
     tessmann_seasonal, ecoregime_classes, min_flow_comparison,
@@ -97,12 +98,17 @@ class Work10Widget(QWidget):
 
         self.eco_figure = Figure(figsize=(10, 4))
         self.eco_canvas = FigureCanvas(self.eco_figure)
-        lay.addWidget(self.eco_canvas)
 
         self.eco_table = QTableWidget()
-        self.eco_table.setMaximumHeight(250)
         auto_resize_table(self.eco_table)
-        lay.addWidget(self.eco_table)
+
+        eco_splitter = QSplitter(Qt.Orientation.Vertical)
+        eco_splitter.addWidget(self.eco_canvas)
+        eco_splitter.addWidget(self.eco_table)
+        eco_splitter.setStretchFactor(0, 3)
+        eco_splitter.setStretchFactor(1, 2)
+        eco_splitter.setSizes([240, 200])
+        lay.addWidget(eco_splitter)
 
         return w
 
@@ -122,12 +128,17 @@ class Work10Widget(QWidget):
 
         self.bf_figure = Figure(figsize=(10, 4))
         self.bf_canvas = FigureCanvas(self.bf_figure)
-        lay.addWidget(self.bf_canvas)
 
         self.bf_result = QTextEdit()
-        self.bf_result.setMaximumHeight(80)
         self.bf_result.setReadOnly(True)
-        lay.addWidget(self.bf_result)
+
+        bf_splitter = QSplitter(Qt.Orientation.Vertical)
+        bf_splitter.addWidget(self.bf_canvas)
+        bf_splitter.addWidget(self.bf_result)
+        bf_splitter.setStretchFactor(0, 3)
+        bf_splitter.setStretchFactor(1, 1)
+        bf_splitter.setSizes([260, 140])
+        lay.addWidget(bf_splitter)
 
         return w
 
@@ -142,12 +153,17 @@ class Work10Widget(QWidget):
 
         self.sp_figure = Figure(figsize=(10, 5))
         self.sp_canvas = FigureCanvas(self.sp_figure)
-        lay.addWidget(self.sp_canvas)
 
         self.sp_result = QTextEdit()
-        self.sp_result.setMaximumHeight(100)
         self.sp_result.setReadOnly(True)
-        lay.addWidget(self.sp_result)
+
+        sp_splitter = QSplitter(Qt.Orientation.Vertical)
+        sp_splitter.addWidget(self.sp_canvas)
+        sp_splitter.addWidget(self.sp_result)
+        sp_splitter.setStretchFactor(0, 3)
+        sp_splitter.setStretchFactor(1, 1)
+        sp_splitter.setSizes([280, 140])
+        lay.addWidget(sp_splitter)
 
         return w
 
@@ -174,12 +190,17 @@ class Work10Widget(QWidget):
 
         self.dr_figure = Figure(figsize=(10, 4))
         self.dr_canvas = FigureCanvas(self.dr_figure)
-        lay.addWidget(self.dr_canvas)
 
         self.dr_result = QTextEdit()
-        self.dr_result.setMaximumHeight(80)
         self.dr_result.setReadOnly(True)
-        lay.addWidget(self.dr_result)
+
+        dr_splitter = QSplitter(Qt.Orientation.Vertical)
+        dr_splitter.addWidget(self.dr_canvas)
+        dr_splitter.addWidget(self.dr_result)
+        dr_splitter.setStretchFactor(0, 3)
+        dr_splitter.setStretchFactor(1, 1)
+        dr_splitter.setSizes([260, 140])
+        lay.addWidget(dr_splitter)
 
         return w
 
