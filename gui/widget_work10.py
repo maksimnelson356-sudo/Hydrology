@@ -37,6 +37,7 @@ from core.stats.spectral import (
 from core.stats.drought import (
     spi_index, drought_classification, drought_frequency
 )
+from core.stats.sheet_reader import read_work_sheet, numeric_column
 
 
 class Work10Widget(QWidget):
@@ -245,8 +246,14 @@ class Work10Widget(QWidget):
             return
         try:
             import pandas as pd
-            df = pd.read_csv(path) if path.endswith('.csv') else pd.read_excel(path)
-            self._data = df.iloc[:, 0].dropna().values
+            df = read_work_sheet(path, ["Работа10", "Экология", "Базовый"])
+            if df.empty:
+                df = pd.read_csv(path) if path.endswith('.csv') else pd.read_excel(path)
+            col = numeric_column(df, prefer_names=["базовый", "value", "q"])
+            if col is not None:
+                self._data = col.values
+            else:
+                self._data = pd.to_numeric(df.iloc[:, 0], errors="coerce").dropna().values
             self._plot_baseflow()
         except Exception as e:
             from PyQt6.QtWidgets import QMessageBox
@@ -303,8 +310,11 @@ class Work10Widget(QWidget):
             return
         try:
             import pandas as pd
-            df = pd.read_csv(path) if path.endswith('.csv') else pd.read_excel(path)
-            data = df.iloc[:, 0].dropna().values
+            df = read_work_sheet(path, ["Работа10", "Экология", "Базовый"])
+            if df.empty:
+                df = pd.read_csv(path) if path.endswith('.csv') else pd.read_excel(path)
+            col = numeric_column(df, prefer_names=["базовый", "сток", "value", "q"])
+            data = col.values if col is not None else pd.to_numeric(df.iloc[:, 0], errors="coerce").dropna().values
             self._analyze_spectral(data)
         except Exception as e:
             from PyQt6.QtWidgets import QMessageBox
@@ -350,8 +360,11 @@ class Work10Widget(QWidget):
             return
         try:
             import pandas as pd
-            df = pd.read_csv(path) if path.endswith('.csv') else pd.read_excel(path)
-            P = df.iloc[:, 0].dropna().values
+            df = read_work_sheet(path, ["Работа10", "Экология", "Базовый"])
+            if df.empty:
+                df = pd.read_csv(path) if path.endswith('.csv') else pd.read_excel(path)
+            col = numeric_column(df, prefer_names=["базовый", "сток", "value", "q"])
+            P = col.values if col is not None else pd.to_numeric(df.iloc[:, 0], errors="coerce").dropna().values
             scale = self.dr_scale.value()
             result = spi_index(P, scale)
             self._plot_drought(result, scale)
@@ -387,10 +400,16 @@ class Work10Widget(QWidget):
         if values is not None:
             self._data = np.asarray(values, dtype=float)
         elif daily_df is not None:
-            if 'value' in daily_df.columns:
-                self._data = pd.to_numeric(daily_df['value'], errors='coerce').dropna().values
+            col = numeric_column(daily_df, prefer_names=["базовый", "сток", "value", "q"])
+            if col is not None:
+                self._data = col.values
             elif len(daily_df.columns) >= 2:
                 self._data = pd.to_numeric(daily_df.iloc[:, 1], errors='coerce').dropna().values
+        if self._data is not None and len(self._data) >= 10:
+            if hasattr(self, 'bf_result') and hasattr(self, '_plot_baseflow'):
+                self.bf_result.clear()
+                self.bf_result.append(f"Загружено из шаблона: n={len(self._data)}")
+                self._plot_baseflow()
 
     def set_qsr(self, q_mean=None):
         """Авто-заполнение Qср из Work1."""

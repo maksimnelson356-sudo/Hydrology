@@ -193,6 +193,20 @@ def create_unified_template(path="unified_template.xlsx"):
         style_cell(ws4b, 4 + i, 1, yr, fill=yellow_fill)
         style_cell(ws4b, 4 + i, 2, round(random.uniform(300, 900), 1), fill=yellow_fill)
 
+    # ========== ЛИСТ 4b: Кривая Q=f(H) ==========
+    ws4c = wb.create_sheet("КриваяQH")
+    ws4c['A1'] = "Работа 4 — Кривая расходов Q=f(H)"
+    ws4c['A1'].font = Font(bold=True, size=12)
+    ws4c.merge_cells('A1:B1')
+    write_header_row(ws4c, 3, ["H, м", "Q, м³/с"])
+    for i in range(20):
+        import random
+        random.seed(i * 7 + 5)
+        h = round(0.5 + i * 0.25, 2)
+        q = round(20.0 * h ** 1.5 + random.uniform(-5, 5), 1)
+        style_cell(ws4c, 4 + i, 1, h, fill=yellow_fill)
+        style_cell(ws4c, 4 + i, 2, q, fill=yellow_fill)
+
     # ========== ЛИСТ 6: Работа5 ==========
     ws5b = wb.create_sheet("Работа5")
     ws5b['A1'] = "Работа 5 — Ледовые явления"
