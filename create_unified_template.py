@@ -82,8 +82,8 @@ def create_unified_template(path="unified_template.xlsx"):
                     if pd.notna(y) and pd.notna(q):
                         series[int(y)] = round(float(q), 2)
                 if series:
-                    post_names.append(f"Расход Q, м³/с (пост {pc})")
-                    post_data[f"Расход Q, м³/с (пост {pc})"] = series
+                    post_names.append(f"Пост {pc}")
+                    post_data[f"Пост {pc}"] = series
     except (FileNotFoundError, ValueError, KeyError, TypeError):
         pass  # шаблон создаётся с дефолтными данными
 
