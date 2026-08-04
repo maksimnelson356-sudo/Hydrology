@@ -182,21 +182,16 @@ def create_unified_template(path="unified_template.xlsx"):
 
     # ========== ЛИСТ 5: Работа4 ==========
     ws4b = wb.create_sheet("Работа4")
-    ws4b['A1'] = "Работа 4 — Максимальный сток (ряды максимумов)"
+    ws4b['A1'] = "Работа 4 — Максимальный сток (годовые максимумы)"
     ws4b['A1'].font = Font(bold=True, size=12)
-    ws4b.merge_cells('A1:E1')
-    ws4b['A2'] = "Год | Q_max (м³/с) | Период осреднения: 1 сутки | 5 суток | 7 суток"
-    ws4b['A2'].font = info_font
-    ws4b.merge_cells('A2:E2')
+    ws4b.merge_cells('A1:C1')
 
-    write_header_row(ws4b, 4, ["Год", "Q_max, м³/с", "Q_5сут, м³/с", "Q_7сут, м³/с", "Примечание"])
+    write_header_row(ws4b, 3, ["Год", "Q_max, м³/с", "Примечание"])
     for i, yr in enumerate(range(1970, 1991)):
         import random
         random.seed(yr * 3 + 1)
-        style_cell(ws4b, 5 + i, 1, yr, fill=yellow_fill)
-        style_cell(ws4b, 5 + i, 2, round(random.uniform(300, 900), 1), fill=yellow_fill)
-        style_cell(ws4b, 5 + i, 3, round(random.uniform(250, 750), 1), fill=yellow_fill)
-        style_cell(ws4b, 5 + i, 4, round(random.uniform(220, 680), 1), fill=yellow_fill)
+        style_cell(ws4b, 4 + i, 1, yr, fill=yellow_fill)
+        style_cell(ws4b, 4 + i, 2, round(random.uniform(300, 900), 1), fill=yellow_fill)
 
     # ========== ЛИСТ 6: Работа5 ==========
     ws5b = wb.create_sheet("Работа5")

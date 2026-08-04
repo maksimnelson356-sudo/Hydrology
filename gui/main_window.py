@@ -449,9 +449,11 @@ class MainWindow(QMainWindow):
         layout.addLayout(btn_row_top)
 
         post_layout = QHBoxLayout()
-        post_layout.addWidget(QLabel("Пост:"))
+        lbl_post = QLabel("Пост:")
+        lbl_post.setStyleSheet("font-weight: bold; font-size: 14px; color: #1565C0;")
+        post_layout.addWidget(lbl_post)
         self.combo_post = QComboBox()
-        self.combo_post.setMinimumWidth(120)
+        self.combo_post.setMinimumWidth(160)
         self.combo_post.currentTextChanged.connect(self.on_post_changed)
         post_layout.addWidget(self.combo_post)
         post_layout.addStretch()
@@ -1081,6 +1083,8 @@ class MainWindow(QMainWindow):
             self.df = get_series_by_post(self.df_raw, self.year_col, post_name)
         else:
             return
+        self.df = self.df.copy()
+        self.df.attrs['post'] = post_name
 
         stats = get_basic_stats(self.df)
         self.table.setRowCount(len(stats))
@@ -1907,7 +1911,19 @@ class MainWindow(QMainWindow):
         if sheet_r4:
             found = True
             try:
-                df_r4 = pd.read_excel(xls, sheet_r4)
+                r4_raw = pd.read_excel(xls, sheet_r4, header=None)
+                header_idx = None
+                for idx in range(min(10, len(r4_raw))):
+                    cells = [str(v).strip().lower() for v in r4_raw.iloc[idx].tolist() if pd.notna(v)]
+                    if any(c in ["год", "year", "years"] for c in cells):
+                        header_idx = idx
+                        break
+                if header_idx is None:
+                    df_r4 = r4_raw
+                else:
+                    df_r4 = r4_raw.iloc[header_idx + 1:].copy()
+                    df_r4.columns = [str(c) for c in r4_raw.iloc[header_idx].values]
+                    df_r4 = df_r4[pd.to_numeric(df_r4.iloc[:, 1], errors='coerce').notna()]
                 self.tab_work4.set_data(daily_df=df_r4)
                 loaded.append("Максимальный сток")
             except (ValueError, TypeError, KeyError, AttributeError) as e:
@@ -2068,17 +2084,23 @@ APP_STYLESHEET = """
         }
         QComboBox {
             background-color: #FAFAFA;
-            border: 1px solid #BDBDBD;
+            border: 1px solid #1565C0;
             border-radius: 4px;
-            padding: 4px 8px;
+            padding: 4px 28px 4px 8px;
             color: #212121;
+            font-weight: bold;
         }
         QComboBox:focus {
-            border: 1px solid #1565C0;
+            border: 1px solid #0D47A1;
         }
         QComboBox::drop-down {
             border: none;
-            width: 20px;
+            width: 24px;
+        }
+        QComboBox::down-arrow {
+            image: url(_ARROW_DOWN_);
+            width: 16px;
+            height: 16px;
         }
         QPushButton {
             background-color: #37474F;
@@ -2101,6 +2123,10 @@ APP_STYLESHEET = """
             border-radius: 4px;
         }
     """
+
+
+_ARROW_DOWN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "arrow_down.svg")
+APP_STYLESHEET = APP_STYLESHEET.replace("_ARROW_DOWN_", _ARROW_DOWN.replace("\\", "/"))
 
 
 if __name__ == "__main__":

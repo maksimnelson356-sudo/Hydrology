@@ -330,22 +330,28 @@ class Work4Widget(QWidget):
             QMessageBox.critical(self, "Ошибка", str(e))
 
     def calculate_max(self):
-        if self.daily_data is None:
+        if self.daily_data is None and self.max_series is None:
             QMessageBox.warning(self, "Внимание", "Сначала загрузите данные")
             return
         try:
             period_map = {"1 сутки": 1, "5 суток": 5, "7 суток": 7, "10 суток": 10}
             period = period_map[self.combo_period.currentText()]
 
-            self.max_series = extract_max_annual(
-                self.daily_data, period_days=period
-            )
+            if self.max_series is not None and self.daily_data is None:
+                # Уже готовые годовые максимумы
+                self.max_series = self.max_series.dropna()
+                period_label = "годовые"
+            else:
+                self.max_series = extract_max_annual(
+                    self.daily_data, period_days=period
+                )
+                period_label = f"{period} сут."
 
             params = compute_max_runoff_stats(self.max_series)
 
             self.result_box.clear()
             self.result_box.append(
-                f"Ряд максимальных стоков ({period} сут.): n={params['n']}"
+                f"Ряд максимальных стоков ({period_label}): n={params['n']}"
             )
             self.result_box.append(
                 f"Qср={params['mean']:.2f}  Cv={params['Cv']:.3f}  Cs={params['Cs']:.3f}"
@@ -501,10 +507,50 @@ class Work4Widget(QWidget):
             QMessageBox.critical(self, "Ошибка", str(e))
 
     def set_data(self, daily_df=None):
-        """Приём данных из единого загрузчика."""
-        if daily_df is not None:
-            self.daily_data = daily_df
-            self.result_box.append(f"Получены данные: {len(daily_df)} строк")
+        """Приём данных из единого загрузчика.
+
+        Поддерживает два формата:
+        - суточные данные: колонки year/дата + value (группируются по годам);
+        - готовые годовые максимумы: колонки Год + Q_max (одна строка на год).
+        """
+        if daily_df is None:
+            return
+
+        df = daily_df.copy()
+        df.columns = [str(c).strip().lower() for c in df.columns]
+
+        year_col = next((c for c in df.columns if c in ["год", "year", "years", "дата", "date"]), None)
+        val_cols = [c for c in df.columns if c not in ["год", "year", "years", "примечание", "дата", "date"]]
+
+        if year_col is None or not val_cols:
+            self.result_box.append("Не удалось определить колонки Год и Значение")
+            return
+
+        year = pd.to_numeric(df[year_col], errors='coerce')
+        value = pd.to_numeric(df[val_cols[0]], errors='coerce')
+
+        # Готовые годовые максимумы: уникальных лет ≈ числу строк
+        n_unique = year.nunique()
+        if n_unique >= 3 and n_unique >= 0.8 * len(value):
+            valid = year.notna() & value.notna()
+            self.max_series = pd.Series(value[valid].values, index=year[valid].astype(int).values)
+            self.daily_data = None
+            self.result_box.clear()
+            self.result_box.append(
+                f"Загружены годовые максимумы: n={len(self.max_series)}"
+            )
+            return
+
+        # Суточные данные — нормализуем к year/value
+        self.max_series = None
+        self.daily_data = pd.DataFrame({
+            "year": pd.to_numeric(df[year_col], errors="coerce"),
+            "value": pd.to_numeric(df[val_cols[0]], errors="coerce"),
+        }).dropna()
+        self.result_box.clear()
+        self.result_box.append(
+            f"Получены суточные данные: {len(self.daily_data)} строк"
+        )
 
     def set_qsr(self, gauged_mean=None, target_mean=None):
         """Авто-заполнение Qsr из Work1."""

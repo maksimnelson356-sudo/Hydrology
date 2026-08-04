@@ -70,7 +70,7 @@ def compute_max_runoff_stats(
     СП 33-101-2003 п. 6.3.3: для максимальных стоков Cs ≈ 2×Cv (при Cv ≤ 0.5)
     или Cs ≈ 3×Cv (при Cv > 0.5).
     """
-    data = max_series.dropna().values
+    data = np.asarray(pd.Series(max_series).dropna(), dtype=float)
     if len(data) < 3:
         return {"mean": None, "Cv": None, "Cs": None, "n": len(data), "reliability_class": "Недостаточно данных"}
 
