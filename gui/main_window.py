@@ -33,6 +33,7 @@ from core.stats.gts_integration import build_gts_frequency_curve, gts_summary_ta
 from core.stats.composite_curves import compute_composite_curve, find_change_point
 from core.stats.series_extension import full_extension_workflow
 from core.stats.report_export import generate_txt_report, generate_excel_report
+from core.stats.sheet_reader import read_work_sheet
 from core.gts_reference import GTSClass
 
 
@@ -1971,6 +1972,17 @@ class MainWindow(QMainWindow):
                     df_r4 = df_r4[pd.to_numeric(df_r4.iloc[:, 1], errors='coerce').notna()]
                 self.tab_work4.set_data(daily_df=df_r4)
                 loaded.append("Максимальный сток")
+                # Кривая расходов Q=f(H) (лист «КриваяQH»)
+                try:
+                    sheet_qh = self._find_sheet(xls, ["КриваяQH", "Кривая"])
+                    if sheet_qh:
+                        df_qh = read_work_sheet(
+                            xls, [sheet_qh, "КриваяQH", "Кривая"],
+                            header_keywords=("h", "уровень", "q", "расход"))
+                        if not df_qh.empty:
+                            self.tab_work4.set_rating_data(df_qh)
+                except (ValueError, TypeError, KeyError, AttributeError) as e:
+                    print(f"[WARN] Ошибка загрузки 'КриваяQH': {e}")
             except (ValueError, TypeError, KeyError, AttributeError) as e:
                 print(f"[WARN] Ошибка загрузки 'Максимальный сток': {e}")
 
@@ -2031,7 +2043,9 @@ class MainWindow(QMainWindow):
         if sheet_r8:
             found = True
             try:
-                df_r8 = pd.read_excel(xls, sheet_r8)
+                df_r8 = read_work_sheet(xls, [sheet_r8, "Работа8", "FDC", "Кривая"])
+                if df_r8.empty:
+                    df_r8 = pd.read_excel(xls, sheet_r8)
                 self.tab_work8.set_data(daily_df=df_r8)
                 loaded.append("FDC")
             except (ValueError, TypeError, KeyError, AttributeError) as e:
@@ -2069,7 +2083,9 @@ class MainWindow(QMainWindow):
         if sheet_r10:
             found = True
             try:
-                df_r10 = pd.read_excel(xls, sheet_r10)
+                df_r10 = read_work_sheet(xls, [sheet_r10, "Работа10", "Экология", "Базовый"])
+                if df_r10.empty:
+                    df_r10 = pd.read_excel(xls, sheet_r10)
                 self.tab_work10.set_data(daily_df=df_r10)
                 loaded.append("Экология и базовый сток")
             except (ValueError, TypeError, KeyError, AttributeError) as e:

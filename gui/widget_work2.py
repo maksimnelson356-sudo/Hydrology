@@ -18,6 +18,8 @@ from PyQt6.QtGui import QFont
 
 from gui.plot_style import auto_resize_table
 
+from core.stats.sheet_reader import read_work_sheet
+
 from core.hydrorash.hydrological_periods import HydrologicalPeriods
 from core.hydrorash.intra_annual import (
     calculate_water_year_sums, compute_intra_annual_stats,
@@ -97,9 +99,39 @@ class Work2Widget(QWidget):
         if not path:
             return
         try:
-            df = pd.read_excel(path, skiprows=2)
-            self.monthly_data = df
-            self.result_box.append(f"Загружено: {len(df)} строк, столбцы: {list(df.columns)[:5]}...")
+            df = read_work_sheet(path, ["Внутригодовое распределение", "Работа2"], use_columns=True)
+            if df.empty:
+                df = pd.read_excel(path, skiprows=2)
+
+            # Нормализуем колонки месяцев к 1-12, индекс — год
+            month_map = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6,
+                         "VII": 7, "VIII": 8, "IX": 9, "X": 10, "XI": 11, "XII": 12,
+                         "ЯНВ": 1, "ФЕВ": 2, "МАР": 3, "АПР": 4, "МАЙ": 5, "ИЮН": 6,
+                         "ИЮЛ": 7, "АВГ": 8, "СЕН": 9, "ОКТ": 10, "НОЯ": 11, "ДЕК": 12}
+            renamed = {}
+            year_col = None
+            for c in df.columns:
+                cs = str(c).strip().upper()
+                if cs in month_map:
+                    renamed[c] = month_map[cs]
+                elif cs in ["ГОД", "YEAR", "YEARS"]:
+                    renamed[c] = "год"
+                    year_col = c
+            df = df.rename(columns=renamed)
+            if year_col is None:
+                year_col = next((c for c in df.columns if "год" in str(c).lower() or "year" in str(c).lower()), None)
+            if year_col is not None and year_col != "год":
+                df = df.rename(columns={year_col: "год"})
+
+            month_cols = [m for m in range(1, 13) if m in df.columns]
+            if year_col is not None and month_cols:
+                df = df[["год"] + month_cols].copy()
+                df["год"] = pd.to_numeric(df["год"], errors="coerce")
+                df = df.dropna(subset=["год"]).set_index("год")
+                self.monthly_data = df
+            else:
+                self.monthly_data = df
+            self.result_box.append(f"Загружено: {len(df)} строк, столбцы: {list(df.columns)[:6]}...")
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))
 

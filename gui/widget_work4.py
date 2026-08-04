@@ -30,6 +30,7 @@ from core.hydrorash.max_runoff import (
     build_rating_curve, discharge_from_level, level_from_discharge
 )
 from core.stats.frequency import pearson3_ppf, empirical_plotting_positions
+from core.stats.sheet_reader import read_work_sheet, clean_column_name
 
 
 class Work4Widget(QWidget):
@@ -413,7 +414,18 @@ class Work4Widget(QWidget):
         if not path:
             return
         try:
-            df = pd.read_excel(path)
+            df = read_work_sheet(path, ["Кривая", "КриваяQH", "H-Q"],
+                                 header_keywords=("h", "уровень", "q", "расход"))
+            if df.empty:
+                df = pd.read_excel(path, header=None)
+                df = df.dropna(how="all")
+                df.columns = ["col" + str(i) for i in range(df.shape[1])]
+            if "Unnamed" in str(df.columns[0]):
+                df.columns = [str(c).replace("Unnamed: 0", "H").replace("Unnamed: 1", "Q")
+                              if "Unnamed" in str(c) else c for c in df.columns]
+            # Снимаем единицы: «H, м» -> «h», «Q, м³/с» -> «q» (для fit_rating_curve).
+            if not df.empty:
+                df.columns = [clean_column_name(c) for c in df.columns]
             self._rating_df = df
             self.rating_result.clear()
             self.rating_result.append(
@@ -421,6 +433,18 @@ class Work4Widget(QWidget):
             )
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))
+
+    def set_rating_data(self, df):
+        """Приём кривой Q=f(H) из единого загрузчика (лист «КриваяQH»)."""
+        if df is None or df.empty:
+            return
+        df = df.copy()
+        df.columns = [clean_column_name(c) for c in df.columns]
+        cols_lower = [str(c).strip().lower() for c in df.columns]
+        if "h" not in cols_lower or "q" not in cols_lower:
+            return
+        self._rating_df = df
+        self.fit_rating_curve()
 
     def fit_rating_curve(self):
         if not hasattr(self, "_rating_df") or self._rating_df is None:

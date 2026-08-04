@@ -38,6 +38,7 @@ from core.stats.advanced_frequency import (
     qq_plot_data, pp_plot_data, weibull_plotting_position,
     fit_logpearson3
 )
+from core.stats.sheet_reader import read_work_sheet, numeric_column
 
 
 class Work8Widget(QWidget):
@@ -179,15 +180,18 @@ class Work8Widget(QWidget):
         if not path:
             return
         try:
-            if path.endswith('.csv'):
-                df = pd.read_csv(path)
-            else:
-                df = pd.read_excel(path)
+            df = read_work_sheet(path, ["Работа8", "FDC", "Кривая"])
+            if df.empty:
+                if path.endswith('.csv'):
+                    df = pd.read_csv(path)
+                else:
+                    df = pd.read_excel(path)
 
-            if 'value' in df.columns:
-                self._data = df['value'].dropna().values
+            col = numeric_column(df, prefer_names=["q", "расход", "value"])
+            if col is not None:
+                self._data = col.values
             elif len(df.columns) >= 1:
-                self._data = df.iloc[:, 0].dropna().values
+                self._data = pd.to_numeric(df.iloc[:, 0], errors="coerce").dropna().values
 
             self._plot_fdc()
         except Exception as e:
@@ -288,19 +292,31 @@ class Work8Widget(QWidget):
             self.reg_table.setItem(i, 2, QTableWidgetItem(c))
 
     def compare_dists(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Загрузить данные", "", "Excel (*.xlsx);;CSV (*.csv)")
-        if not path:
-            return
-        try:
-            if path.endswith('.csv'):
-                df = pd.read_csv(path)
-            else:
-                df = pd.read_excel(path)
+        data = None
+        if getattr(self, "_data", None) is not None and len(self._data) >= 5:
+            data = np.asarray(self._data, dtype=float)
+        else:
+            path, _ = QFileDialog.getOpenFileName(self, "Загрузить данные", "", "Excel (*.xlsx);;CSV (*.csv)")
+            if not path:
+                return
+            try:
+                df = read_work_sheet(path, ["Работа8", "FDC", "Кривая"])
+                if df.empty:
+                    df = pd.read_csv(path) if path.endswith('.csv') else pd.read_excel(path)
+                col = numeric_column(df, prefer_names=["q", "расход", "value"])
+                if col is not None:
+                    data = col.values
+                else:
+                    data = pd.to_numeric(df.iloc[:, 0], errors="coerce").dropna().values
+                self._data = data
+            except Exception as e:
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.critical(self, "Ошибка", str(e))
+                return
 
-            data = df.iloc[:, 0].dropna().values
-        except Exception as e:
+        if data is None or len(data) < 5:
             from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Ошибка", str(e))
+            QMessageBox.warning(self, "Мало данных", "Нужно минимум 5 значений")
             return
 
         result_df = compare_distributions(data)
@@ -350,8 +366,9 @@ class Work8Widget(QWidget):
         if values is not None:
             self._data = np.asarray(values, dtype=float)
         elif daily_df is not None:
-            if 'value' in daily_df.columns:
-                self._data = pd.to_numeric(daily_df['value'], errors='coerce').dropna().values
+            col = numeric_column(daily_df, prefer_names=["q", "расход", "value"])
+            if col is not None:
+                self._data = col.values
             elif len(daily_df.columns) >= 2:
                 self._data = pd.to_numeric(daily_df.iloc[:, 1], errors='coerce').dropna().values
         if self._data is not None and len(self._data) >= 5:
