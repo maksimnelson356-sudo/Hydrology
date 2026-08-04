@@ -37,6 +37,8 @@ def compute_basic_stats(
     Returns:
         Словарь со статистическими характеристиками
     """
+    # Приводим к числовому типу — object-dtype ломает np.corrcoef (numpy 2.x)
+    Q = pd.to_numeric(Q, errors="coerce").dropna()
     n = len(Q)
     mean = float(Q.mean())
     std = float(Q.std(ddof=ddof))

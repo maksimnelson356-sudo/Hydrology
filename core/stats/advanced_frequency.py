@@ -85,13 +85,13 @@ def mle_pearson3(
         beta = sigma / np.sqrt(alpha) if alpha > 0 else 1
         shift = mu - alpha * beta
 
-    try:
-        ll = np.sum(stats.gamma.logpdf(data - shift, a=alpha, scale=beta))
-        if np.isnan(ll) or np.isinf(ll):
+        try:
+            ll = np.sum(stats.gamma.logpdf(data - shift, a=alpha, scale=beta))
+            if np.isnan(ll) or np.isinf(ll):
+                return 1e10
+            return -ll
+        except (ValueError, FloatingPointError, ZeroDivisionError):
             return 1e10
-        return -ll
-    except (ValueError, FloatingPointError, ZeroDivisionError):
-        return 1e10
 
     result = minimize(neg_loglik, x0, method='Nelder-Mead',
                       options={'maxiter': max_iter})
