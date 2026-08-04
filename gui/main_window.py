@@ -282,7 +282,6 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
         file_menu = menubar.addMenu("Файл данных")
         file_menu.addAction("Открыть данные...", self.load_data)
-        file_menu.addAction("Загрузить единый шаблон...", self.load_unified_template)
         file_menu.addAction("Создать шаблон", self.create_unified_template)
         file_menu.addAction("Сохранить отчёт в Excel...", self.save_report)
         file_menu.addSeparator()
@@ -821,37 +820,149 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def load_data(self):
-        filepath, _ = QFileDialog.getOpenFileName(self, "Открыть файл", "", "Файлы Excel (*.xlsx)")
+        """Единый загрузчик данных из Excel.
+
+        Автоматически распознаёт формат файла:
+        - единый шаблон — лист «Гидропост» + листы Работа1-10, FDC;
+        - плоский файл — единственный лист с годом и постами.
+        Распарсенные данные распределяются по всем вкладкам.
+        """
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Открыть данные", "", "Файлы Excel (*.xlsx)"
+        )
         if not filepath:
             return
         try:
-            self.df_raw, self.year_col, self.available_posts = load_hydrological_data(filepath)
-            self.combo_post.blockSignals(True)
-            self.combo_post.clear()
-            self.combo_post.addItems(self.available_posts)
-            self.combo_post.blockSignals(False)
-            if self.available_posts:
-                self.combo_post.setCurrentIndex(0)
-                self.on_post_changed(self.available_posts[0])
-            
+            loaded = []
+            xls = pd.ExcelFile(filepath)
+
+            # === 1. Основной лист с постами ===
+            posts_loaded = self._parse_main_posts(xls, loaded)
+            if not posts_loaded:
+                self._load_flat_posts(filepath, loaded)
+
+            # === 2. Рабочие листы единого шаблона (Работа1-10, FDC) ===
+            is_template = self._parse_work_sheets(xls, loaded)
+
+            # === 3. Плоский файл: раздача ежедневных данных в work4/6/8/10 ===
+            if not is_template:
+                self._distribute_data_to_widgets()
+
+            # === 4. Активация кнопок ===
             for btn in [self.btn_fill, self.btn_fill_corr, self.btn_calc, self.btn_trend,
                         self.btn_save_plot, self.btn_homogeneity, self.btn_outliers,
                         self.btn_composite, self.btn_quantiles, self.btn_gts_curve,
-                        self.btn_composite_auto, self.btn_extend]:
+                        self.btn_composite_auto, self.btn_extend,
+                        self.btn_plot_series, self.btn_plot_hist,
+                        self.btn_plot_box, self.btn_plot_corr]:
                 btn.setEnabled(True)
 
-            self._distribute_data_to_widgets()
-            self.statusBar.showMessage(f"Загружено постов: {len(self.available_posts)}")
+            # === 5. Итог ===
+            if loaded:
+                self.statusBar.showMessage("Загружено: " + ", ".join(loaded))
+                msg = "\n".join("  " + s for s in loaded)
+                QMessageBox.information(self, "Загрузка данных",
+                                        "Загружено:\n\n" + msg)
+            else:
+                QMessageBox.warning(self, "Внимание",
+                                    "Не удалось загрузить данные ни из одного листа")
         except Exception as e:
-            QMessageBox.critical(self, "Ошибка", str(e))
+            QMessageBox.critical(self, "Ошибка загрузки", str(e))
+
+    def _parse_main_posts(self, xls, loaded):
+        """Распарсить основной лист с постами (шаблон или плоский файл)."""
+        names = xls.sheet_names
+        sheet_main = self._find_sheet(xls, ["Данные", "Гидропост", "Лист1"])
+        if sheet_main is None:
+            for sn in names:
+                if not any(kw in sn for kw in [
+                    "Норма", "Внутригод", "Минималь", "Максималь",
+                    "Кривая", "Ледовые", "Водный", "FDC", "Эколог",
+                    "Работа", "ГТС"
+                ]):
+                    sheet_main = sn
+                    break
+        if sheet_main is None and names:
+            sheet_main = names[0]
+        if not sheet_main:
+            return False
+
+        all_rows = pd.read_excel(xls, sheet_main, header=None).astype(str).values
+        year_row_idx = None
+        year_col_idx = None
+        for r in range(min(50, len(all_rows))):
+            for c in range(min(30, all_rows.shape[1])):
+                v = str(all_rows[r, c]).strip().lower()
+                if v in ["год", "year", "years"]:
+                    year_row_idx = r
+                    year_col_idx = c
+                    break
+            if year_row_idx is not None:
+                break
+
+        if year_row_idx is None:
+            self.statusBar.showMessage("Лист " + sheet_main + ": не найден столбец Год")
+            return False
+
+        df_sheet = pd.read_excel(xls, sheet_main, skiprows=year_row_idx)
+        year_col_name = df_sheet.columns[year_col_idx]
+        post_dfs = {}
+        for c in df_sheet.columns:
+            if c == year_col_name:
+                continue
+            vals = pd.to_numeric(df_sheet[c], errors="coerce").dropna()
+            if len(vals) >= 3:
+                post_dfs[str(c)] = pd.DataFrame({
+                    "year": pd.to_numeric(df_sheet[year_col_name], errors="coerce"),
+                    "value": pd.to_numeric(df_sheet[c], errors="coerce"),
+                }).dropna(subset=["value"]).reset_index(drop=True)
+
+        if not post_dfs:
+            return False
+
+        self._all_posts = post_dfs
+        self.available_posts = list(post_dfs.keys())
+        self.combo_post.blockSignals(True)
+        self.combo_post.clear()
+        self.combo_post.addItems(self.available_posts)
+        self.combo_post.blockSignals(False)
+        first = self.available_posts[0]
+        self.df = post_dfs[first]
+        self.current_post = first
+        loaded.append("Данные (%d постов)" % len(post_dfs))
+        self.on_post_changed(first)
+        return True
+
+    def _load_flat_posts(self, filepath, loaded):
+        """Запасной путь: плоский файл с годом и постами."""
+        try:
+            self.df_raw, self.year_col, self.available_posts = load_hydrological_data(filepath)
+        except Exception as e:
+            self.statusBar.showMessage("Не удалось распознать посты: %s" % e)
+            return
+        if not self.available_posts:
+            return
+        self.combo_post.blockSignals(True)
+        self.combo_post.clear()
+        self.combo_post.addItems(self.available_posts)
+        self.combo_post.blockSignals(False)
+        self.combo_post.setCurrentIndex(0)
+        self.on_post_changed(self.available_posts[0])
+        loaded.append("Данные (%d постов)" % len(self.available_posts))
 
     def _distribute_data_to_widgets(self):
         """Распределение загруженных данных по рабочим виджетам."""
-        if self.df_raw is None:
+        if self.df_raw is not None:
+            daily_df = self.df_raw.copy()
+            if self.year_col and self.year_col in daily_df.columns:
+                daily_df = daily_df.rename(columns={self.year_col: 'year'})
+        elif hasattr(self, '_all_posts') and self._all_posts:
+            daily_df = pd.DataFrame({
+                pname: sdf.set_index('year')['value']
+                for pname, sdf in self._all_posts.items()
+            })
+        else:
             return
-        daily_df = self.df_raw.copy()
-        if self.year_col and self.year_col in daily_df.columns:
-            daily_df = daily_df.rename(columns={self.year_col: 'year'})
         for widget in [self.tab_work4, self.tab_work6, self.tab_work8, self.tab_work10]:
             try:
                 widget.set_data(daily_df=daily_df)
@@ -1676,249 +1787,234 @@ class MainWindow(QMainWindow):
                 return name
         return None
 
-    def load_unified_template(self):
-        """Загрузить единый шаблон и раздать данные по вкладкам."""
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Загрузить единый шаблон", "", "Файлы Excel (*.xlsx)"
-        )
-        if not path:
-            return
+    def _parse_work_sheets(self, xls, loaded):
+        """Распарсить листы Работа1-10 и FDC единого шаблона.
 
-        try:
-            xls = pd.ExcelFile(path)
-            loaded = []
-            names = xls.sheet_names
+        Возвращает True, если файл является единым шаблоном (найден хотя бы
+        один рабочий лист), иначе False (плоский файл с одним листом постов).
+        """
+        found = False
 
-            # === Основные данные (год + посты) ===
-            sheet_main = self._find_sheet(xls, [
-                "Данные", "Гидропост", "Лист1",
-            ])
-            if sheet_main is None:
-                for sn in names:
-                    if not any(kw in sn for kw in [
-                        "Норма", "Внутригод", "Минималь", "Максималь",
-                        "Кривая", "Ледовые", "Водный", "FDC", "Эколог",
-                        "Работа", "ГТС"
-                    ]):
-                        sheet_main = sn
+        # === Норма годового стока (Работа 1) ===
+        sheet_r1 = self._find_sheet(xls, ["Норма годового стока", "Работа1"])
+        if sheet_r1:
+            found = True
+            try:
+                r1_raw = pd.read_excel(xls, sheet_r1, header=None)
+                f_calc = None
+                name_calc = None
+                f_analog = None
+                name_analog = None
+                calc_years = []
+                calc_Q = []
+                analog_years = []
+                analog_Q = []
+
+                for i, row in r1_raw.iterrows():
+                    val_a = str(row[0]).strip() if pd.notna(row[0]) else ""
+                    val_b = row[1] if pd.notna(row[1]) else None
+                    if "Площадь" in val_a and "F" in val_a:
+                        try:
+                            if f_calc is None:
+                                f_calc = float(val_b)
+                            else:
+                                f_analog = float(val_b)
+                        except (ValueError, TypeError):
+                            pass  # нечисловое значение — пропускаем
+                    elif "Название" in val_a or "река" in val_a.lower():
+                        if val_b:
+                            if name_calc is None:
+                                name_calc = str(val_b)
+                            else:
+                                name_analog = str(val_b)
+                    else:
+                        try:
+                            year = int(val_a)
+                            q = float(val_b)
+                            if i < 40:
+                                calc_years.append(year)
+                                calc_Q.append(q)
+                            else:
+                                analog_years.append(year)
+                                analog_Q.append(q)
+                        except (ValueError, TypeError):
+                            pass  # пропускаем строки с нечисловыми данными
+
+                if calc_years:
+                    calc_series = pd.Series(calc_Q, index=calc_years)
+                    analog_series = pd.Series(analog_Q, index=analog_years) if analog_years else None
+                    self.tab_work1.set_data(
+                        calc_series=calc_series,
+                        analog_series=analog_series,
+                        f_calc=f_calc, f_analog=f_analog,
+                        name_calc=name_calc, name_analog=name_analog
+                    )
+                    loaded.append("Норма годового стока")
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                print(f"[WARN] Ошибка загрузки листа 'Норма годового стока': {e}")
+
+        # === Внутригодовое распределение (Работа 2) ===
+        sheet_r2 = self._find_sheet(xls, ["Внутригодовое распределение", "Работа2"])
+        if sheet_r2:
+            found = True
+            try:
+                r2_raw = pd.read_excel(xls, sheet_r2, header=None)
+                month_map = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6,
+                             "VII": 7, "VIII": 8, "IX": 9, "X": 10, "XI": 11, "XII": 12}
+                header_idx = None
+                for idx in range(min(10, len(r2_raw))):
+                    cells = [str(v).strip().upper() for v in r2_raw.iloc[idx].tolist() if pd.notna(v)]
+                    if any(c in ["ГОД", "YEAR"] for c in cells) or any(c in month_map for c in cells):
+                        header_idx = idx
                         break
-            if sheet_main is None and names:
-                sheet_main = names[0]
+                if header_idx is not None:
+                    df_r2 = r2_raw.iloc[header_idx + 1:].copy()
+                    df_r2.columns = r2_raw.iloc[header_idx].values
+                    renamed = {}
+                    for c in df_r2.columns:
+                        cs = str(c).strip().upper()
+                        if cs in month_map:
+                            renamed[c] = month_map[cs]
+                        elif cs in ["ГОД", "YEAR"]:
+                            renamed[c] = "год"
+                    df_r2 = df_r2.rename(columns=renamed)
+                    df_r2 = df_r2[["год"] + [m for m in range(1, 13) if m in df_r2.columns]].copy()
+                    df_r2 = df_r2.dropna(subset=["год"])
+                    if len(df_r2) >= 1:
+                        df_r2 = df_r2.set_index("год")
+                        self.tab_work2.set_data(monthly_df=df_r2)
+                        loaded.append("Внутригодовое распределение")
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                print(f"[WARN] Ошибка загрузки 'Внутригодовое распределение': {e}")
 
-            if sheet_main:
-                all_rows = pd.read_excel(xls, sheet_main, header=None).astype(str).values
-                year_row_idx = None
-                year_col_idx = None
-                for r in range(min(50, len(all_rows))):
-                    for c in range(min(30, all_rows.shape[1])):
-                        v = str(all_rows[r, c]).strip().lower()
-                        if v in ["год", "year", "years"]:
-                            year_row_idx = r
-                            year_col_idx = c
-                            break
-                    if year_row_idx is not None:
-                        break
+        # === Минимальный сток (Работа 3) ===
+        sheet_r3 = self._find_sheet(xls, ["Минимальный сток", "Работа3"])
+        if sheet_r3:
+            found = True
+            try:
+                df_r3 = pd.read_excel(xls, sheet_r3, skiprows=0)
+                if len(df_r3) >= 3:
+                    years = pd.to_numeric(df_r3.iloc[:, 0], errors='coerce')
+                    winter = pd.Series(pd.to_numeric(df_r3.iloc[:, 1], errors='coerce').values, index=years)
+                    summer = pd.Series(pd.to_numeric(df_r3.iloc[:, 2], errors='coerce').values, index=years)
+                    self.tab_work3.set_data(winter_series=winter, summer_series=summer)
+                    loaded.append("Минимальный сток")
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                print(f"[WARN] Ошибка загрузки 'Минимальный сток': {e}")
 
-                if year_row_idx is None:
-                    self.statusBar.showMessage("Лист " + sheet_main + ": не найден столбец Год")
-                else:
-                    df_sheet = pd.read_excel(xls, sheet_main, skiprows=year_row_idx)
-                    year_col_name = df_sheet.columns[year_col_idx]
-                    post_dfs = {}
-                    for c in df_sheet.columns:
-                        if c == year_col_name:
-                            continue
-                        vals = pd.to_numeric(df_sheet[c], errors="coerce").dropna()
-                        if len(vals) >= 3:
-                            post_dfs[str(c)] = pd.DataFrame({
-                                "year": pd.to_numeric(df_sheet[year_col_name], errors="coerce"),
-                                "value": pd.to_numeric(df_sheet[c], errors="coerce"),
-                            }).dropna(subset=["value"]).reset_index(drop=True)
+        # === Максимальный сток (Работа 4) ===
+        sheet_r4 = self._find_sheet(xls, ["Максимальный сток", "Работа4"])
+        if sheet_r4:
+            found = True
+            try:
+                df_r4 = pd.read_excel(xls, sheet_r4)
+                self.tab_work4.set_data(daily_df=df_r4)
+                loaded.append("Максимальный сток")
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                print(f"[WARN] Ошибка загрузки 'Максимальный сток': {e}")
 
-                    if post_dfs:
-                        self._all_posts = post_dfs
-                        self.available_posts = list(post_dfs.keys())
-                        self.combo_post.blockSignals(True)
-                        self.combo_post.clear()
-                        self.combo_post.addItems(self.available_posts)
-                        self.combo_post.blockSignals(False)
-                        first = self.available_posts[0]
-                        self.df = post_dfs[first]
-                        self.current_post = first
-                        loaded.append("Данные (%d постов)" % len(post_dfs))
-                        self.on_post_changed(first)
-                        for btn in [self.btn_fill, self.btn_fill_corr,
-                                    self.btn_homogeneity, self.btn_outliers,
-                                    self.btn_composite, self.btn_quantiles,
-                                    self.btn_gts_curve, self.btn_composite_auto,
-                                    self.btn_extend, self.btn_calc,
-                                    self.btn_save_plot, self.btn_trend,
-                                    self.btn_plot_series, self.btn_plot_hist,
-                                    self.btn_plot_box, self.btn_plot_corr]:
-                            btn.setEnabled(True)
+        # === Ледовые явления (Работа 5) ===
+        sheet_r5 = self._find_sheet(xls, ["Ледовые явления", "Работа5"])
+        if sheet_r5:
+            found = True
+            try:
+                df_r5 = pd.read_excel(xls, sheet_r5)
+                freeze_col = [c for c in df_r5.columns
+                              if 'ледостав' in str(c).lower() or 'freeze' in str(c).lower()]
+                breakup_col = [c for c in df_r5.columns
+                               if 'распад' in str(c).lower() or 'breakup' in str(c).lower()]
+                freeze_dates = pd.to_datetime(df_r5[freeze_col[0]], errors='coerce').dropna() if freeze_col else None
+                breakup_dates = pd.to_datetime(df_r5[breakup_col[0]], errors='coerce').dropna() if breakup_col else None
+                self.tab_work5.set_data(freeze_dates=freeze_dates, breakup_dates=breakup_dates)
+                loaded.append("Ледовые явления")
+            except (ValueError, TypeError, KeyError, IndexError, AttributeError) as e:
+                print(f"[WARN] Ошибка загрузки 'Ледовые явления': {e}")
 
-            # === Норма годового стока (Работа 1) ===
-            sheet_r1 = self._find_sheet(xls, ["Норма годового стока", "Работа1"])
-            if sheet_r1:
-                try:
-                    r1_raw = pd.read_excel(xls, sheet_r1, header=None)
-                    f_calc = None
-                    name_calc = None
-                    f_analog = None
-                    name_analog = None
-                    calc_years = []
-                    calc_Q = []
-                    analog_years = []
-                    analog_Q = []
+        # === Водный баланс (Работа 6) ===
+        sheet_r6 = self._find_sheet(xls, ["Водный баланс", "Работа6"])
+        if sheet_r6:
+            found = True
+            try:
+                df_r6 = pd.read_excel(xls, sheet_r6)
+                self.tab_work6.set_data(daily_df=df_r6)
+                loaded.append("Водный баланс")
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                print(f"[WARN] Ошибка загрузки 'Водный баланс': {e}")
 
-                    for i, row in r1_raw.iterrows():
-                        val_a = str(row[0]).strip() if pd.notna(row[0]) else ""
-                        val_b = row[1] if pd.notna(row[1]) else None
-                        if "Площадь" in val_a and "F" in val_a:
-                            try:
-                                if f_calc is None:
-                                    f_calc = float(val_b)
-                                else:
-                                    f_analog = float(val_b)
-                            except (ValueError, TypeError):
-                                pass  # нечисловое значение — пропускаем
-                        elif "Название" in val_a or "река" in val_a.lower():
-                            if val_b:
-                                if name_calc is None:
-                                    name_calc = str(val_b)
-                                else:
-                                    name_analog = str(val_b)
-                        else:
-                            try:
-                                year = int(val_a)
-                                q = float(val_b)
-                                if i < 40:
-                                    calc_years.append(year)
-                                    calc_Q.append(q)
-                                else:
-                                    analog_years.append(year)
-                                    analog_Q.append(q)
-                            except (ValueError, TypeError):
-                                pass  # пропускаем строки с нечисловыми данными
+        # === Ливневый сток (Работа 7) — параметры расчёта ===
+        sheet_r7 = self._find_sheet(xls, ["Ливневый сток", "Работа7"])
+        if sheet_r7:
+            found = True
+            try:
+                r7_raw = pd.read_excel(xls, sheet_r7, header=None)
+                f_val = None
+                zone_val = None
+                for _, row in r7_raw.iterrows():
+                    key = str(row[0]).strip().lower() if pd.notna(row[0]) else ""
+                    val = row[1]
+                    if "площадь" in key and "f" in key:
+                        try:
+                            f_val = float(val)
+                        except (ValueError, TypeError):
+                            pass
+                    elif "зона" in key:
+                        zone_val = str(val).strip() if pd.notna(val) else None
+                if f_val is not None or zone_val:
+                    self.tab_work7.set_data(F=f_val, zone=zone_val)
+                    loaded.append("Ливневый сток")
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                print(f"[WARN] Ошибка загрузки 'Ливневый сток': {e}")
 
-                    if calc_years:
-                        calc_series = pd.Series(calc_Q, index=calc_years)
-                        analog_series = pd.Series(analog_Q, index=analog_years) if analog_years else None
-                        self.tab_work1.set_data(
-                            calc_series=calc_series,
-                            analog_series=analog_series,
-                            f_calc=f_calc, f_analog=f_analog,
-                            name_calc=name_calc, name_analog=name_analog
-                        )
-                        loaded.append("Норма годового стока")
-                except (ValueError, TypeError, KeyError, AttributeError) as e:
-                    print(f"[WARN] Ошибка загрузки листа 'Норма годового стока': {e}")
+        # === FDC (Работа 8) ===
+        sheet_r8 = self._find_sheet(xls, ["FDC", "Работа8"])
+        if sheet_r8:
+            found = True
+            try:
+                df_r8 = pd.read_excel(xls, sheet_r8)
+                self.tab_work8.set_data(daily_df=df_r8)
+                loaded.append("FDC")
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                print(f"[WARN] Ошибка загрузки 'FDC': {e}")
 
-            # === Внутригодовое распределение (Работа 2) ===
-            sheet_r2 = self._find_sheet(xls, ["Внутригодовое распределение", "Работа2"])
-            if sheet_r2:
-                try:
-                    df_r2 = pd.read_excel(xls, sheet_r2, skiprows=0)
-                    if len(df_r2) >= 2:
-                        month_map = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6,
-                                     "VII": 7, "VIII": 8, "IX": 9, "X": 10, "XI": 11, "XII": 12}
-                        renamed = {}
-                        for c in df_r2.columns:
-                            cs = str(c).strip().upper()
-                            if cs in month_map:
-                                renamed[c] = month_map[cs]
-                            elif cs in ["ГОД", "YEAR"]:
-                                renamed[c] = "год"
-                        df_r2 = df_r2.rename(columns=renamed)
-                        if "год" in df_r2.columns:
-                            df_r2 = df_r2.set_index("год")
-                            self.tab_work2.set_data(monthly_df=df_r2)
-                            loaded.append("Внутригодовое распределение")
-                except (ValueError, TypeError, KeyError, AttributeError) as e:
-                    print(f"[WARN] Ошибка загрузки 'Внутригодовое распределение': {e}")
+        # === Гидротехнические расчёты (Работа 9) — параметры ===
+        sheet_r9 = self._find_sheet(xls, ["Гидротехнические расчёты", "Работа9"])
+        if sheet_r9:
+            found = True
+            try:
+                r9_raw = pd.read_excel(xls, sheet_r9, header=None)
+                q_val = None
+                b_val = None
+                slope_val = None
+                for _, row in r9_raw.iterrows():
+                    key = str(row[0]).strip().lower() if pd.notna(row[0]) else ""
+                    val = row[1]
+                    try:
+                        if "расход" in key and "q" in key:
+                            q_val = float(val)
+                        elif "ширин" in key and "b" in key:
+                            b_val = float(val)
+                        elif "уклон" in key:
+                            slope_val = float(val)
+                    except (ValueError, TypeError):
+                        pass
+                if q_val is not None or b_val is not None or slope_val is not None:
+                    self.tab_work9.set_data(Q=q_val, B=b_val, slope=slope_val)
+                    loaded.append("Гидротехнические расчёты")
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                print(f"[WARN] Ошибка загрузки 'Гидротехнические расчёты': {e}")
 
-            # === Минимальный сток (Работа 3) ===
-            sheet_r3 = self._find_sheet(xls, ["Минимальный сток", "Работа3"])
-            if sheet_r3:
-                try:
-                    df_r3 = pd.read_excel(xls, sheet_r3, skiprows=0)
-                    if len(df_r3) >= 3:
-                        years = pd.to_numeric(df_r3.iloc[:, 0], errors='coerce')
-                        winter = pd.Series(pd.to_numeric(df_r3.iloc[:, 1], errors='coerce').values, index=years)
-                        summer = pd.Series(pd.to_numeric(df_r3.iloc[:, 2], errors='coerce').values, index=years)
-                        self.tab_work3.set_data(winter_series=winter, summer_series=summer)
-                        loaded.append("Минимальный сток")
-                except (ValueError, TypeError, KeyError, AttributeError) as e:
-                    print(f"[WARN] Ошибка загрузки 'Минимальный сток': {e}")
+        # === Экология и базовый сток (Работа 10) ===
+        sheet_r10 = self._find_sheet(xls, ["Экология и базовый сток", "Работа10"])
+        if sheet_r10:
+            found = True
+            try:
+                df_r10 = pd.read_excel(xls, sheet_r10)
+                self.tab_work10.set_data(daily_df=df_r10)
+                loaded.append("Экология и базовый сток")
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                print(f"[WARN] Ошибка загрузки 'Экология и базовый сток': {e}")
 
-            # === Максимальный сток (Работа 4) ===
-            sheet_r4 = self._find_sheet(xls, ["Максимальный сток", "Работа4"])
-            if sheet_r4:
-                try:
-                    df_r4 = pd.read_excel(xls, sheet_r4)
-                    self.tab_work4.set_data(daily_df=df_r4)
-                    loaded.append("Максимальный сток")
-                except (ValueError, TypeError, KeyError, AttributeError) as e:
-                    print(f"[WARN] Ошибка загрузки 'Максимальный сток': {e}")
-
-            # === Ледовые явления (Работа 5) ===
-            sheet_r5 = self._find_sheet(xls, ["Ледовые явления", "Работа5"])
-            if sheet_r5:
-                try:
-                    df_r5 = pd.read_excel(xls, sheet_r5)
-                    freeze_col = [c for c in df_r5.columns
-                                  if 'ледостав' in str(c).lower() or 'freeze' in str(c).lower()]
-                    breakup_col = [c for c in df_r5.columns
-                                   if 'распад' in str(c).lower() or 'breakup' in str(c).lower()]
-                    freeze_dates = pd.to_datetime(df_r5[freeze_col[0]], errors='coerce').dropna() if freeze_col else None
-                    breakup_dates = pd.to_datetime(df_r5[breakup_col[0]], errors='coerce').dropna() if breakup_col else None
-                    self.tab_work5.set_data(freeze_dates=freeze_dates, breakup_dates=breakup_dates)
-                    loaded.append("Ледовые явления")
-                except (ValueError, TypeError, KeyError, IndexError, AttributeError) as e:
-                    print(f"[WARN] Ошибка загрузки 'Ледовые явления': {e}")
-
-            # === Водный баланс (Работа 6) ===
-            sheet_r6 = self._find_sheet(xls, ["Водный баланс", "Работа6"])
-            if sheet_r6:
-                try:
-                    df_r6 = pd.read_excel(xls, sheet_r6)
-                    self.tab_work6.set_data(daily_df=df_r6)
-                    loaded.append("Водный баланс")
-                except (ValueError, TypeError, KeyError, AttributeError) as e:
-                    print(f"[WARN] Ошибка загрузки 'Водный баланс': {e}")
-
-            # === FDC (Работа 8) ===
-            sheet_r8 = self._find_sheet(xls, ["FDC", "Работа8"])
-            if sheet_r8:
-                try:
-                    df_r8 = pd.read_excel(xls, sheet_r8)
-                    self.tab_work8.set_data(daily_df=df_r8)
-                    loaded.append("FDC")
-                except (ValueError, TypeError, KeyError, AttributeError) as e:
-                    print(f"[WARN] Ошибка загрузки 'FDC': {e}")
-
-            # === Экология и базовый сток (Работа 10) ===
-            sheet_r10 = self._find_sheet(xls, ["Экология и базовый сток", "Работа10"])
-            if sheet_r10:
-                try:
-                    df_r10 = pd.read_excel(xls, sheet_r10)
-                    self.tab_work10.set_data(daily_df=df_r10)
-                    loaded.append("Экология и базовый сток")
-                except (ValueError, TypeError, KeyError, AttributeError) as e:
-                    print(f"[WARN] Ошибка загрузки 'Экология и базовый сток': {e}")
-
-            # === Итог ===
-            if loaded:
-                self.statusBar.showMessage("Загружен шаблон: " + ", ".join(loaded))
-                msg = "\n".join(["  " + s for s in loaded])
-                QMessageBox.information(self, "Загрузка шаблона",
-                                        "Загружены разделы:\n\n" + msg)
-            else:
-                QMessageBox.warning(self, "Внимание",
-                                    "Не удалось загрузить данные ни из одного листа")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Ошибка загрузки шаблона", str(e))
+        return found
 
 
 APP_STYLESHEET = """

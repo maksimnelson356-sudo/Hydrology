@@ -7,6 +7,13 @@ create_unified_template.py
   Работа1     — норма годового стока (расчётная река + аналог)
   Работа2     — внутригодовое распределение (помесячные расходы)
   Работа3     — минимальный сток (зимние и летние минимумы)
+  Работа4     — максимальный сток (ряды максимумов по периодам осреднения)
+  Работа5     — ледовые явления (даты ледостава и вскрытия)
+  Работа6     — водный баланс (суточные/посты данные)
+  Работа7     — ливневый сток (параметры расчёта: площадь, климатическая зона)
+  Работа8     — кривая обеспеченности продолжительности (FDC)
+  Работа9     — гидротехнические расчёты (параметры: расход, ширина, уклон)
+  Работа10    — экология и базовый сток
   ГТС         — параметры ГТС для классификации
 
 Пустые листы — данные по ним не загружаются.
@@ -57,7 +64,7 @@ def create_unified_template(path="unified_template.xlsx"):
 
     # Пытаемся прочитать test_data_clean.xlsx
     post_data = {}
-    post_name = "Расход Q, м³/с"  # имя по умолчанию
+    post_names = []
     try:
         df_test = pd.read_excel("test_data_clean.xlsx")
         year_col = None
@@ -67,34 +74,32 @@ def create_unified_template(path="unified_template.xlsx"):
                 break
         if year_col:
             post_cols = [c for c in df_test.columns if c != year_col]
-            if post_cols:
-                first_post = post_cols[0]
-                post_name = str(first_post)  # имя поста = номер/название
-                ws1['A4'] = "Пост:"
-                ws1['B4'] = post_name
-                ws1['B4'].fill = yellow_fill
+            for pc in post_cols:
+                series = {}
                 for _, row in df_test.iterrows():
                     y = row[year_col]
-                    q = row[first_post]
+                    q = row[pc]
                     if pd.notna(y) and pd.notna(q):
-                        post_data[int(y)] = round(float(q), 2)
+                        series[int(y)] = round(float(q), 2)
+                if series:
+                    post_names.append(f"Расход Q, м³/с (пост {pc})")
+                    post_data[f"Расход Q, м³/с (пост {pc})"] = series
     except (FileNotFoundError, ValueError, KeyError, TypeError):
         pass  # шаблон создаётся с дефолтными данными
 
     if not post_data:
-        ws1['A4'] = "Название поста:"
-        ws1['B4'] = post_name
-        ws1['B4'].fill = yellow_fill
-        for y, q in zip(range(1960, 1980), [
+        post_names = ["Расход Q, м³/с"]
+        post_data[post_names[0]] = dict(zip(range(1960, 1980), [
             120, 145, 98, 156, 134, 110, 167, 129, 143, 108,
             152, 118, 136, 147, 102, 158, 125, 139, 151, 106
-        ]):
-            post_data[y] = q
+        ]))
 
-    write_header_row(ws1, 7, ["Год", post_name])
-    for i, (y, q) in enumerate(sorted(post_data.items()), start=8):
+    write_header_row(ws1, 7, ["Год"] + post_names)
+    all_years = sorted({y for s in post_data.values() for y in s})
+    for i, y in enumerate(all_years, start=8):
         style_cell(ws1, i, 1, y, fill=yellow_fill)
-        style_cell(ws1, i, 2, q, fill=yellow_fill)
+        for col, pname in enumerate(post_names, start=2):
+            style_cell(ws1, i, col, post_data[pname].get(y, None), fill=yellow_fill)
 
     # ========== ЛИСТ 2: Работа1 ==========
     ws2 = wb.create_sheet("Работа1")
@@ -175,7 +180,126 @@ def create_unified_template(path="unified_template.xlsx"):
         style_cell(ws4, yr - 1970 + 4, 3, round(random.uniform(3.0, 15.0), 2), fill=yellow_fill)
         style_cell(ws4, yr - 1970 + 4, 4, "—")
 
-    # ========== ЛИСТ 5: ГТС ==========
+    # ========== ЛИСТ 5: Работа4 ==========
+    ws4b = wb.create_sheet("Работа4")
+    ws4b['A1'] = "Работа 4 — Максимальный сток (ряды максимумов)"
+    ws4b['A1'].font = Font(bold=True, size=12)
+    ws4b.merge_cells('A1:E1')
+    ws4b['A2'] = "Год | Q_max (м³/с) | Период осреднения: 1 сутки | 5 суток | 7 суток"
+    ws4b['A2'].font = info_font
+    ws4b.merge_cells('A2:E2')
+
+    write_header_row(ws4b, 4, ["Год", "Q_max, м³/с", "Q_5сут, м³/с", "Q_7сут, м³/с", "Примечание"])
+    for i, yr in enumerate(range(1970, 1991)):
+        import random
+        random.seed(yr * 3 + 1)
+        style_cell(ws4b, 5 + i, 1, yr, fill=yellow_fill)
+        style_cell(ws4b, 5 + i, 2, round(random.uniform(300, 900), 1), fill=yellow_fill)
+        style_cell(ws4b, 5 + i, 3, round(random.uniform(250, 750), 1), fill=yellow_fill)
+        style_cell(ws4b, 5 + i, 4, round(random.uniform(220, 680), 1), fill=yellow_fill)
+
+    # ========== ЛИСТ 6: Работа5 ==========
+    ws5b = wb.create_sheet("Работа5")
+    ws5b['A1'] = "Работа 5 — Ледовые явления"
+    ws5b['A1'].font = Font(bold=True, size=12)
+    ws5b.merge_cells('A1:C1')
+    ws5b['A2'] = "Год | Дата ледостава | Дата вскрытия"
+    ws5b['A2'].font = info_font
+    ws5b.merge_cells('A2:C2')
+
+    write_header_row(ws5b, 4, ["Год", "Дата ледостава", "Дата вскрытия"])
+    for i, yr in enumerate(range(1970, 1991)):
+        style_cell(ws5b, 5 + i, 1, yr, fill=yellow_fill)
+        style_cell(ws5b, 5 + i, 2, f"{yr}-11-20", fill=yellow_fill)
+        style_cell(ws5b, 5 + i, 3, f"{yr + 1}-04-10", fill=yellow_fill)
+
+    # ========== ЛИСТ 7: Работа6 ==========
+    ws6b = wb.create_sheet("Работа6")
+    ws6b['A1'] = "Работа 6 — Водный баланс"
+    ws6b['A1'].font = Font(bold=True, size=12)
+    ws6b.merge_cells('A1:C1')
+
+    write_header_row(ws6b, 3, ["Год", "Осадки, мм", "Сток, мм", "Испарение, мм"])
+    for i, yr in enumerate(range(1980, 2000)):
+        import random
+        random.seed(yr * 7)
+        style_cell(ws6b, 4 + i, 1, yr, fill=yellow_fill)
+        style_cell(ws6b, 4 + i, 2, round(random.uniform(500, 700), 1), fill=yellow_fill)
+        style_cell(ws6b, 4 + i, 3, round(random.uniform(150, 300), 1), fill=yellow_fill)
+        style_cell(ws6b, 4 + i, 4, round(random.uniform(250, 400), 1), fill=yellow_fill)
+
+    # ========== ЛИСТ 8: Работа7 ==========
+    ws7b = wb.create_sheet("Работа7")
+    ws7b['A1'] = "Работа 7 — Ливневый сток (параметры расчёта)"
+    ws7b['A1'].font = Font(bold=True, size=12)
+    ws7b.merge_cells('A1:B1')
+
+    ws7b['A3'] = "Площадь бассейна F, км²:"
+    ws7b['B3'] = 25
+    ws7b['B3'].fill = yellow_fill
+    ws7b['A4'] = "Климатическая зона (zone_1 ... zone_7):"
+    ws7b['B4'] = "zone_3"
+    ws7b['B4'].fill = yellow_fill
+    ws7b['A5'] = "Обеспеченность T, лет:"
+    ws7b['B5'] = 10
+    ws7b['B5'].fill = yellow_fill
+    ws7b['A6'] = "Время концентрации t, мин:"
+    ws7b['B6'] = 60
+    ws7b['B6'].fill = yellow_fill
+    ws7b['A7'] = "Коэфф. стока α:"
+    ws7b['B7'] = 0.70
+    ws7b['B7'].fill = yellow_fill
+
+    ws7b.column_dimensions['A'].width = 35
+    ws7b.column_dimensions['B'].width = 15
+
+    # ========== ЛИСТ 9: Работа8 (FDC) ==========
+    ws8b = wb.create_sheet("Работа8")
+    ws8b['A1'] = "Работа 8 — Кривая обеспеченности продолжительности (FDC)"
+    ws8b['A1'].font = Font(bold=True, size=12)
+    ws8b.merge_cells('A1:B1')
+
+    write_header_row(ws8b, 3, ["Год", "Расход Q, м³/с"])
+    for i in range(30):
+        import random
+        random.seed(1000 + i)
+        style_cell(ws8b, 4 + i, 1, 1980 + i, fill=yellow_fill)
+        style_cell(ws8b, 4 + i, 2, round(random.uniform(50, 300), 1), fill=yellow_fill)
+
+    # ========== ЛИСТ 10: Работа9 ==========
+    ws9b = wb.create_sheet("Работа9")
+    ws9b['A1'] = "Работа 9 — Гидротехнические расчёты (параметры)"
+    ws9b['A1'].font = Font(bold=True, size=12)
+    ws9b.merge_cells('A1:B1')
+
+    ws9b['A3'] = "Расход паводка Q, м³/с:"
+    ws9b['B3'] = 500
+    ws9b['B3'].fill = yellow_fill
+    ws9b['A4'] = "Ширина B, м:"
+    ws9b['B4'] = 45
+    ws9b['B4'].fill = yellow_fill
+    ws9b['A5'] = "Уклон I, м/м (или ‰):"
+    ws9b['B5'] = 0.002
+    ws9b['B5'].fill = yellow_fill
+
+    ws9b.column_dimensions['A'].width = 35
+    ws9b.column_dimensions['B'].width = 15
+
+    # ========== ЛИСТ 11: Работа10 ==========
+    ws10b = wb.create_sheet("Работа10")
+    ws10b['A1'] = "Работа 10 — Экология и базовый сток"
+    ws10b['A1'].font = Font(bold=True, size=12)
+    ws10b.merge_cells('A1:B1')
+
+    write_header_row(ws10b, 3, ["Год", "Базовый сток, м³/с", "Qэкологический, м³/с"])
+    for i, yr in enumerate(range(1980, 2000)):
+        import random
+        random.seed(yr * 5 + 2)
+        style_cell(ws10b, 4 + i, 1, yr, fill=yellow_fill)
+        style_cell(ws10b, 4 + i, 2, round(random.uniform(20, 90), 1), fill=yellow_fill)
+        style_cell(ws10b, 4 + i, 3, round(random.uniform(25, 100), 1), fill=yellow_fill)
+
+    # ========== ЛИСТ 12: ГТС ==========
     ws5 = wb.create_sheet("ГТС")
     ws5['A1'] = "Параметры ГТС для классификации"
     ws5['A1'].font = Font(bold=True, size=12)

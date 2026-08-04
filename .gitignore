@@ -12,5 +12,6 @@ Thumbs.db
 *.egg-info/
 .env
 *.xlsx
+!unified_template.xlsx
 *.docx
 data/
