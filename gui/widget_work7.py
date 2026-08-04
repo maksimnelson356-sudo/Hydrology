@@ -76,7 +76,7 @@ class Work7Widget(QWidget):
 
         self.zone_combo = QComboBox()
         for k, v in IDF_ZONES.items():
-            self.zone_combo.addItem(f"{v['name']} ({k})", k)
+            self.zone_combo.addItem(v['name'], k)
         self.zone_combo.setCurrentIndex(2)
         form.addRow("Климатическая зона:", self.zone_combo)
 
@@ -192,7 +192,7 @@ class Work7Widget(QWidget):
 
         self.sm_zone = QComboBox()
         for k, v in MELT_COEFFICIENTS.items():
-            self.sm_zone.addItem(f"{v['name']} ({k})", k)
+            self.sm_zone.addItem(v['name'], k)
         self.sm_zone.setCurrentIndex(2)
         form.addRow("Климатическая зона:", self.sm_zone)
 

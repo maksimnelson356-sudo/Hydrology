@@ -274,6 +274,7 @@ class MainWindow(QMainWindow):
         self.current_post = None
         self.df = None
         self._all_posts = {}
+        self._post_combos = []
         self.curve_type = "pearson3"
         self.calc_method = "moments"
         self.break_year = None
@@ -516,9 +517,43 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel("Статистика:"))
         layout.addWidget(self.table)
     
+    def _make_post_combo(self):
+        """Создать синхронизированный комбобокс выбора поста."""
+        combo = QComboBox()
+        combo.setMinimumWidth(160)
+        combo.currentTextChanged.connect(self.on_post_changed)
+        self._post_combos.append(combo)
+        return combo
+
+    def _populate_post_combos(self):
+        """Заполнить все комбо постов (главный + вкладки)."""
+        for combo in [self.combo_post] + self._post_combos:
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItems(self.available_posts)
+            combo.blockSignals(False)
+
+    def _sync_post_combos(self, active):
+        """Синхронизировать все комбо постов с текущим выбором."""
+        for combo in [self.combo_post] + self._post_combos:
+            if combo.currentText() != active:
+                combo.blockSignals(True)
+                idx = combo.findText(active)
+                combo.setCurrentIndex(idx if idx >= 0 else 0)
+                combo.blockSignals(False)
+
     def setup_graph_tab(self):
         layout = QVBoxLayout(self.tab_graph)
         
+        post_row = QHBoxLayout()
+        lbl = QLabel("Пост:")
+        lbl.setStyleSheet("font-weight: bold; font-size: 13px; color: #1565C0;")
+        self.combo_post_graph = self._make_post_combo()
+        post_row.addWidget(lbl)
+        post_row.addWidget(self.combo_post_graph)
+        post_row.addStretch()
+        layout.addLayout(post_row)
+
         btn_layout = QHBoxLayout()
         self.btn_select_curve = QPushButton("Выбор кривой")
         self.btn_select_curve.clicked.connect(self.open_curve_dialog)
@@ -542,6 +577,16 @@ class MainWindow(QMainWindow):
     
     def setup_trend_tab(self):
         layout = QVBoxLayout(self.tab_trend)
+
+        post_row = QHBoxLayout()
+        lbl = QLabel("Пост:")
+        lbl.setStyleSheet("font-weight: bold; font-size: 13px; color: #1565C0;")
+        self.combo_post_trend = self._make_post_combo()
+        post_row.addWidget(lbl)
+        post_row.addWidget(self.combo_post_trend)
+        post_row.addStretch()
+        layout.addLayout(post_row)
+
         self.btn_trend = QPushButton("Выполнить анализ тренда")
         self.btn_trend.clicked.connect(self.run_trend_analysis)
         self.btn_trend.setEnabled(False)
@@ -572,7 +617,16 @@ class MainWindow(QMainWindow):
     
     def setup_viz_tab(self):
         layout = QVBoxLayout(self.tab_viz)
-        
+
+        post_row = QHBoxLayout()
+        lbl = QLabel("Пост:")
+        lbl.setStyleSheet("font-weight: bold; font-size: 13px; color: #1565C0;")
+        self.combo_post_viz = self._make_post_combo()
+        post_row.addWidget(lbl)
+        post_row.addWidget(self.combo_post_viz)
+        post_row.addStretch()
+        layout.addLayout(post_row)
+
         btn_layout = QHBoxLayout()
         self.btn_plot_series = QPushButton("Временной ряд")
         self.btn_plot_series.clicked.connect(self.plot_time_series)
@@ -924,10 +978,7 @@ class MainWindow(QMainWindow):
 
         self._all_posts = post_dfs
         self.available_posts = list(post_dfs.keys())
-        self.combo_post.blockSignals(True)
-        self.combo_post.clear()
-        self.combo_post.addItems(self.available_posts)
-        self.combo_post.blockSignals(False)
+        self._populate_post_combos()
         first = self.available_posts[0]
         self.df = post_dfs[first]
         self.current_post = first
@@ -944,10 +995,7 @@ class MainWindow(QMainWindow):
             return
         if not self.available_posts:
             return
-        self.combo_post.blockSignals(True)
-        self.combo_post.clear()
-        self.combo_post.addItems(self.available_posts)
-        self.combo_post.blockSignals(False)
+        self._populate_post_combos()
         self.combo_post.setCurrentIndex(0)
         self.on_post_changed(self.available_posts[0])
         loaded.append("Данные (%d постов)" % len(self.available_posts))
@@ -1003,8 +1051,7 @@ class MainWindow(QMainWindow):
             self.current_post = post_name
             self.df = df
 
-            self.combo_post.clear()
-            self.combo_post.addItems(self.available_posts)
+            self._populate_post_combos()
 
             stats = get_basic_stats(self.df)
             self.table.setRowCount(len(stats))
@@ -1044,10 +1091,7 @@ class MainWindow(QMainWindow):
                 self.year_col = year_col_new
 
             self.available_posts = [c for c in self.df_raw.columns if c != self.year_col]
-            self.combo_post.blockSignals(True)
-            self.combo_post.clear()
-            self.combo_post.addItems(self.available_posts)
-            self.combo_post.blockSignals(False)
+            self._populate_post_combos()
 
             if hasattr(self, '_all_posts'):
                 for post_name in new_posts:
@@ -1085,6 +1129,7 @@ class MainWindow(QMainWindow):
             return
         self.df = self.df.copy()
         self.df.attrs['post'] = post_name
+        self._sync_post_combos(post_name)
 
         stats = get_basic_stats(self.df)
         self.table.setRowCount(len(stats))
@@ -2130,6 +2175,20 @@ APP_STYLESHEET = APP_STYLESHEET.replace("_ARROW_DOWN_", _ARROW_DOWN.replace("\\"
 
 
 if __name__ == "__main__":
+    import traceback as _tb
+    import datetime as _dt
+    _LOG_PATH = os.path.join(os.path.dirname(__file__), "gui_error.log")
+
+    def _log_exception(exc_type, exc_value, exc_tb):
+        try:
+            with open(_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(f"\n[{_dt.datetime.now():%Y-%m-%d %H:%M:%S}] {exc_type.__name__}: {exc_value}\n")
+                f.write("".join(_tb.format_exception(exc_type, exc_value, exc_tb)))
+        except Exception:
+            pass
+
+    sys.excepthook = _log_exception
+
     app = QApplication(sys.argv)
     app.setStyleSheet(APP_STYLESHEET)
     window = MainWindow()
