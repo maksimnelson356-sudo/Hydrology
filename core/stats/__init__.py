@@ -22,6 +22,7 @@ core/stats/__init__.py
 - report — формирование отчётов
 - report_export — экспорт отчётов
 - critical_values — критические значения
+- short_series — восстановление коротких рядов (<6 лет)
 """
 
 __all__ = [
@@ -44,4 +45,5 @@ __all__ = [
     "report",
     "report_export",
     "critical_values",
+    "short_series",
 ]

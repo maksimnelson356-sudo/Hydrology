@@ -450,3 +450,83 @@ def multi_analog_extension(
             for i, name in enumerate(analog_names)
         )
     }
+
+
+# ============================================================
+# ИНТЕГРАЛЬНАЯ / РАЗНОСТНО-ИНТЕГРАЛЬНАЯ КРИВАЯ (ГГИ)
+# ============================================================
+#
+# Интегральная кривая: Σki (сумма модульных коэффициентов)
+# Разностно-интегральная: Σ(ki - 1) / Cv
+#
+# ki = xi / x̄ — модульный коэффициент
+#
+# Форма кривой позволяет выявить:
+# - Переломы = границы нестационарности
+# - Экстремумы = границы периодов повышенных/пониженных значений
+
+
+def compute_integral_curves(data: pd.Series) -> Dict:
+    """
+    Вычисление интегральной и разностно-интегральной кривых.
+
+    Аргументы:
+        data — pd.Series с индексом=год, значения=Q
+
+    Возвращает dict:
+        years — годы
+        modular_coefficients — ki = Q/Qср
+        integral_curve — Σki (нарастающая сумма)
+        diff_integral_curve — Σ(ki-1)/Cv
+        mean — среднее значение
+        cv — Cv
+        breakpoints — список годов с переломами (экстремумы разностно-интегральной)
+    """
+    data = data.dropna()
+    if len(data) < 4:
+        return {
+            'years': data.index.tolist(),
+            'modular_coefficients': [],
+            'integral_curve': [],
+            'diff_integral_curve': [],
+            'mean': 0, 'cv': 0, 'breakpoints': [],
+        }
+
+    values = data.values.astype(float)
+    years = data.index.tolist()
+
+    mean_val = np.mean(values)
+    std_val = np.std(values, ddof=1)
+    cv = std_val / mean_val if mean_val > 0 else 0
+
+    # Модульные коэффициенты
+    ki = values / mean_val if mean_val > 0 else np.ones_like(values)
+
+    # Интегральная кривая: нарастающая сумма ki
+    integral = np.cumsum(ki)
+
+    # Разностно-интегральная кривая: нарастающая сумма (ki-1)/Cv
+    if cv > 1e-12:
+        diff_integral = np.cumsum((ki - 1) / cv)
+    else:
+        diff_integral = np.cumsum(ki - 1)
+
+    # Поиск переломов (экстремумы разностно-интегральной кривой)
+    breakpoints = []
+    if len(diff_integral) >= 3:
+        for i in range(1, len(diff_integral) - 1):
+            if ((diff_integral[i] > diff_integral[i-1] and
+                 diff_integral[i] > diff_integral[i+1]) or
+                (diff_integral[i] < diff_integral[i-1] and
+                 diff_integral[i] < diff_integral[i+1])):
+                breakpoints.append(years[i])
+
+    return {
+        'years': years,
+        'modular_coefficients': ki.tolist(),
+        'integral_curve': integral.tolist(),
+        'diff_integral_curve': diff_integral.tolist(),
+        'mean': round(mean_val, 4),
+        'cv': round(cv, 4),
+        'breakpoints': breakpoints,
+    }

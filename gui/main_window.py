@@ -287,6 +287,8 @@ class MainWindow(QMainWindow):
         file_menu.addAction("Создать шаблон", self.create_unified_template)
         file_menu.addAction("Сохранить отчёт в Excel...", self.save_report)
         file_menu.addSeparator()
+        file_menu.addAction("Восстановить короткий ряд (Short)...",
+                            self._open_short_module)
         file_menu.addAction("Выход", self.close)
         
         self.tabs = QStackedWidget()
@@ -321,6 +323,7 @@ class MainWindow(QMainWindow):
         from gui.widget_work8 import Work8Widget
         from gui.widget_work9 import Work9Widget
         from gui.widget_work10 import Work10Widget
+        from gui.widget_short import ShortWidget
 
         self.tab_work1 = Work1Widget()
         self.tab_work1.calculation_done.connect(self._on_work1_calculated)
@@ -333,6 +336,7 @@ class MainWindow(QMainWindow):
         self.tab_work8 = Work8Widget()
         self.tab_work9 = Work9Widget()
         self.tab_work10 = Work10Widget()
+        self.tab_short = ShortWidget()
 
         self._nav_names = [
             "Данные и статистика",
@@ -350,6 +354,7 @@ class MainWindow(QMainWindow):
             "FDC + Регрессии + Статистика",
             "ППУ + ГВП + Регулирование",
             "Экология + Базовый сток",
+            "Короткие ряды (Short)",
             "Параметры",
         ]
         self._nav_pages = [
@@ -358,6 +363,7 @@ class MainWindow(QMainWindow):
             self.tab_work1, self.tab_work2, self.tab_work3, self.tab_work4,
             self.tab_work5, self.tab_work6, self.tab_work7, self.tab_work8,
             self.tab_work9, self.tab_work10,
+            self.tab_short,
             self.tab_params,
         ]
         self._nav_colors = [
@@ -365,6 +371,7 @@ class MainWindow(QMainWindow):
             "#2E7D32", "#00695C", "#E65100", "#C62828",
             "#4527A0", "#00838F", "#6A1B9A", "#2E7D32",
             "#EF6C00", "#880E4F",
+            "#F57C00",
             "#1565C0",
         ]
 
@@ -459,31 +466,31 @@ class MainWindow(QMainWindow):
         self.combo_post.currentTextChanged.connect(self.on_post_changed)
         post_layout.addWidget(self.combo_post)
         post_layout.addStretch()
-        
+
         self.btn_fill = QPushButton("Восстановить пропуски (простое)")
         self.btn_fill.clicked.connect(self.fill_missing_data)
         self.btn_fill.setEnabled(False)
-        
+
         self.btn_fill_corr = QPushButton("Восстановить пропуски (по корреляции)")
         self.btn_fill_corr.clicked.connect(self.fill_missing_with_correlation)
         self.btn_fill_corr.setEnabled(False)
-        
+
         self.btn_homogeneity = QPushButton("Проверить однородность ряда")
         self.btn_homogeneity.clicked.connect(self.check_homogeneity)
         self.btn_homogeneity.setEnabled(False)
-        
+
         self.btn_outliers = QPushButton("Найти выдающиеся значения")
         self.btn_outliers.clicked.connect(self.detect_outliers)
         self.btn_outliers.setEnabled(False)
-        
+
         self.btn_composite = QPushButton("Составная кривая (указать год разрыва)")
         self.btn_composite.clicked.connect(self.set_composite_break)
         self.btn_composite.setEnabled(False)
-        
+
         self.btn_clear_break = QPushButton("Сбросить составную кривую")
         self.btn_clear_break.clicked.connect(self.clear_composite)
         self.btn_clear_break.setEnabled(False)
-        
+
         self.btn_quantiles = QPushButton("Расчётные расходы (Q заданной обеспеченности)")
         self.btn_quantiles.clicked.connect(self.calculate_quantiles)
         self.btn_quantiles.setEnabled(False)
@@ -499,24 +506,39 @@ class MainWindow(QMainWindow):
         self.btn_extend = QPushButton("Удлинить ряд по аналогу")
         self.btn_extend.clicked.connect(self.extend_series)
         self.btn_extend.setEnabled(False)
-        
+
         self.table = QTableWidget()
         self.table.setColumnCount(2)
         auto_resize_table(self.table)
-        
-        layout.addLayout(post_layout)
-        layout.addWidget(self.btn_fill)
-        layout.addWidget(self.btn_fill_corr)
-        layout.addWidget(self.btn_homogeneity)
-        layout.addWidget(self.btn_outliers)
-        layout.addWidget(self.btn_composite)
-        layout.addWidget(self.btn_clear_break)
-        layout.addWidget(self.btn_quantiles)
-        layout.addWidget(self.btn_gts_curve)
-        layout.addWidget(self.btn_composite_auto)
-        layout.addWidget(self.btn_extend)
-        layout.addWidget(QLabel("Статистика:"))
-        layout.addWidget(self.table)
+
+        # QSplitter для масштабирования
+        data_splitter = QSplitter(Qt.Orientation.Vertical)
+        top_widget = QWidget()
+        top_layout = QVBoxLayout(top_widget)
+        top_layout.addLayout(post_layout)
+        top_layout.addWidget(self.btn_fill)
+        top_layout.addWidget(self.btn_fill_corr)
+        top_layout.addWidget(self.btn_homogeneity)
+        top_layout.addWidget(self.btn_outliers)
+        top_layout.addWidget(self.btn_composite)
+        top_layout.addWidget(self.btn_clear_break)
+        top_layout.addWidget(self.btn_quantiles)
+        top_layout.addWidget(self.btn_gts_curve)
+        top_layout.addWidget(self.btn_composite_auto)
+        top_layout.addWidget(self.btn_extend)
+
+        bottom_widget = QWidget()
+        bottom_layout = QVBoxLayout(bottom_widget)
+        bottom_layout.addWidget(QLabel("Статистика:"))
+        bottom_layout.addWidget(self.table)
+
+        data_splitter.addWidget(top_widget)
+        data_splitter.addWidget(bottom_widget)
+        data_splitter.setStretchFactor(0, 1)
+        data_splitter.setStretchFactor(1, 2)
+        data_splitter.setSizes([400, 600])
+
+        layout.addWidget(data_splitter)
     
     def _make_post_combo(self):
         """Создать синхронизированный комбобокс выбора поста."""
@@ -569,12 +591,91 @@ class MainWindow(QMainWindow):
         btn_layout.addWidget(self.btn_calc)
         btn_layout.addWidget(self.btn_save_plot)
         btn_layout.addStretch()
-        
+
+        # Кнопки для вариантов подбора
+        variant_layout = QHBoxLayout()
+        self.btn_save_variant = QPushButton("Сохранить вариант")
+        self.btn_save_variant.setEnabled(False)
+        self.btn_save_variant.clicked.connect(self._save_curve_variant)
+        self.btn_show_all = QPushButton("Все варианты")
+        self.btn_show_all.setEnabled(False)
+        self.btn_show_all.clicked.connect(self._show_all_variants)
+        self.btn_clear_variants = QPushButton("Очистить варианты")
+        self.btn_clear_variants.setEnabled(False)
+        self.btn_clear_variants.clicked.connect(self._clear_variants)
+
+        variant_layout.addWidget(self.btn_save_variant)
+        variant_layout.addWidget(self.btn_show_all)
+        variant_layout.addWidget(self.btn_clear_variants)
+        variant_layout.addStretch()
+        layout.addLayout(variant_layout)
+
+        # Таблица сохранённых вариантов
+        self.variant_table = QTableWidget()
+        self.variant_table.setColumnCount(5)
+        self.variant_table.setHorizontalHeaderLabels(
+            ["Тип кривой", "Cs/Cv", "Qср", "Cv", "Cs"])
+        self.variant_table.setMaximumHeight(120)
+        self.variant_table.setVisible(False)
+        auto_resize_table(self.variant_table)
+        layout.addWidget(self.variant_table)
+
+        # Хранилище вариантов
+        self._saved_variants = []
+
+        # Кнопка "Подбор Cs/Cv"
+        csv_layout = QHBoxLayout()
+        self.btn_auto_cs_cv = QPushButton("Подбор Cs/Cv")
+        self.btn_auto_cs_cv.setStyleSheet(
+            "QPushButton { background: #FF6F00; color: white; "
+            "padding: 6px 12px; border-radius: 4px; font-weight: bold; }")
+        self.btn_auto_cs_cv.setEnabled(False)
+        self.btn_auto_cs_cv.clicked.connect(self._auto_select_cs_cv)
+
+        self.btn_add_extreme = QPushButton("Добавить экстремум")
+        self.btn_add_extreme.setEnabled(False)
+        self.btn_add_extreme.clicked.connect(self._add_historical_extreme)
+
+        csv_layout.addWidget(self.btn_auto_cs_cv)
+        csv_layout.addWidget(self.btn_add_extreme)
+        csv_layout.addStretch()
+        layout.addLayout(csv_layout)
+
+        # Текст результатов подбора Cs/Cv
+        self.cs_cv_text = QTextEdit()
+        self.cs_cv_text.setReadOnly(True)
+        self.cs_cv_text.setMaximumHeight(100)
+        self.cs_cv_text.setFont(QFont('Consolas', 9))
+        self.cs_cv_text.setVisible(False)
+        layout.addWidget(self.cs_cv_text)
+
+        # Хранилище исторических экстремумов
+        self._historical_extremes = []
+
         self.figure = Figure(figsize=(10, 6))
         self.canvas = FigureCanvas(self.figure)
-        
-        layout.addLayout(btn_layout)
-        layout.addWidget(self.canvas)
+
+        # QSplitter для масштабирования графика
+        graph_splitter = QSplitter(Qt.Orientation.Vertical)
+        controls_widget = QWidget()
+        controls_layout = QVBoxLayout(controls_widget)
+        controls_layout.addLayout(btn_layout)
+        controls_layout.addLayout(variant_layout)
+        controls_layout.addWidget(self.variant_table)
+        controls_layout.addLayout(csv_layout)
+        controls_layout.addWidget(self.cs_cv_text)
+
+        graph_widget = QWidget()
+        graph_layout = QVBoxLayout(graph_widget)
+        graph_layout.addWidget(self.canvas)
+
+        graph_splitter.addWidget(controls_widget)
+        graph_splitter.addWidget(graph_widget)
+        graph_splitter.setStretchFactor(0, 1)
+        graph_splitter.setStretchFactor(1, 4)
+        graph_splitter.setSizes([200, 800])
+
+        layout.addWidget(graph_splitter)
     
     def setup_trend_tab(self):
         layout = QVBoxLayout(self.tab_trend)
@@ -591,6 +692,13 @@ class MainWindow(QMainWindow):
         self.btn_trend = QPushButton("Выполнить анализ тренда")
         self.btn_trend.clicked.connect(self.run_trend_analysis)
         self.btn_trend.setEnabled(False)
+
+        self.btn_stationarity = QPushButton("Проверка стационарности")
+        self.btn_stationarity.setStyleSheet(
+            "QPushButton { background: #7B1FA2; color: white; "
+            "padding: 6px 12px; border-radius: 4px; font-weight: bold; }")
+        self.btn_stationarity.setEnabled(False)
+        self.btn_stationarity.clicked.connect(self._check_stationarity)
         
         self.trend_table = QTableWidget()
         auto_resize_table(self.trend_table)
@@ -611,6 +719,7 @@ class MainWindow(QMainWindow):
         trend_splitter.setSizes([140, 300])
 
         layout.addWidget(self.btn_trend)
+        layout.addWidget(self.btn_stationarity)
         layout.addWidget(QLabel("Результаты анализа тренда:"))
         layout.addWidget(self.trend_table)
         layout.addWidget(QLabel("Интерпретация + график:"))
@@ -911,7 +1020,9 @@ class MainWindow(QMainWindow):
                         self.btn_composite, self.btn_quantiles, self.btn_gts_curve,
                         self.btn_composite_auto, self.btn_extend,
                         self.btn_plot_series, self.btn_plot_hist,
-                        self.btn_plot_box, self.btn_plot_corr]:
+                        self.btn_plot_box, self.btn_plot_corr,
+                        self.btn_auto_cs_cv, self.btn_add_extreme,
+                        self.btn_stationarity]:
                 btn.setEnabled(True)
 
             # === 5. Итог ===
@@ -1019,6 +1130,14 @@ class MainWindow(QMainWindow):
                 widget.set_data(daily_df=daily_df)
             except (ValueError, TypeError, AttributeError) as e:
                 print(f"[WARN] Ошибка передачи данных в виджет: {e}")
+        # Short: передаём all_posts если есть
+        if hasattr(self, '_all_posts') and self._all_posts:
+            try:
+                self.tab_short.set_data(
+                    all_posts=self._all_posts,
+                    available_posts=self.available_posts)
+            except (ValueError, TypeError, AttributeError) as e:
+                print(f"[WARN] Ошибка передачи данных в Short: {e}")
 
     def _on_work1_calculated(self, result):
         """Автоматическая передача Qsr из Work1 в Work4 и другие виджеты."""
@@ -1422,10 +1541,252 @@ class MainWindow(QMainWindow):
             ax.text(0.02, -0.07, textstr, transform=ax.transAxes, fontsize=9, verticalalignment='bottom', bbox=props, family='monospace')
             
             self.canvas.draw()
-            
+
+            # Включаем кнопки вариантов
+            self.btn_save_variant.setEnabled(True)
+            self.btn_show_all.setEnabled(True)
+            self.btn_clear_variants.setEnabled(True)
+
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
+    def _save_curve_variant(self):
+        """Сохранение текущего варианта кривой."""
+        if self.df is None:
+            return
+
+        values = self.df['value'].dropna().values
+        pearson = fit_pearson3(values)
+
+        variant = {
+            'curve_type': self.curve_type,
+            'mean': round(pearson['mean'], 2),
+            'cv': round(pearson['cv'], 4),
+            'cs': round(pearson['skew'], 4),
+            'cs_cv': round(pearson['skew'] / pearson['cv'], 2) if pearson['cv'] > 0 else 0,
+        }
+        self._saved_variants.append(variant)
+
+        # Обновляем таблицу
+        self.variant_table.setVisible(True)
+        self.variant_table.setRowCount(len(self._saved_variants))
+        for i, v in enumerate(self._saved_variants):
+            self.variant_table.setItem(i, 0, QTableWidgetItem(v['curve_type']))
+            self.variant_table.setItem(i, 1, QTableWidgetItem(str(v['cs_cv'])))
+            self.variant_table.setItem(i, 2, QTableWidgetItem(str(v['mean'])))
+            self.variant_table.setItem(i, 3, QTableWidgetItem(str(v['cv'])))
+            self.variant_table.setItem(i, 4, QTableWidgetItem(str(v['cs'])))
+        auto_resize_table(self.variant_table)
+
+        self.statusBar().showMessage(
+            f"Вариант сохранён: {self.curve_type}, Cs/Cv={variant['cs_cv']}")
+
+    def _show_all_variants(self):
+        """Отображение всех сохранённых вариантов на одном графике."""
+        if not self._saved_variants or self.df is None:
+            return
+
+        values = self.df['value'].dropna().values
+        mean_q = np.mean(values)
+
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+
+        # Эмпирические точки
+        q_desc, p_emp = empirical_plotting_positions(values)
+        x_emp = stats.norm.ppf(p_emp)
+        modular_emp = q_desc / mean_q
+        ax.plot(x_emp, modular_emp, 'o', color=COLORS["primary"], markersize=5,
+                label='Эмпирические точки', markeredgecolor='white', markeredgewidth=0.5)
+
+        # Теоретические кривые для каждого варианта
+        p_theor = np.array([0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5,
+                            0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99, 0.995, 0.999])
+        x_theor = stats.norm.ppf(p_theor)
+
+        colors = ['#E53935', '#1E88E5', '#43A047', '#FB8C00', '#8E24AA',
+                  '#00897B', '#D81B60', '#3949AB']
+        labels_map = {
+            'pearson3': 'Пирсон III',
+            'kritsky_menkel': 'Крицкий-Менкель',
+            'normal': 'Нормальное',
+            'piecewise': 'Ломаная',
+        }
+
+        for i, v in enumerate(self._saved_variants):
+            color = colors[i % len(colors)]
+            label = labels_map.get(v['curve_type'], v['curve_type'])
+            cs_cv = v['cs_cv']
+            label_full = f"{label} (Cs/Cv={cs_cv})"
+
+            if v['curve_type'] == 'pearson3':
+                curve = calculate_frequency_curve(values, probabilities=p_theor,
+                                                  curve_type='pearson3')
+                modular = curve['Q'].values / mean_q
+            elif v['curve_type'] == 'kritsky_menkel':
+                from core.stats.frequency import kritsky_menkel_ppf
+                theor_q = kritsky_menkel_ppf(p_theor, mean_q, v['cv'], v['cs'])
+                modular = theor_q / mean_q
+            elif v['curve_type'] == 'normal':
+                from core.stats.parameters import calculate_statistical_parameters
+                params = calculate_statistical_parameters(values)
+                theor = stats.norm.ppf(1 - p_theor, loc=params['mean'], scale=params['std'])
+                modular = theor / mean_q
+            else:
+                modular = np.interp(x_theor, x_emp, modular_emp)
+
+            ax.plot(x_theor, modular, color=color, linewidth=2, label=label_full)
+
+        setup_axes_style(ax, title=f'Все варианты подбора — Пост {self.current_post}',
+                         xlabel='Обеспеченность, %', ylabel='K = Q / Qср')
+        ax.legend(loc='upper right', framealpha=0.9, fontsize=8)
+
+        prob_ticks = [0.01, 0.05, 0.1, 0.2, 0.5, 0.8, 0.9, 0.95, 0.99]
+        prob_labels = ['1%', '5%', '10%', '20%', '50%', '80%', '90%', '95%', '99%']
+        ax.set_xticks(stats.norm.ppf(prob_ticks))
+        ax.set_xticklabels(prob_labels)
+
+        self.canvas.draw()
+
+    def _clear_variants(self):
+        """Очистка сохранённых вариантов."""
+        self._saved_variants.clear()
+        self.variant_table.setRowCount(0)
+        self.variant_table.setVisible(False)
+        self.statusBar().showMessage("Варианты очищены")
+
+    def _auto_select_cs_cv(self):
+        """Автоматический подбор Cs/Cv."""
+        if self.df is None:
+            return
+
+        from core.stats.frequency import auto_select_cs_cv
+
+        values = self.df['value'].dropna().values
+        if len(values) < 5:
+            QMessageBox.warning(self, "Ошибка", "Нужно минимум 5 значений")
+            return
+
+        result = auto_select_cs_cv(values, curve_type=self.curve_type)
+
+        if result.get('cs_cv_optimal') is None:
+            QMessageBox.warning(self, "Ошибка", result.get('message', 'Не удалось подобрать'))
+            return
+
+        # Показываем результаты
+        self.cs_cv_text.setVisible(True)
+        text = (
+            f"=== Подбор Cs/Cv (автоматически) ===\n"
+            f"Тип кривой: {self.curve_type}\n"
+            f"Cv = {result['cv']:.4f}\n"
+            f"Оптимальный Cs/Cv = {result['cs_cv_optimal']}\n"
+            f"Cs (оптимальный) = {result['cs_optimal']:.4f}\n"
+            f"Минимальная SS = {result['ss_min']:.4f}\n"
+            f"\nКвантили при оптимальном Cs/Cv:\n"
+        )
+        if 'quantiles' in result:
+            df_q = result['quantiles']
+            for _, row in df_q.iterrows():
+                text += f"  P={row['P_%']:6.2f}%  Q_теор={row['Q_theory']:8.2f}  Q_эмп={row['Q_empirical']:8.2f}\n"
+
+        self.cs_cv_text.setText(text)
+        self.statusBar().showMessage(
+            f"Cs/Cv подобран: {result['cs_cv_optimal']} (SS={result['ss_min']:.2f})")
+
+    def _add_historical_extreme(self):
+        """Добавление исторического экстремума."""
+        if self.df is None:
+            return
+
+        from PyQt6.QtWidgets import QInputDialog
+
+        # Ввод года
+        year, ok1 = QInputDialog.getInt(
+            self, "Исторический экстремум", "Год:", 1950, 1800, 2025)
+        if not ok1:
+            return
+
+        # Ввод значения
+        value, ok2 = QInputDialog.getDouble(
+            self, "Исторический экстремум", "Значение (Q):", 150.0, 0, 100000, 2)
+        if not ok2:
+            return
+
+        # Ввод периода непревышения
+        period, ok3 = QInputDialog.getInt(
+            self, "Исторический экстремум", "Период непревышения (лет):", 100, 1, 10000)
+        if not ok3:
+            return
+
+        from core.stats.frequency import HistoricalExtreme
+        extreme = HistoricalExtreme(year=year, value=value, period=period)
+        self._historical_extremes.append(extreme)
+
+        # Показываем результаты
+        self.cs_cv_text.setVisible(True)
+        text = f"=== Исторические экстремумы ({len(self._historical_extremes)}) ===\n"
+        for ext in self._historical_extremes:
+            text += (f"  Год {ext.year}: Q={ext.value}, "
+                    f"T={ext.period} лет, P={ext.exceedance_prob*100:.4f}%\n")
+
+        # Пересчитываем параметры с учётом экстремумов
+        from core.stats.frequency import compute_params_with_extremes
+        values = self.df['value'].dropna().values
+        result = compute_params_with_extremes(values, self._historical_extremes, is_max=True)
+
+        text += (
+            f"\n=== Параметры с учётом экстремумов ===\n"
+            f"Исходные: mean={result['mean_raw']:.2f}, cv={result['cv_raw']:.4f}\n"
+            f"Скорректированные: mean={result['mean_corrected']:.2f}, "
+            f"cv={result['cv_corrected']:.4f}\n"
+            f"Поправки: Δmean={result['corrections']['delta_mean']:.4f}, "
+            f"Δcv={result['corrections']['delta_cv']:.4f}"
+        )
+
+        self.cs_cv_text.setText(text)
+        self.statusBar().showMessage(
+            f"Добавлен экстремум: Q={value} (T={period} лет)")
+
+    def _check_stationarity(self):
+        """Проверка стационарности ряда."""
+        if self.df is None:
+            return
+
+        from core.stats.homogeneity import stationarity_test
+
+        values = self.df['value'].dropna().values
+        years = self.df['year'].values if 'year' in self.df.columns else None
+
+        result = stationarity_test(values, years=years)
+
+        # Показываем результаты
+        text = (
+            f"=== Проверка стационарности ===\n"
+            f"n = {result['split_info']['n1'] + result['split_info']['n2']}\n"
+            f"Деление: {result['split_info']['n1']} vs {result['split_info']['n2']} "
+            f"(год разделения: {result['split_info']['split_year'] or 'середина'})\n\n"
+            f"--- t-тест Стьюдента (стационарность по среднему) ---\n"
+            f"  t = {result['t_test']['t_stat']:.4f}\n"
+            f"  t_crit = {result['t_test']['t_critical']:.4f}\n"
+            f"  p = {result['t_test']['p_value']:.4f}\n"
+            f"  Часть1: mean = {result['t_test']['part1_mean']:.4f}\n"
+            f"  Часть2: mean = {result['t_test']['part2_mean']:.4f}\n"
+            f"  Результат: {'НЕОДНОРОДНЫЙ' if result['t_test']['significant'] else 'ОДНОРОДНЫЙ'}\n\n"
+            f"--- F-тест Фишера (стационарность по дисперсии) ---\n"
+            f"  F = {result['f_test']['f_stat']:.4f}\n"
+            f"  F_crit = {result['f_test']['f_critical']:.4f}\n"
+            f"  p = {result['f_test']['p_value']:.4f}\n"
+            f"  Часть1: var = {result['f_test']['part1_var']:.4f}\n"
+            f"  Часть2: var = {result['f_test']['part2_var']:.4f}\n"
+            f"  Результат: {'НЕОДНОРОДНЫЙ' if result['f_test']['significant'] else 'ОДНОРОДНЫЙ'}\n\n"
+            f"--- Итого ---\n"
+            f"Ряд стационарен: {'ДА' if result['is_stationary'] else 'НЕТ'}"
+        )
+
+        self.trend_text.setText(text)
+        self.statusBar().showMessage(
+            f"Стационарность: {'ДА' if result['is_stationary'] else 'НЕТ'}")
+
     def save_plot_as_image(self):
         filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить график", "", 
             "Изображения PNG (*.png);;Изображения JPEG (*.jpg);;Документы PDF (*.pdf)")
@@ -1743,6 +2104,15 @@ class MainWindow(QMainWindow):
 
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))
+
+    def _open_short_module(self):
+        """Переключает на страницу Short и передаёт данные."""
+        idx = self._nav_names.index("Короткие ряды (Short)")
+        self._nav_list.setCurrentRow(idx)
+        if hasattr(self, '_all_posts') and self._all_posts:
+            self.tab_short.set_data(
+                all_posts=self._all_posts,
+                available_posts=self.available_posts)
 
     def extend_series(self):
         """Удлинение ряда по аналогу."""
