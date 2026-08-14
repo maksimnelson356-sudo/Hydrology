@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 
 # Принудительно перенаправляем stdout в UTF-8 для Windows-консоли.
-if sys.platform == "win32":
+if sys.platform == "win32" and sys.stdout is not None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 # Добавляем корень репозитория в путь для импорта core.
@@ -28,6 +28,7 @@ from core.stats.sheet_reader import (
     find_sheet, find_header_row, read_work_sheet,
     numeric_column, clean_column_name
 )
+from core.gts_reference import GTSClass, classify_gts_by_parameters
 
 
 def main():
@@ -48,10 +49,10 @@ def main():
     print("\n=== find_sheet longest-match ===")
 
     tests_find = [
-        (["Работа8", "FDC", "Кривая"], "Работа8", "work8"),
-        (["Кривая", "КриваяQH", "H-Q"], "КриваяQH", "work4-кривая"),
-        (["Работа10", "Экология", "Базовый"], "Работа10", "work10"),
-        (["Внутригодовое распределение", "Работа2"], "Работа2", "work2"),
+        (["FDC + Регрессии + Статистика", "FDC", "Кривая"], "FDC + Регрессии + Статистика", "work8"),
+        (["Кривая Q(H)", "Кривая", "H-Q"], "Кривая Q(H)", "work4-кривая"),
+        (["Экология + Базовый сток", "Экология", "Базовый"], "Экология + Базовый сток", "work10"),
+        (["Внутригодовое распределение"], "Внутригодовое распределение", "work2"),
     ]
     for keywords, expected, label in tests_find:
         got = find_sheet(xls, keywords)
@@ -64,11 +65,11 @@ def main():
     print("\n=== find_header_row (clean-match) ===")
 
     tests_header = [
-        (["Кривая", "КриваяQH"], ("h", "уровень", "q", "расход"), 2, "КриваяQH"),
-        (["Работа8"], ("год", "year", "years"), 2, "Работа8"),
-        (["Работа10"], ("год", "year", "years"), 2, "Работа10"),
-        (["Работа2"], ("год", "year", "years"), 3, "Работа2"),
-        (["Работа4"], ("год", "year", "years"), 2, "Работа4"),
+        (["Кривая Q(H)", "Кривая"], ("h", "уровень", "q", "расход"), 2, "Кривая Q(H)"),
+        (["FDC + Регрессии + Статистика"], ("год", "year", "years"), 2, "FDC"),
+        (["Экология + Базовый сток"], ("год", "year", "years"), 2, "Экология"),
+        (["Внутригодовое распределение"], ("год", "year", "years"), 3, "Внутригодовое распределение"),
+        (["Максимальный сток"], ("год", "year", "years"), 2, "Максимальный сток"),
     ]
     for sheet_keys, header_keys, expected_idx, label in tests_header:
         sheet = find_sheet(xls, sheet_keys)
@@ -106,7 +107,7 @@ def main():
     # ========== 4. work2: read_work_sheet + month_map ==========
     print("\n=== work2: внутригодовое распределение ===")
 
-    df2 = read_work_sheet(str(template_path), ["Внутригодовое распределение", "Работа2"], use_columns=True)
+    df2 = read_work_sheet(str(template_path), ["Внутригодовое распределение"], use_columns=True)
     if df2.empty:
         print("FAIL: work2: read_work_sheet вернул пустой DataFrame")
         ok = False
@@ -146,7 +147,7 @@ def main():
     # ========== 5. work4: кривая Q=f(H) ==========
     print("\n=== work4: кривая расходов Q=f(H) ===")
 
-    df4 = read_work_sheet(str(template_path), ["Кривая", "КриваяQH", "H-Q"],
+    df4 = read_work_sheet(str(template_path), ["Кривая Q(H)", "Кривая", "H-Q"],
                           header_keywords=("h", "уровень", "q", "расход"))
     if df4.empty:
         print("FAIL: work4: read_work_sheet вернул пустой DataFrame")
@@ -173,7 +174,7 @@ def main():
     # ========== 6. work8: FDC ==========
     print("\n=== work8: кривая обеспеченности продолжительности (FDC) ===")
 
-    df8 = read_work_sheet(str(template_path), ["Работа8", "FDC", "Кривая"])
+    df8 = read_work_sheet(str(template_path), ["FDC + Регрессии + Статистика", "FDC", "Кривая"])
     if df8.empty:
         print("FAIL: work8: read_work_sheet вернул пустой DataFrame")
         ok = False
@@ -196,7 +197,7 @@ def main():
     # ========== 7. work10: базовый сток ==========
     print("\n=== work10: экология и базовый сток ===")
 
-    df10 = read_work_sheet(str(template_path), ["Работа10", "Экология", "Базовый"])
+    df10 = read_work_sheet(str(template_path), ["Экология + Базовый сток", "Экология", "Базовый"])
     if df10.empty:
         print("FAIL: work10: read_work_sheet вернул пустой DataFrame")
         ok = False
@@ -219,19 +220,179 @@ def main():
     # ========== 8. Регрессия фикса E: pd.read_excel + numeric_column ==========
     print("\n=== Регрессия: pd.read_excel без read_work_sheet (ожидаемо годы) ===")
 
-    sheet_r8 = find_sheet(xls, ["FDC", "Работа8"])
+    sheet_r8 = find_sheet(xls, ["FDC + Регрессии + Статистика", "FDC"])
     if sheet_r8:
         df_raw = pd.read_excel(xls, sheet_r8)
         col_raw = numeric_column(df_raw, prefer_names=["q", "расход", "value"])
         if col_raw is not None:
             vals_raw = col_raw.values
-            # Без read_work_sheet колонка-год содержит титул «Работа8 — …», clean -> «работа 8 …»,
+            # Без read_work_sheet колонка-год содержит титул «Кривая обеспеченности продолжительности (FDC)»,
             # но numeric_column по специфичности выберет второй столбец «Расход Q, м³/с» -> расход(6).
             # Однако в текущей реализации без clean-имён колонки — ожидаемо годы.
             # Просто выводим для справки.
             print(f"INFO: pd.read_excel('{sheet_r8}') + numeric_column -> head={list(vals_raw[:3])} (без read_work_sheet)")
         else:
             print("INFO: pd.read_excel + numeric_column -> None")
+
+    # ========== 9. ГТС: параметры + классификация ==========
+    print("\n=== ГТС: параметры и классификация ===")
+
+    sheet_gts = find_sheet(xls, ["ГТС"])
+    if sheet_gts is None:
+        print("FAIL: ГТС: лист не найден")
+        ok = False
+    else:
+        gts_raw = pd.read_excel(xls, sheet_gts, header=None)
+        dam_height = None
+        reservoir_vol = None
+        for _, row in gts_raw.iterrows():
+            key = str(row[0]).strip().lower() if pd.notna(row[0]) else ""
+            val = row[1]
+            if "высота" in key and "плотин" in key:
+                try:
+                    dam_height = float(val)
+                except (ValueError, TypeError):
+                    pass
+            elif "объём" in key or "объем" in key:
+                try:
+                    reservoir_vol = float(val)
+                except (ValueError, TypeError):
+                    pass
+        if dam_height == 35.0 and reservoir_vol == 200.0:
+            print(f"OK: ГТС: высота={dam_height}, объём={reservoir_vol}")
+        else:
+            print(f"FAIL: ГТС: высота={dam_height}, объём={reservoir_vol}, ожидалось 35/200")
+            ok = False
+
+        gts_class = classify_gts_by_parameters(dam_height, reservoir_vol)
+        if gts_class == GTSClass.CLASS_III:
+            print(f"OK: ГТС: classify({dam_height}, {reservoir_vol}) -> {gts_class}")
+        else:
+            print(f"FAIL: ГТС: classify -> {gts_class}, ожидалось CLASS_III")
+            ok = False
+
+    # ========== 10. Рацион + IDF + Гидрографы: F / зона / T / t / α ==========
+    print("\n=== Рацион + IDF + Гидрографы: F / зона / T / t / α ===")
+
+    sheet_r7 = find_sheet(xls, ["Рацион + IDF + Гидрографы", "Ливневый сток"])
+    if sheet_r7 is None:
+        print("FAIL: Рацион + IDF + Гидрографы: лист не найден")
+        ok = False
+    else:
+        r7_raw = pd.read_excel(xls, sheet_r7, header=None)
+        f7 = zone7 = t7 = time7 = alpha7 = None
+        for _, row in r7_raw.iterrows():
+            key = str(row[0]).strip().lower() if pd.notna(row[0]) else ""
+            val = row[1]
+            if "площадь" in key and "f" in key:
+                try:
+                    f7 = float(val)
+                except (ValueError, TypeError):
+                    pass
+            elif "зона" in key:
+                zone7 = str(val).strip() if pd.notna(val) else None
+            elif "обеспеченност" in key and "t" in key:
+                try:
+                    t7 = float(val)
+                except (ValueError, TypeError):
+                    pass
+            elif "время" in key and "концентрац" in key:
+                try:
+                    time7 = float(val)
+                except (ValueError, TypeError):
+                    pass
+            elif ("стока" in key or "коэфф" in key) and ("α" in key or "alpha" in key or "a" in key):
+                try:
+                    alpha7 = float(val)
+                except (ValueError, TypeError):
+                    pass
+        expected7 = (25.0, "zone_3", 10.0, 60.0, 0.70)
+        got7 = (f7, zone7, t7, time7, alpha7)
+        if got7 == expected7:
+            print(f"OK: Рацион + IDF + Гидрографы: F={f7}, зона={zone7}, T={t7}, t={time7}, α={alpha7}")
+        else:
+            print(f"FAIL: Рацион + IDF + Гидрографы: {got7} != {expected7}")
+            ok = False
+
+    # ========== 11. ППУ + ГВП + Регулирование: все параметры + slope ==========
+    print("\n=== ППУ + ГВП + Регулирование: все параметры (slope не теряется) ===")
+
+    sheet_r9 = find_sheet(xls, ["ППУ + ГВП + Регулирование", "Гидротехнические расчёты"])
+    if sheet_r9 is None:
+        print("FAIL: ППУ + ГВП + Регулирование: лист не найден")
+        ok = False
+    else:
+        r9_raw = pd.read_excel(xls, sheet_r9, header=None)
+        q9 = b9 = slope9 = l9 = h9 = type9 = m9 = n9 = hres9 = lback9 = qmean9 = demand9 = None
+        for _, row in r9_raw.iterrows():
+            key = str(row[0]).strip().lower() if pd.notna(row[0]) else ""
+            val = row[1]
+            try:
+                if "средний" in key and "q" in key:
+                    qmean9 = float(val)
+                elif "расход" in key and "q" in key:
+                    q9 = float(val)
+                elif "ширин" in key and "b" in key:
+                    b9 = float(val)
+                elif "уклон" in key:
+                    slope9 = float(val)
+                elif "длина" in key and "гребн" in key:
+                    l9 = float(val)
+                elif "напор" in key:
+                    h9 = float(val)
+                elif "тип" in key:
+                    type9 = str(val).strip() if pd.notna(val) else None
+                elif "откос" in key:
+                    m9 = float(val)
+                elif "маннинг" in key or "коэфф. манн" in key:
+                    n9 = float(val)
+                elif "уровень" in key and ("водохр" in key or "hres" in key):
+                    hres9 = float(val)
+                elif "длина" in key and "участка" in key:
+                    lback9 = float(val)
+                elif "забор" in key:
+                    demand9 = float(val)
+            except (ValueError, TypeError):
+                pass
+        expected9 = (500.0, 45.0, 0.002, 20.0, 3.0, "трапеция", 2.0, 0.035, 5.0, 5000.0, 100.0, 30.0)
+        got9 = (q9, b9, slope9, l9, h9, type9, m9, n9, hres9, lback9, qmean9, demand9)
+        if got9 == expected9:
+            print(f"OK: ППУ + ГВП + Регулирование: Q={q9}, B={b9}, slope={slope9}, L={l9}, H={h9}, тип={type9}, "
+                  f"m={m9}, n={n9}, Hres={hres9}, Lback={lback9}, Qmean={qmean9}, demand={demand9}")
+        else:
+            print(f"FAIL: ППУ + ГВП + Регулирование: {got9} != {expected9}")
+            ok = False
+
+    # ========== 12. Интеграция ГТС: шаблон → парсер → класс ==========
+    print("\n=== Интеграция ГТС: шаблон → парсер → класс ===")
+
+    gts_cls = None
+    gts_params = None
+    sheet_gts2 = find_sheet(xls, ["ГТС"])
+    if sheet_gts2 is not None:
+        gts_raw2 = pd.read_excel(xls, sheet_gts2, header=None)
+        dam2 = vol2 = None
+        for _, row in gts_raw2.iterrows():
+            key = str(row[0]).strip().lower() if pd.notna(row[0]) else ""
+            val = row[1]
+            if "высота" in key and "плотин" in key:
+                try:
+                    dam2 = float(val)
+                except (ValueError, TypeError):
+                    pass
+            elif "объём" in key or "объем" in key:
+                try:
+                    vol2 = float(val)
+                except (ValueError, TypeError):
+                    pass
+        if dam2 is not None or vol2 is not None:
+            gts_params = {'dam_height': dam2, 'reservoir_volume': vol2}
+            gts_cls = classify_gts_by_parameters(dam2, vol2)
+    if gts_cls == GTSClass.CLASS_III and gts_params and gts_params['dam_height'] == 35.0:
+        print(f"OK: Интеграция: класс={gts_cls}, параметры={gts_params}")
+    else:
+        print(f"FAIL: Интеграция: класс={gts_cls}, параметры={gts_params}")
+        ok = False
 
     # ========== Итог ==========
     print("\n" + "=" * 40)

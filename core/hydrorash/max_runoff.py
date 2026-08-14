@@ -29,20 +29,20 @@ def extract_max_annual(
 ) -> pd.Series:
     """
     Извлечение средних максимальных расходов за period_days суток для каждого года.
-
-    period_days=1  — абсолютный суточный максимум
-    period_days>1  — скользящее среднее за period_days суток, затем максимум по году
-
-    Parameters:
-        daily_df: DataFrame с колонками year и value (суточные расходы)
-        year_col: имя колонки с годом
-        value_col: имя колонки с расходом
-        period_days: длительность окна (сутки)
-
-    Returns:
-        Series, индексированная годом, значения — максимальные расходы
     """
-    df = daily_df[[year_col, value_col]].dropna().copy()
+    df = daily_df.copy()
+    # Нормализация имён колонок
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    col_map = {
+        'год': 'year', 'year': 'year', 'years': 'year', 'дата': 'year', 'date': 'year',
+        'q': 'value', 'расход': 'value', 'value': 'value',
+    }
+    for old, new in col_map.items():
+        if old in df.columns and new not in df.columns:
+            df = df.rename(columns={old: new})
+    if year_col not in df.columns or value_col not in df.columns:
+        raise KeyError(f"Не найдены колонки '{year_col}' и/или '{value_col}' в DataFrame")
+    df = df[[year_col, value_col]].dropna().copy()
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce')
     df = df.dropna()
 
@@ -138,7 +138,7 @@ def max_runoff_frequency_curve(
     if P_values is None:
         P_values = [0.1, 0.33, 1.0, 2.0, 3.0, 5.0, 10.0, 20.0, 33.0, 50.0]
 
-    data = max_series.dropna().values
+    data = np.asarray(pd.Series(max_series).dropna(), dtype=float)
     if len(data) < 3:
         return pd.DataFrame({"P_%": P_values, "Q_max": [np.nan] * len(P_values), "kp": [np.nan] * len(P_values)})
 

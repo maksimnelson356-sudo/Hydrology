@@ -42,7 +42,7 @@ def clean_column_name(name) -> str:
 def find_sheet(xls: pd.ExcelFile, keywords: Sequence[str]) -> Optional[str]:
     """Найти имя листа с самым длинным совпавшим ключевым словом.
 
-    Пробелы игнорируются, чтобы «Работа8» матчил и лист «Работа8 (FDC)».
+    Пробелы игнорируются, чтобы «FDC + Регрессии» матчил и лист «FDC + Регрессии + Статистика».
     При равной длине ключа побеждает лист, встречающийся раньше.
     """
     lower_keywords = [str(k).strip().lower().replace(" ", "")
@@ -87,7 +87,7 @@ def read_work_sheet(filepath_or_xls,
 
     Args:
         filepath_or_xls: путь к файлу Excel или открытый pd.ExcelFile.
-        sheet_keywords: ключевые слова для поиска листа (например ["Работа8", "FDC"]).
+        sheet_keywords: ключевые слова для поиска листа (например ["FDC + Регрессии + Статистика", "FDC"]).
         header_keywords: слова для поиска строки-заголовка.
         use_columns: если True — возвращать DataFrame с колонками из заголовка,
             иначе читать с skiprows=header_row.
@@ -158,11 +158,3 @@ def numeric_column(df: pd.DataFrame,
         if vals.notna().sum() >= 3:
             return vals.dropna()
     return None
-
-
-def first_data_frame(xls: pd.ExcelFile, sheet_keywords: Sequence[str]) -> pd.DataFrame:
-    """Читать лист целиком (первая строка — заголовок). Удобно для «плоских» листов."""
-    sheet = find_sheet(xls, sheet_keywords)
-    if sheet is None:
-        return pd.DataFrame()
-    return pd.read_excel(xls, sheet)

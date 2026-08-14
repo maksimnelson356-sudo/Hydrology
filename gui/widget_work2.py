@@ -99,7 +99,7 @@ class Work2Widget(QWidget):
         if not path:
             return
         try:
-            df = read_work_sheet(path, ["Внутригодовое распределение", "Работа2"], use_columns=True)
+            df = read_work_sheet(path, ["Внутригодовое распределение"], use_columns=True)
             if df.empty:
                 df = pd.read_excel(path, skiprows=2)
 

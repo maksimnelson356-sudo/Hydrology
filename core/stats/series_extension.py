@@ -390,7 +390,10 @@ def multi_analog_extension(
     p = X.shape[1]
     dof = max(n_common - p, 1)
     sigma2 = ss_res / dof
-    cov = np.linalg.inv(X.T @ X) * sigma2
+    try:
+        cov = np.linalg.inv(X.T @ X) * sigma2
+    except np.linalg.LinAlgError:
+        cov = np.linalg.pinv(X.T @ X) * sigma2
     sigma_k = np.sqrt(np.abs(np.diag(cov)))
 
     k_all = np.concatenate([[k0], k])

@@ -30,33 +30,38 @@ def linear_trend(years, values):
 
 
 def mann_kendall_test(values):
-    """Тест Манна-Кендалла"""
+    """Тест Манна-Кендалла (векторизованная реализация)."""
+    values = np.asarray(values, dtype=float)
     n = len(values)
-    s = 0
-    for i in range(n - 1):
-        for j in range(i + 1, n):
-            s += np.sign(values[j] - values[i])
-    
+    if n < 4:
+        return {'statistic': 0, 'z': 0, 'p_value': 1.0,
+                'trend': 'Тренд отсутствует', 'significant': False}
+
+    # Векторизованный расчёт S
+    diff = values[None, :] - values[:, None]
+    s = float(np.sum(np.sign(diff)))
+
     unique, counts = np.unique(values, return_counts=True)
     ties = np.sum(counts * (counts - 1) * (2 * counts + 5))
-    var_s = (n * (n - 1) * (2 * n + 5) - ties) / 18
-    
+    var_s = (n * (n - 1) * (2 * n + 5) - ties) / 18.0
+    var_s = max(var_s, 1e-10)
+
     if s > 0:
         z = (s - 1) / np.sqrt(var_s)
     elif s < 0:
         z = (s + 1) / np.sqrt(var_s)
     else:
         z = 0
-    
-    p_value = 2 * (1 - norm.cdf(abs(z)))
-    
+
+    p_value = float(2 * (1 - norm.cdf(abs(z))))
+
     if s > 0:
         trend = "Рост"
     elif s < 0:
         trend = "Снижение"
     else:
         trend = "Тренд отсутствует"
-    
+
     return {
         'statistic': s,
         'z': z,
@@ -82,31 +87,35 @@ def sens_slope(years, values):
 
 def pettitt_test(values):
     """
-    Тест Петтитта (Pettitt test) — поиск точки изменения
+    Тест Петтитта (Pettitt test) — поиск точки изменения.
+    Векторизованная реализация.
     """
+    values = np.asarray(values, dtype=float)
     n = len(values)
-    U_t = []
-    
+    if n < 4:
+        return {'change_index': 0, 'max_U': 0, 'p_value': 1.0, 'significant': False}
+
+    # Векторизованный расчёт U_t
+    sign_diff = np.sign(values[None, :] - values[:, None])
+    U_t_clean = []
     for t in range(1, n):
-        left = values[:t]
-        right = values[t:]
-        u = sum(np.sign(x - y) for x in right for y in left)
-        U_t.append(abs(u))
-    
-    if not U_t:
-        return None
-    
-    max_U = max(U_t)
-    change_idx = U_t.index(max_U)
-    change_year = None  # будет заполнено позже
-    
-    # Примерная оценка значимости
-    p_value = 2 * np.exp(-6 * max_U**2 / (n**3 + n**2))
-    
+        u = float(np.sum(sign_diff[t:, :t]))
+        U_t_clean.append(abs(u))
+
+    if not U_t_clean:
+        return {'change_index': 0, 'max_U': 0, 'p_value': 1.0, 'significant': False}
+
+    U_arr = np.array(U_t_clean)
+    max_U = float(np.max(U_arr))
+    change_idx = int(np.argmax(U_arr))
+
+    p_value = float(2 * np.exp(-6 * max_U**2 / (n**3 + n**2)))
+    p_value = min(max(p_value, 0.0), 1.0)
+
     return {
         'change_index': change_idx,
         'max_U': max_U,
-        'p_value': min(p_value, 1.0),
+        'p_value': p_value,
         'significant': p_value < 0.05
     }
 

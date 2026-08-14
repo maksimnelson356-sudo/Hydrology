@@ -180,7 +180,7 @@ class Work8Widget(QWidget):
         if not path:
             return
         try:
-            df = read_work_sheet(path, ["Работа8", "FDC", "Кривая"])
+            df = read_work_sheet(path, ["FDC + Регрессии + Статистика", "FDC", "Кривая"])
             if df.empty:
                 if path.endswith('.csv'):
                     df = pd.read_csv(path)
@@ -300,7 +300,7 @@ class Work8Widget(QWidget):
             if not path:
                 return
             try:
-                df = read_work_sheet(path, ["Работа8", "FDC", "Кривая"])
+                df = read_work_sheet(path, ["FDC + Регрессии + Статистика", "FDC", "Кривая"])
                 if df.empty:
                     df = pd.read_csv(path) if path.endswith('.csv') else pd.read_excel(path)
                 col = numeric_column(df, prefer_names=["q", "расход", "value"])

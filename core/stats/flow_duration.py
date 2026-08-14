@@ -132,7 +132,7 @@ def fdc_slope_index(
     else:
         n_value = 0
 
-    cv = float(np.std(Q, ddof=1) / np.mean(Q)) if np.mean(Q) > 0 else 0
+    cv = float(np.std(Q, ddof=1) / abs(np.mean(Q))) if np.mean(Q) != 0 else 0
 
     return {
         'n_value': round(float(n_value), 4),

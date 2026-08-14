@@ -246,7 +246,7 @@ class Work10Widget(QWidget):
             return
         try:
             import pandas as pd
-            df = read_work_sheet(path, ["Работа10", "Экология", "Базовый"])
+            df = read_work_sheet(path, ["Экология + Базовый сток", "Экология", "Базовый"])
             if df.empty:
                 df = pd.read_csv(path) if path.endswith('.csv') else pd.read_excel(path)
             col = numeric_column(df, prefer_names=["базовый", "value", "q"])
@@ -310,7 +310,7 @@ class Work10Widget(QWidget):
             return
         try:
             import pandas as pd
-            df = read_work_sheet(path, ["Работа10", "Экология", "Базовый"])
+            df = read_work_sheet(path, ["Экология + Базовый сток", "Экология", "Базовый"])
             if df.empty:
                 df = pd.read_csv(path) if path.endswith('.csv') else pd.read_excel(path)
             col = numeric_column(df, prefer_names=["базовый", "сток", "value", "q"])
@@ -360,7 +360,7 @@ class Work10Widget(QWidget):
             return
         try:
             import pandas as pd
-            df = read_work_sheet(path, ["Работа10", "Экология", "Базовый"])
+            df = read_work_sheet(path, ["Экология + Базовый сток", "Экология", "Базовый"])
             if df.empty:
                 df = pd.read_csv(path) if path.endswith('.csv') else pd.read_excel(path)
             col = numeric_column(df, prefer_names=["базовый", "сток", "value", "q"])

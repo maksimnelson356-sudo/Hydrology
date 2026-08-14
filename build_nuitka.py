@@ -4,6 +4,7 @@ build_nuitka.py
 """
 
 import subprocess
+import shlex
 import sys
 import os
 
@@ -33,12 +34,12 @@ cmd = [
     "--remove-output",
 ]
 
-if os.path.exists("icon.ico"):
-    cmd.append("--windows-icon-from-ico=icon.ico")
-    cmd.append("--include-data-files=icon.ico;.")
-    print("✅ Иконка добавлена")
-else:
-    print("⚠️ icon.ico не найден")
+    if os.path.exists("gui/resources/logo.svg"):
+        cmd.append("--windows-icon-from-ico=gui/resources/logo.svg")
+        cmd.append("--include-data-files=gui/resources/logo.svg;.")
+        print("✅ Иконка добавлена")
+    else:
+        print("⚠️ logo.svg не найден")
 
 # Дополнительно явно включаем проблемный модуль
 cmd.append("--include-module=scipy._external.array_api_compat")
@@ -48,7 +49,7 @@ cmd.append("--include-module=scipy._external.array_api_compat.numpy.fft")
 print("Запускаю сборку Nuitka (это снова займёт время)...")
 print()
 
-result = subprocess.run(cmd)
+result = subprocess.run(cmd, shell=False)
 
 if result.returncode == 0:
     print("\n✅ Сборка завершена!")

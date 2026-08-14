@@ -414,7 +414,7 @@ class Work4Widget(QWidget):
         if not path:
             return
         try:
-            df = read_work_sheet(path, ["Кривая", "КриваяQH", "H-Q"],
+            df = read_work_sheet(path, ["Кривая Q(H)", "Кривая", "H-Q"],
                                  header_keywords=("h", "уровень", "q", "расход"))
             if df.empty:
                 df = pd.read_excel(path, header=None)
@@ -435,7 +435,7 @@ class Work4Widget(QWidget):
             QMessageBox.critical(self, "Ошибка", str(e))
 
     def set_rating_data(self, df):
-        """Приём кривой Q=f(H) из единого загрузчика (лист «КриваяQH»)."""
+        """Приём кривой Q=f(H) из единого загрузчика (лист «Кривая Q(H)»)."""
         if df is None or df.empty:
             return
         df = df.copy()
@@ -582,6 +582,13 @@ class Work4Widget(QWidget):
             self.edit_gauged_mean.setText(f"{gauged_mean:.2f}")
         if target_mean is not None:
             self.edit_target_mean.setText(f"{target_mean:.2f}")
+
+    def calculate_frequency(self, **kwargs):
+        """Резервный метод для совместимости с вызовами извне."""
+        if self.max_series is None:
+            return None
+        from core.stats.frequency import calculate_frequency_curve
+        return calculate_frequency_curve(self.max_series.values, **kwargs)
 
     def save_report(self):
         if self.max_series is None:

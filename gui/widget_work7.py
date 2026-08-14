@@ -341,7 +341,7 @@ class Work7Widget(QWidget):
         self.sm_figure.tight_layout()
         self.sm_canvas.draw()
 
-    def set_data(self, daily_df=None, F=None, zone=None):
+    def set_data(self, daily_df=None, F=None, zone=None, T=None, t=None, alpha=None):
         """Приём данных из единого загрузчика."""
         if F is not None and hasattr(self, 'spin_F'):
             self.spin_F.setValue(float(F))
@@ -349,3 +349,9 @@ class Work7Widget(QWidget):
             idx = self.zone_combo.findData(zone)
             if idx >= 0:
                 self.zone_combo.setCurrentIndex(idx)
+        if T is not None and hasattr(self, 'spin_T'):
+            self.spin_T.setValue(float(T))
+        if t is not None and hasattr(self, 'spin_t'):
+            self.spin_t.setValue(float(t))
+        if alpha is not None and hasattr(self, 'spin_alpha'):
+            self.spin_alpha.setValue(float(alpha))

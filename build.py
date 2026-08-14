@@ -73,16 +73,17 @@ args = [
     "--hidden-import=gui.widget_work8",
     "--hidden-import=gui.widget_work9",
     "--hidden-import=gui.widget_work10",
+    "--hidden-import=gui.widget_short",
+    "--hidden-import=gui.plot_style",
+    "--hidden-import=core.stats.sheet_reader",
+    "--hidden-import=core.short_series",
+    "--hidden-import=core.gts_reference",
+    "--hidden-import=create_unified_template",
 ]
 
-if os.path.exists("icon.ico"):
-    # Кроссплатформенный разделитель: ; для Windows, : для Linux/macOS
-    sep = ";" if sys.platform == "win32" else ":"
-    args.append(f"--add-data=icon.ico{sep}.")
-    args.append("--icon=icon.ico")
-    print("OK Иконка добавлена")
-else:
-    print("WARN Файл icon.ico не найден")
+    if os.path.exists("gui/resources/logo.svg"):
+        args.append("--icon=gui/resources/logo.svg")
+        print("OK Иконка добавлена")
 
 PyInstaller.__main__.run(args)
 

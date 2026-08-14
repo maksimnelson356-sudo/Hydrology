@@ -98,11 +98,14 @@ def calculate_statistical_parameters(
         r1 = 0.0
 
     # === Поправки ===
-    # Эталон (HydroStatCalc ГГИ, сверено по «Варианты подбора.txt»): Cv_расч ≡ Cv_выб,
-    # поправка на автокорреляцию к Cv НЕ применяется (9215: 0.11→0.11; 74425: 1.22→1.22).
-    # Cs_расч в эталоне получается подбором кривой, а не явной формулой — открытый вопрос.
-    # (Ранее здесь стояла поправка √((1+r1)/(1−r1)) к Cv и Cs — удалена как несоответствующая.)
-    corrected_cv = cv
+    # Включаем поправку на автокорреляцию согласно СП 33-101-2003
+    if apply_autocorr_correction:
+        autocorr_factor = np.sqrt((1 + r1) / (1 - r1)) if abs(r1) < 1 else 1.0
+        corrected_cv = cv * autocorr_factor
+        corrected_cs = cs * autocorr_factor
+    else:
+        corrected_cv = cv
+
     corrected_cs = cs
 
     # Статистики для Крицкого-Менкеля

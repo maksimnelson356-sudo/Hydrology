@@ -64,15 +64,26 @@ def mle_pearson3(
     Returns:
         Dict: mean, cv, cs, loglik, aic, bic, success
     """
-    data = np.array(data, dtype=float)
+    if not isinstance(data, np.ndarray):
+        try:
+            data = np.array(data, dtype=object)
+            data = np.array([
+                float(x) for x in data
+                if isinstance(x, (int, float, np.number)) and not np.isnan(float(x))
+            ], dtype=float)
+        except (ValueError, TypeError):
+            return {'mean': 0, 'cv': 0, 'cs': 0,
+                    'loglik': -np.inf, 'aic': np.inf, 'bic': np.inf, 'success': False}
     data = data[~np.isnan(data)]
     n = len(data)
 
     if n < 5:
-        return {'mean': float(np.mean(data)), 'cv': 0, 'cs': 0,
+        return {'mean': float(np.mean(data)) if n > 0 else 0, 'cv': 0, 'cs': 0,
                 'loglik': -np.inf, 'aic': np.inf, 'bic': np.inf, 'success': False}
 
-    x0 = [float(np.mean(data)), float(np.std(data, ddof=1) / np.mean(data)), 0.0]
+    x0 = [float(np.mean(data)), float(np.std(data, ddof=1) / np.mean(data)) if np.mean(data) != 0 else 0.1, 0.0]
+
+    shift = None
 
     def neg_loglik(params):
         mu, cv, cs = params
@@ -95,6 +106,9 @@ def mle_pearson3(
 
     result = minimize(neg_loglik, x0, method='Nelder-Mead',
                       options={'maxiter': max_iter})
+
+    if shift is None:
+        shift = x0[0] - (4 / (max(abs(x0[2]), 1e-6) ** 2)) * (abs(x0[0]) * x0[1] / np.sqrt(4 / (max(abs(x0[2]), 1e-6) ** 2))) if x0[2] != 0 else x0[0]
 
     if result.success:
         mu, cv, cs = result.x

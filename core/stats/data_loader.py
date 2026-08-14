@@ -101,21 +101,22 @@ def parse_hydro_data(xlsx_path: str) -> dict:
     if is_universal:
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
+            rows_data = []
             for row in ws.iter_rows(min_row=5, values_only=True):
                 if len(row) >= 4 and row[0] and row[1] and row[2] is not None and row[3] is not None:
                     try:
                         river, gauge = str(row[0]).strip(), str(row[1]).strip()
                         year, Q = int(row[2]), float(row[3])
-                        key = f"{river}_{gauge}"
-                        if key not in data:
-                            data[key] = {'river': river, 'gauge': gauge,
-                                         'df': __import__('pandas').DataFrame(columns=['year', 'Q'])}
-                        data[key]['df'] = __import__('pandas').concat([
-                            data[key]['df'],
-                            __import__('pandas').DataFrame({'year': [year], 'Q': [Q]})
-                        ], ignore_index=True)
+                        rows_data.append({'year': year, 'Q': Q})
                     except (ValueError, TypeError):
                         continue
+            if rows_data:
+                key = f"{river}_{gauge}"
+                if key not in data:
+                    data[key] = {'river': river, 'gauge': gauge,
+                                 'df': pd.DataFrame(columns=['year', 'Q'])}
+                data[key]['df'] = pd.concat([data[key]['df'],
+                                             pd.DataFrame(rows_data)], ignore_index=True)
     else:
         import pandas as pd
         for sheet_name in wb.sheetnames:

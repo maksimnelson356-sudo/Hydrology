@@ -34,7 +34,7 @@ from core.stats.composite_curves import compute_composite_curve, find_change_poi
 from core.stats.series_extension import full_extension_workflow
 from core.stats.report_export import generate_txt_report, generate_excel_report
 from core.stats.sheet_reader import read_work_sheet
-from core.gts_reference import GTSClass
+from core.gts_reference import GTSClass, classify_gts_by_parameters
 
 
 class ManualInputDialog(QDialog):
@@ -262,9 +262,9 @@ class MainWindow(QMainWindow):
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         
-        self.statusBar = QStatusBar()
-        self.setStatusBar(self.statusBar)
-        self.statusBar.showMessage("Готово")
+        self._status_bar = QStatusBar()
+        self.setStatusBar(self._status_bar)
+        self._status_bar.showMessage("Готово")
 
         self._table_filter = AutoResizeTableFilter()
         self.installEventFilter(self._table_filter)
@@ -280,6 +280,8 @@ class MainWindow(QMainWindow):
         self.calc_method = "moments"
         self.break_year = None
         self.last_quantiles = None
+        self._gts_class = None
+        self._gts_params = None
         
         menubar = self.menuBar()
         file_menu = menubar.addMenu("Файл данных")
@@ -827,6 +829,9 @@ class MainWindow(QMainWindow):
             ax.grid(True, alpha=0.3)
             self.viz_canvas.draw()
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def plot_histogram(self):
@@ -844,6 +849,9 @@ class MainWindow(QMainWindow):
             ax.grid(True, alpha=0.3)
             self.viz_canvas.draw()
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def plot_boxplot(self):
@@ -862,6 +870,9 @@ class MainWindow(QMainWindow):
             ax.grid(True, alpha=0.3)
             self.viz_canvas.draw()
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def plot_correlation(self):
@@ -891,6 +902,9 @@ class MainWindow(QMainWindow):
             self.viz_figure.tight_layout()
             self.viz_canvas.draw()
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def calculate_kritsky_ordinates(self):
@@ -912,9 +926,12 @@ class MainWindow(QMainWindow):
                 val = f"{k:.3f}" if not np.isnan(k) and k > 0 else "—"
                 self.km_table.setItem(i, 1, QTableWidgetItem(val))
             
-            self.statusBar.showMessage(f"Ординаты (табличные) рассчитаны (Cs/Cv={cs_cv:.2f}, Cv={cv:.2f})")
+            self._status_bar.showMessage(f"Ординаты (табличные) рассчитаны (Cs/Cv={cs_cv:.2f}, Cv={cv:.2f})")
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", f"Не удалось рассчитать:\n{str(e)}")
     
     def open_curve_dialog(self):
@@ -927,7 +944,7 @@ class MainWindow(QMainWindow):
                 "normal": "Нормальное распределение",
                 "empirical": "Интерполяция ломаной"
             }
-            self.statusBar.showMessage(f"Выбрана кривая: {curve_names.get(self.curve_type)}")
+            self._status_bar.showMessage(f"Выбрана кривая: {curve_names.get(self.curve_type)}")
             if self.df is not None and len(self.df) > 5:
                 self.calculate_and_plot()
     
@@ -939,13 +956,13 @@ class MainWindow(QMainWindow):
         if ok:
             self.break_year = year
             self.btn_clear_break.setEnabled(True)
-            self.statusBar.showMessage(f"Год разрыва: {year}. Постройте кривую.")
+            self._status_bar.showMessage(f"Год разрыва: {year}. Постройте кривую.")
             self.calculate_and_plot()
     
     def clear_composite(self):
         self.break_year = None
         self.btn_clear_break.setEnabled(False)
-        self.statusBar.showMessage("Составная кривая сброшена")
+        self._status_bar.showMessage("Составная кривая сброшена")
         if self.df is not None:
             self.calculate_and_plot()
     
@@ -981,15 +998,18 @@ class MainWindow(QMainWindow):
                 msg += f"{lab:>5} → {q:.2f}\n"
             
             QMessageBox.information(self, "Расчётные расходы", msg)
-            self.statusBar.showMessage("Расчётные расходы рассчитаны")
+            self._status_bar.showMessage("Расчётные расходы рассчитаны")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def load_data(self):
         """Единый загрузчик данных из Excel.
 
         Автоматически распознаёт формат файла:
-        - единый шаблон — лист «Гидропост» + листы Работа1-10, FDC;
+        - единый шаблон — лист «Данные и статистика» + тематические листы;
         - плоский файл — единственный лист с годом и постами.
         Распарсенные данные распределяются по всем вкладкам.
         """
@@ -1007,7 +1027,7 @@ class MainWindow(QMainWindow):
             if not posts_loaded:
                 self._load_flat_posts(filepath, loaded)
 
-            # === 2. Рабочие листы единого шаблона (Работа1-10, FDC) ===
+            # === 2. Рабочие листы единого шаблона ===
             is_template = self._parse_work_sheets(xls, loaded)
 
             # === 3. Плоский файл: раздача ежедневных данных в work4/6/8/10 ===
@@ -1027,7 +1047,7 @@ class MainWindow(QMainWindow):
 
             # === 5. Итог ===
             if loaded:
-                self.statusBar.showMessage("Загружено: " + ", ".join(loaded))
+                self._status_bar.showMessage("Загружено: " + ", ".join(loaded))
                 msg = "\n".join("  " + s for s in loaded)
                 QMessageBox.information(self, "Загрузка данных",
                                         "Загружено:\n\n" + msg)
@@ -1035,18 +1055,21 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Внимание",
                                     "Не удалось загрузить данные ни из одного листа")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка загрузки", str(e))
 
     def _parse_main_posts(self, xls, loaded):
         """Распарсить основной лист с постами (шаблон или плоский файл)."""
         names = xls.sheet_names
-        sheet_main = self._find_sheet(xls, ["Данные", "Гидропост", "Лист1"])
+        sheet_main = self._find_sheet(xls, ["Данные", "Гидропост", "GPS", "Лист1"])
         if sheet_main is None:
             for sn in names:
                 if not any(kw in sn for kw in [
                     "Норма", "Внутригод", "Минималь", "Максималь",
                     "Кривая", "Ледовые", "Водный", "FDC", "Эколог",
-                    "Работа", "ГТС"
+                    "Рацион", "ГВП", "ГТС", "W0", "W1", "QHC", "GTS"
                 ]):
                     sheet_main = sn
                     break
@@ -1069,7 +1092,7 @@ class MainWindow(QMainWindow):
                 break
 
         if year_row_idx is None:
-            self.statusBar.showMessage("Лист " + sheet_main + ": не найден столбец Год")
+            self._status_bar.showMessage("Лист " + sheet_main + ": не найден столбец Год")
             return False
 
         df_sheet = pd.read_excel(xls, sheet_main, skiprows=year_row_idx)
@@ -1103,7 +1126,10 @@ class MainWindow(QMainWindow):
         try:
             self.df_raw, self.year_col, self.available_posts = load_hydrological_data(filepath)
         except Exception as e:
-            self.statusBar.showMessage("Не удалось распознать посты: %s" % e)
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
+            self._status_bar.showMessage("Не удалось распознать посты: %s" % e)
             return
         if not self.available_posts:
             return
@@ -1166,6 +1192,14 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             post_name, df = dialog.get_data()
 
+            if self._all_posts:
+                reply = QMessageBox.question(self, "Подтверждение",
+                    f"Текущие данные ({len(self._all_posts)} постов) будут заменены. Продолжить?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.No)
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+
             self._all_posts = {post_name: df}
             self.available_posts = [post_name]
             self.current_post = post_name
@@ -1185,7 +1219,7 @@ class MainWindow(QMainWindow):
                         self.btn_composite_auto, self.btn_extend]:
                 btn.setEnabled(True)
 
-            self.statusBar.showMessage(f"Введено вручную: {post_name} ({len(df)} значений)")
+            self._status_bar.showMessage(f"Введено вручную: {post_name} ({len(df)} значений)")
     
     def add_additional_post(self):
         """Загрузить дополнительный пост и добавить к существующим."""
@@ -1230,10 +1264,13 @@ class MainWindow(QMainWindow):
                 btn.setEnabled(True)
 
             self._distribute_data_to_widgets()
-            self.statusBar.showMessage(
+            self._status_bar.showMessage(
                 f"Добавлено постов: {len(new_posts)} | Всего: {len(self.available_posts)}"
             )
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def on_post_changed(self, post_name):
@@ -1257,7 +1294,7 @@ class MainWindow(QMainWindow):
             self.table.setItem(i, 0, QTableWidgetItem(str(key)))
             self.table.setItem(i, 1, QTableWidgetItem(str(value)))
 
-        self.statusBar.showMessage(f"Пост {post_name} | Значений: {len(self.df)}")
+        self._status_bar.showMessage(f"Пост {post_name} | Значений: {len(self.df)}")
     
     def fill_missing_with_correlation(self):
         if self.df is None or len(getattr(self, 'available_posts', [])) < 2:
@@ -1334,9 +1371,12 @@ class MainWindow(QMainWindow):
                 self.table.setItem(i, 0, QTableWidgetItem(str(key)))
                 self.table.setItem(i, 1, QTableWidgetItem(str(value)))
             
-            self.statusBar.showMessage(f"Восстановлено с помощью {best_post} (r={best_corr:.3f})")
+            self._status_bar.showMessage(f"Восстановлено с помощью {best_post} (r={best_corr:.3f})")
             QMessageBox.information(self, "Готово", f"Восстановлено с помощью поста {best_post}")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def fill_missing_data(self):
@@ -1352,6 +1392,9 @@ class MainWindow(QMainWindow):
                 self.table.setItem(i, 1, QTableWidgetItem(str(value)))
             QMessageBox.information(self, "Готово", f"Пропусков было: {missing_before} → стало: {missing_after}")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def check_homogeneity(self):
@@ -1400,6 +1443,9 @@ class MainWindow(QMainWindow):
             
             QMessageBox.information(self, "Результат проверки однородности", result_text)
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def detect_outliers(self):
@@ -1438,6 +1484,9 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Выдающиеся значения", 
                 f"Обнаружено {len(outlier_idx)} выдающихся значений.\n\nРекомендуется проверить их.")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def calculate_and_plot(self):
@@ -1548,6 +1597,9 @@ class MainWindow(QMainWindow):
             self.btn_clear_variants.setEnabled(True)
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
 
     def _save_curve_variant(self):
@@ -1578,7 +1630,7 @@ class MainWindow(QMainWindow):
             self.variant_table.setItem(i, 4, QTableWidgetItem(str(v['cs'])))
         auto_resize_table(self.variant_table)
 
-        self.statusBar().showMessage(
+        self._status_bar().showMessage(
             f"Вариант сохранён: {self.curve_type}, Cs/Cv={variant['cs_cv']}")
 
     def _show_all_variants(self):
@@ -1653,7 +1705,7 @@ class MainWindow(QMainWindow):
         self._saved_variants.clear()
         self.variant_table.setRowCount(0)
         self.variant_table.setVisible(False)
-        self.statusBar().showMessage("Варианты очищены")
+        self._status_bar().showMessage("Варианты очищены")
 
     def _auto_select_cs_cv(self):
         """Автоматический подбор Cs/Cv."""
@@ -1690,7 +1742,7 @@ class MainWindow(QMainWindow):
                 text += f"  P={row['P_%']:6.2f}%  Q_теор={row['Q_theory']:8.2f}  Q_эмп={row['Q_empirical']:8.2f}\n"
 
         self.cs_cv_text.setText(text)
-        self.statusBar().showMessage(
+        self._status_bar().showMessage(
             f"Cs/Cv подобран: {result['cs_cv_optimal']} (SS={result['ss_min']:.2f})")
 
     def _add_historical_extreme(self):
@@ -1744,7 +1796,7 @@ class MainWindow(QMainWindow):
         )
 
         self.cs_cv_text.setText(text)
-        self.statusBar().showMessage(
+        self._status_bar().showMessage(
             f"Добавлен экстремум: Q={value} (T={period} лет)")
 
     def _check_stationarity(self):
@@ -1784,7 +1836,7 @@ class MainWindow(QMainWindow):
         )
 
         self.trend_text.setText(text)
-        self.statusBar().showMessage(
+        self._status_bar().showMessage(
             f"Стационарность: {'ДА' if result['is_stationary'] else 'НЕТ'}")
 
     def save_plot_as_image(self):
@@ -1794,9 +1846,12 @@ class MainWindow(QMainWindow):
             return
         try:
             self.figure.savefig(filepath, dpi=300, bbox_inches='tight')
-            self.statusBar.showMessage(f"График сохранён: {filepath}")
+            self._status_bar.showMessage(f"График сохранён: {filepath}")
             QMessageBox.information(self, "Готово", "График успешно сохранён")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def save_report(self):
@@ -1850,9 +1905,12 @@ class MainWindow(QMainWindow):
                 
                 self.df.to_excel(writer, sheet_name='Исходные_данные', index=False)
             
-            self.statusBar.showMessage(f"Отчёт сохранён: {filepath}")
+            self._status_bar.showMessage(f"Отчёт сохранён: {filepath}")
             QMessageBox.information(self, "Готово", "Отчёт успешно сохранён")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def run_trend_analysis(self):
@@ -1910,6 +1968,9 @@ class MainWindow(QMainWindow):
             ax.grid(True, alpha=0.3)
             self.trend_canvas.draw()
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
     
     def apply_parameters(self):
@@ -1929,7 +1990,16 @@ class MainWindow(QMainWindow):
             }
             from PyQt6.QtWidgets import QInputDialog
             items = list(gts_classes.keys())
-            item, ok = QInputDialog.getItem(self, "Класс ГТС", "Выберите класс:", items, 1, False)
+            default_idx = 1
+            if self._gts_class is not None:
+                for i, name in enumerate(items):
+                    if gts_classes[name] == self._gts_class:
+                        default_idx = i
+                        break
+                label = f"Класс ГТС (из шаблона): «{items[default_idx]}»"
+            else:
+                label = "Класс ГТС"
+            item, ok = QInputDialog.getItem(self, "Класс ГТС", label, items, default_idx, False)
             if not ok:
                 return
 
@@ -2005,6 +2075,9 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "ГТС: расчётные точки", msg)
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
 
     def build_composite_curve(self):
@@ -2103,6 +2176,9 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Составная кривая", msg)
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
 
     def _open_short_module(self):
@@ -2189,15 +2265,29 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Результат удлинения", msg)
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
 
     def create_unified_template(self):
         """Создать единый Excel-шаблон."""
         try:
+            from PyQt6.QtWidgets import QFileDialog
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Сохранить шаблон",
+                "unified_template.xlsx",
+                "Excel files (*.xlsx);;All files (*)"
+            )
+            if not path:
+                return
             from create_unified_template import create_unified_template
-            path = create_unified_template()
+            path = create_unified_template(path)
             QMessageBox.information(self, "Готово", f"Шаблон создан:\n{path}")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
 
     def _find_sheet(self, xls, candidates):
@@ -2208,15 +2298,15 @@ class MainWindow(QMainWindow):
         return None
 
     def _parse_work_sheets(self, xls, loaded):
-        """Распарсить листы Работа1-10 и FDC единого шаблона.
+        """Распарсить тематические листы единого шаблона.
 
         Возвращает True, если файл является единым шаблоном (найден хотя бы
         один рабочий лист), иначе False (плоский файл с одним листом постов).
         """
         found = False
 
-        # === Норма годового стока (Работа 1) ===
-        sheet_r1 = self._find_sheet(xls, ["Норма годового стока", "Работа1"])
+        # === Норма годового стока ===
+        sheet_r1 = self._find_sheet(xls, ["Норма годового стока"])
         if sheet_r1:
             found = True
             try:
@@ -2273,8 +2363,8 @@ class MainWindow(QMainWindow):
             except (ValueError, TypeError, KeyError, AttributeError) as e:
                 print(f"[WARN] Ошибка загрузки листа 'Норма годового стока': {e}")
 
-        # === Внутригодовое распределение (Работа 2) ===
-        sheet_r2 = self._find_sheet(xls, ["Внутригодовое распределение", "Работа2"])
+        # === Внутригодовое распределение ===
+        sheet_r2 = self._find_sheet(xls, ["Внутригодовое распределение"])
         if sheet_r2:
             found = True
             try:
@@ -2307,23 +2397,26 @@ class MainWindow(QMainWindow):
             except (ValueError, TypeError, KeyError, AttributeError) as e:
                 print(f"[WARN] Ошибка загрузки 'Внутригодовое распределение': {e}")
 
-        # === Минимальный сток (Работа 3) ===
-        sheet_r3 = self._find_sheet(xls, ["Минимальный сток", "Работа3"])
+        # === Минимальный сток ===
+        sheet_r3 = self._find_sheet(xls, ["Минимальный сток"])
         if sheet_r3:
             found = True
             try:
-                df_r3 = pd.read_excel(xls, sheet_r3, skiprows=0)
+                # read_work_sheet пропускает титульные строки и находит строку-заголовок.
+                df_r3 = read_work_sheet(xls, [sheet_r3, "Минимальный сток"], use_columns=True)
                 if len(df_r3) >= 3:
-                    years = pd.to_numeric(df_r3.iloc[:, 0], errors='coerce')
-                    winter = pd.Series(pd.to_numeric(df_r3.iloc[:, 1], errors='coerce').values, index=years)
-                    summer = pd.Series(pd.to_numeric(df_r3.iloc[:, 2], errors='coerce').values, index=years)
-                    self.tab_work3.set_data(winter_series=winter, summer_series=summer)
-                    loaded.append("Минимальный сток")
+                    clean = df_r3.iloc[:, :3].apply(pd.to_numeric, errors="coerce").dropna()
+                    if len(clean) >= 3:
+                        years = clean.iloc[:, 0].astype(int)
+                        winter = pd.Series(clean.iloc[:, 1].values, index=years.values)
+                        summer = pd.Series(clean.iloc[:, 2].values, index=years.values)
+                        self.tab_work3.set_data(winter_series=winter, summer_series=summer)
+                        loaded.append("Минимальный сток")
             except (ValueError, TypeError, KeyError, AttributeError) as e:
                 print(f"[WARN] Ошибка загрузки 'Минимальный сток': {e}")
 
-        # === Максимальный сток (Работа 4) ===
-        sheet_r4 = self._find_sheet(xls, ["Максимальный сток", "Работа4"])
+        # === Максимальный сток ===
+        sheet_r4 = self._find_sheet(xls, ["Максимальный сток"])
         if sheet_r4:
             found = True
             try:
@@ -2342,56 +2435,66 @@ class MainWindow(QMainWindow):
                     df_r4 = df_r4[pd.to_numeric(df_r4.iloc[:, 1], errors='coerce').notna()]
                 self.tab_work4.set_data(daily_df=df_r4)
                 loaded.append("Максимальный сток")
-                # Кривая расходов Q=f(H) (лист «КриваяQH»)
+                # Кривая расходов Q=f(H) (лист «Кривая Q(H)»)
                 try:
-                    sheet_qh = self._find_sheet(xls, ["КриваяQH", "Кривая"])
+                    sheet_qh = self._find_sheet(xls, ["Кривая Q(H)", "КриваяQH", "Кривая"])
                     if sheet_qh:
                         df_qh = read_work_sheet(
-                            xls, [sheet_qh, "КриваяQH", "Кривая"],
+                            xls, [sheet_qh, "Кривая Q(H)", "КриваяQH", "Кривая"],
                             header_keywords=("h", "уровень", "q", "расход"))
                         if not df_qh.empty:
                             self.tab_work4.set_rating_data(df_qh)
                 except (ValueError, TypeError, KeyError, AttributeError) as e:
-                    print(f"[WARN] Ошибка загрузки 'КриваяQH': {e}")
+                    print(f"[WARN] Ошибка загрузки 'Кривая Q(H)': {e}")
             except (ValueError, TypeError, KeyError, AttributeError) as e:
                 print(f"[WARN] Ошибка загрузки 'Максимальный сток': {e}")
 
-        # === Ледовые явления (Работа 5) ===
-        sheet_r5 = self._find_sheet(xls, ["Ледовые явления", "Работа5"])
+        # === Ледовые явления ===
+        sheet_r5 = self._find_sheet(xls, ["Ледовые явления"])
         if sheet_r5:
             found = True
             try:
-                df_r5 = pd.read_excel(xls, sheet_r5)
+                # read_work_sheet пропускает титул; вскрытие ищется по корню «вскрыт»
+                # (колонка «Дата вскрытия» не матчится по полному слову «вскрытие»).
+                df_r5 = read_work_sheet(
+                    xls, [sheet_r5, "Ледовые явления"],
+                    header_keywords=("год", "дата", "ледостав", "вскрыт"))
                 freeze_col = [c for c in df_r5.columns
                               if 'ледостав' in str(c).lower() or 'freeze' in str(c).lower()]
                 breakup_col = [c for c in df_r5.columns
-                               if 'распад' in str(c).lower() or 'breakup' in str(c).lower()]
+                               if 'вскрыт' in str(c).lower() or 'распад' in str(c).lower() or 'breakup' in str(c).lower()]
                 freeze_dates = pd.to_datetime(df_r5[freeze_col[0]], errors='coerce').dropna() if freeze_col else None
                 breakup_dates = pd.to_datetime(df_r5[breakup_col[0]], errors='coerce').dropna() if breakup_col else None
-                self.tab_work5.set_data(freeze_dates=freeze_dates, breakup_dates=breakup_dates)
-                loaded.append("Ледовые явления")
+                if (freeze_dates is not None and len(freeze_dates) > 0) or \
+                   (breakup_dates is not None and len(breakup_dates) > 0):
+                    self.tab_work5.set_data(freeze_dates=freeze_dates, breakup_dates=breakup_dates)
+                    loaded.append("Ледовые явления")
             except (ValueError, TypeError, KeyError, IndexError, AttributeError) as e:
                 print(f"[WARN] Ошибка загрузки 'Ледовые явления': {e}")
 
-        # === Водный баланс (Работа 6) ===
-        sheet_r6 = self._find_sheet(xls, ["Водный баланс", "Работа6"])
+        # === Водный баланс ===
+        sheet_r6 = self._find_sheet(xls, ["Водный баланс"])
         if sheet_r6:
             found = True
             try:
-                df_r6 = pd.read_excel(xls, sheet_r6)
-                self.tab_work6.set_data(daily_df=df_r6)
-                loaded.append("Водный баланс")
+                df_r6 = read_work_sheet(xls, [sheet_r6, "Водный баланс"], use_columns=True)
+                if len(df_r6) >= 3:
+                    self.tab_work6.set_data(daily_df=df_r6)
+                    loaded.append("Водный баланс")
             except (ValueError, TypeError, KeyError, AttributeError) as e:
                 print(f"[WARN] Ошибка загрузки 'Водный баланс': {e}")
 
-        # === Ливневый сток (Работа 7) — параметры расчёта ===
-        sheet_r7 = self._find_sheet(xls, ["Ливневый сток", "Работа7"])
+        # === Ливневый сток (Рацион + IDF + Гидрографы) — параметры расчёта ===
+        sheet_r7 = self._find_sheet(xls, ["Рацион + IDF + Гидрографы", "Ливневый сток"])
         if sheet_r7:
             found = True
             try:
                 r7_raw = pd.read_excel(xls, sheet_r7, header=None)
                 f_val = None
                 zone_val = None
+                t_val = None
+                time_val = None
+                alpha_val = None
                 for _, row in r7_raw.iterrows():
                     key = str(row[0]).strip().lower() if pd.notna(row[0]) else ""
                     val = row[1]
@@ -2402,18 +2505,33 @@ class MainWindow(QMainWindow):
                             pass
                     elif "зона" in key:
                         zone_val = str(val).strip() if pd.notna(val) else None
-                if f_val is not None or zone_val:
-                    self.tab_work7.set_data(F=f_val, zone=zone_val)
+                    elif "обеспеченност" in key and "t" in key:
+                        try:
+                            t_val = float(val)
+                        except (ValueError, TypeError):
+                            pass
+                    elif "время" in key and "концентрац" in key:
+                        try:
+                            time_val = float(val)
+                        except (ValueError, TypeError):
+                            pass
+                    elif ("стока" in key or "коэфф" in key) and ("α" in key or "alpha" in key or "a" in key):
+                        try:
+                            alpha_val = float(val)
+                        except (ValueError, TypeError):
+                            pass
+                if f_val is not None or zone_val or t_val is not None or time_val is not None or alpha_val is not None:
+                    self.tab_work7.set_data(F=f_val, zone=zone_val, T=t_val, t=time_val, alpha=alpha_val)
                     loaded.append("Ливневый сток")
             except (ValueError, TypeError, KeyError, AttributeError) as e:
                 print(f"[WARN] Ошибка загрузки 'Ливневый сток': {e}")
 
-        # === FDC (Работа 8) ===
-        sheet_r8 = self._find_sheet(xls, ["FDC", "Работа8"])
+        # === FDC + Регрессии + Статистика ===
+        sheet_r8 = self._find_sheet(xls, ["FDC + Регрессии + Статистика", "FDC"])
         if sheet_r8:
             found = True
             try:
-                df_r8 = read_work_sheet(xls, [sheet_r8, "Работа8", "FDC", "Кривая"])
+                df_r8 = read_work_sheet(xls, [sheet_r8, "FDC + Регрессии + Статистика", "FDC", "Кривая"])
                 if df_r8.empty:
                     df_r8 = pd.read_excel(xls, sheet_r8)
                 self.tab_work8.set_data(daily_df=df_r8)
@@ -2421,8 +2539,8 @@ class MainWindow(QMainWindow):
             except (ValueError, TypeError, KeyError, AttributeError) as e:
                 print(f"[WARN] Ошибка загрузки 'FDC': {e}")
 
-        # === Гидротехнические расчёты (Работа 9) — параметры ===
-        sheet_r9 = self._find_sheet(xls, ["Гидротехнические расчёты", "Работа9"])
+        # === ППУ + ГВП + Регулирование — параметры ===
+        sheet_r9 = self._find_sheet(xls, ["ППУ + ГВП + Регулирование", "Гидротехнические расчёты"])
         if sheet_r9:
             found = True
             try:
@@ -2430,36 +2548,103 @@ class MainWindow(QMainWindow):
                 q_val = None
                 b_val = None
                 slope_val = None
+                l_ridge_val = None
+                h_head_val = None
+                spill_type_val = None
+                m_slope_val = None
+                n_rough_val = None
+                hres_val = None
+                l_back_val = None
+                qmean_val = None
+                demand_val = None
                 for _, row in r9_raw.iterrows():
                     key = str(row[0]).strip().lower() if pd.notna(row[0]) else ""
                     val = row[1]
                     try:
-                        if "расход" in key and "q" in key:
+                        if "средний" in key and "q" in key:
+                            qmean_val = float(val)
+                        elif "расход" in key and "q" in key:
                             q_val = float(val)
                         elif "ширин" in key and "b" in key:
                             b_val = float(val)
                         elif "уклон" in key:
                             slope_val = float(val)
+                        elif "длина" in key and "гребн" in key:
+                            l_ridge_val = float(val)
+                        elif "напор" in key:
+                            h_head_val = float(val)
+                        elif "тип" in key:
+                            spill_type_val = str(val).strip() if pd.notna(val) else None
+                        elif "откос" in key:
+                            m_slope_val = float(val)
+                        elif "маннинг" in key or "коэфф. манн" in key:
+                            n_rough_val = float(val)
+                        elif "уровень" in key and ("водохр" in key or "hres" in key):
+                            hres_val = float(val)
+                        elif "длина" in key and "участка" in key:
+                            l_back_val = float(val)
+                        elif "забор" in key:
+                            demand_val = float(val)
                     except (ValueError, TypeError):
                         pass
-                if q_val is not None or b_val is not None or slope_val is not None:
-                    self.tab_work9.set_data(Q=q_val, B=b_val, slope=slope_val)
+                if any(v is not None for v in (q_val, b_val, slope_val, l_ridge_val, h_head_val,
+                                                spill_type_val, m_slope_val, n_rough_val, hres_val,
+                                                l_back_val, qmean_val, demand_val)):
+                    self.tab_work9.set_data(
+                        Q=q_val, B=b_val, slope=slope_val,
+                        L_ridge=l_ridge_val, H_head=h_head_val, spillway_type=spill_type_val,
+                        m_slope=m_slope_val, n_roughness=n_rough_val, Hres=hres_val,
+                        L_backwater=l_back_val, Qmean=qmean_val, demand=demand_val)
                     loaded.append("Гидротехнические расчёты")
             except (ValueError, TypeError, KeyError, AttributeError) as e:
                 print(f"[WARN] Ошибка загрузки 'Гидротехнические расчёты': {e}")
 
-        # === Экология и базовый сток (Работа 10) ===
-        sheet_r10 = self._find_sheet(xls, ["Экология и базовый сток", "Работа10"])
+        # === Экология + Базовый сток ===
+        sheet_r10 = self._find_sheet(xls, ["Экология + Базовый сток", "Экология и базовый сток"])
         if sheet_r10:
             found = True
             try:
-                df_r10 = read_work_sheet(xls, [sheet_r10, "Работа10", "Экология", "Базовый"])
+                df_r10 = read_work_sheet(xls, [sheet_r10, "Экология + Базовый сток", "Экология", "Базовый"])
                 if df_r10.empty:
                     df_r10 = pd.read_excel(xls, sheet_r10)
                 self.tab_work10.set_data(daily_df=df_r10)
                 loaded.append("Экология и базовый сток")
             except (ValueError, TypeError, KeyError, AttributeError) as e:
                 print(f"[WARN] Ошибка загрузки 'Экология и базовый сток': {e}")
+
+        # === ГТС — параметры и автоклассификация ===
+        sheet_gts = self._find_sheet(xls, ["ГТС"])
+        if sheet_gts:
+            found = True
+            try:
+                gts_raw = pd.read_excel(xls, sheet_gts, header=None)
+                dam_height = None
+                reservoir_vol = None
+                for _, row in gts_raw.iterrows():
+                    key = str(row[0]).strip().lower() if pd.notna(row[0]) else ""
+                    val = row[1]
+                    if "высота" in key and "плотин" in key:
+                        try:
+                            dam_height = float(val)
+                        except (ValueError, TypeError):
+                            pass
+                    elif "объём" in key or "объем" in key:
+                        try:
+                            reservoir_vol = float(val)
+                        except (ValueError, TypeError):
+                            pass
+                if dam_height is not None or reservoir_vol is not None:
+                    self._gts_params = {
+                        'dam_height': dam_height,
+                        'reservoir_volume': reservoir_vol,
+                    }
+                    try:
+                        self._gts_class = classify_gts_by_parameters(dam_height, reservoir_vol)
+                        loaded.append(f"ГТС (класс {self._gts_class})")
+                    except (ValueError, TypeError, KeyError, AttributeError) as e:
+                        print(f"[WARN] Ошибка классификации ГТС: {e}")
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
+                print(f"[WARN] Ошибка загрузки 'ГТС': {e}")
 
         return found
 

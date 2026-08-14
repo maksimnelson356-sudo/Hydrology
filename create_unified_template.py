@@ -3,25 +3,33 @@ create_unified_template.py
 Генератор единого Excel-шаблона для всех вкладок приложения.
 
 Листы:
-  Гидропост   — ряд наблюдений для статистики/кривых/трендов
-  Работа1     — норма годового стока (расчётная река + аналог)
-  Работа2     — внутригодовое распределение (помесячные расходы)
-  Работа3     — минимальный сток (зимние и летние минимумы)
-  Работа4     — максимальный сток (ряды максимумов по периодам осреднения)
-  Работа5     — ледовые явления (даты ледостава и вскрытия)
-  Работа6     — водный баланс (суточные/посты данные)
-  Работа7     — ливневый сток (параметры расчёта: площадь, климатическая зона)
-  Работа8     — кривая обеспеченности продолжительности (FDC)
-  Работа9     — гидротехнические расчёты (параметры: расход, ширина, уклон)
-  Работа10    — экология и базовый сток
-  ГТС         — параметры ГТС для классификации
+  Данные и статистика         — ряд наблюдений для статистики/кривых/трендов
+  Норма годового стока        — норма годового стока (расчётная река + аналог)
+  Внутригодовое распределение — внутригодовое распределение (помесячные расходы)
+  Минимальный сток            — минимальный сток (зимние и летние минимумы)
+  Максимальный сток           — максимальный сток (ряды максимумов по периодам осреднения)
+  Кривая Q(H)                 — кривая расходов Q=f(H)
+  Ледовые явления             — ледовые явления (даты ледостава и вскрытия)
+  Водный баланс               — водный баланс (суточные/посты данные)
+  Рацион + IDF + Гидрографы   — параметры ливневого стока (F, зона, T, t, α)
+  FDC + Регрессии + Статистика — кривая обеспеченности продолжительности (FDC)
+  ППУ + ГВП + Регулирование   — гидротехнические расчёты (расход, ширина, уклон)
+  Экология + Базовый сток     — экология и базовый сток
+  ГТС                         — параметры ГТС для классификации
 
 Пустые листы — данные по ним не загружаются.
 """
 
+import sys
+
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+
+# Windows-консоль cp1251 не умеет кодировать эмодзи (✅) в print.
+# Перенаправляем stdout в UTF-8, чтобы скрипт не падал в конце.
+if sys.platform == "win32" and sys.stdout is not None:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 def create_unified_template(path="unified_template.xlsx"):
@@ -45,17 +53,12 @@ def create_unified_template(path="unified_template.xlsx"):
 
     def write_header_row(ws, row, headers):
         for c, h in enumerate(headers, 1):
-            style_cell(ws, row, c, h, font=header_fill, fill=header_fill)
-            cell = ws.cell(row=row, column=c)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.border = thin
-            cell.alignment = Alignment(horizontal='center')
+            style_cell(ws, row, c, h, font=header_font, fill=header_fill)
 
-    # ========== ЛИСТ 1: Гидропост ==========
+    # ========== ЛИСТ 1: Данные и статистика ==========
     ws1 = wb.active
-    ws1.title = "Гидропост"
-    ws1['A1'] = "Данные гидрологического поста для статистической обработки"
+    ws1.title = "Данные и статистика"
+    ws1['A1'] = "Данные и статистика"
     ws1['A1'].font = Font(bold=True, size=12)
     ws1.merge_cells('A1:D1')
     ws1['A2'] = "Заполни данные в жёлтых ячейках или оставь как есть"
@@ -101,9 +104,9 @@ def create_unified_template(path="unified_template.xlsx"):
         for col, pname in enumerate(post_names, start=2):
             style_cell(ws1, i, col, post_data[pname].get(y, None), fill=yellow_fill)
 
-    # ========== ЛИСТ 2: Работа1 ==========
-    ws2 = wb.create_sheet("Работа1")
-    ws2['A1'] = "Работа 1 — Норма годового стока"
+    # ========== ЛИСТ 2: Норма годового стока ==========
+    ws2 = wb.create_sheet("Норма годового стока")
+    ws2['A1'] = "Норма годового стока (расчётная река + аналог)"
     ws2['A1'].font = Font(bold=True, size=12)
     ws2.merge_cells('A1:E1')
 
@@ -146,9 +149,9 @@ def create_unified_template(path="unified_template.xlsx"):
     ws2.column_dimensions['A'].width = 22
     ws2.column_dimensions['B'].width = 16
 
-    # ========== ЛИСТ 3: Работа2 ==========
-    ws3 = wb.create_sheet("Работа2")
-    ws3['A1'] = "Работа 2 — Внутригодовое распределение (помесячные расходы)"
+    # ========== ЛИСТ 3: Внутригодовое распределение ==========
+    ws3 = wb.create_sheet("Внутригодовое распределение")
+    ws3['A1'] = "Внутригодовое распределение (помесячные расходы)"
     ws3['A1'].font = Font(bold=True, size=12)
     ws3.merge_cells('A1:M1')
     ws3['A2'] = "Год | I | II | III | IV | V | VI | VII | VIII | IX | X | XI | XII"
@@ -165,9 +168,9 @@ def create_unified_template(path="unified_template.xlsx"):
             style_cell(ws3, yr - 1965 + 5, m + 1,
                        round(random.uniform(5, 60), 1), fill=yellow_fill)
 
-    # ========== ЛИСТ 4: Работа3 ==========
-    ws4 = wb.create_sheet("Работа3")
-    ws4['A1'] = "Работа 3 — Минимальный сток (30-суточные минимумы)"
+    # ========== ЛИСТ 4: Минимальный сток ==========
+    ws4 = wb.create_sheet("Минимальный сток")
+    ws4['A1'] = "Минимальный сток (30-суточные минимумы)"
     ws4['A1'].font = Font(bold=True, size=12)
     ws4.merge_cells('A1:D1')
 
@@ -180,9 +183,9 @@ def create_unified_template(path="unified_template.xlsx"):
         style_cell(ws4, yr - 1970 + 4, 3, round(random.uniform(3.0, 15.0), 2), fill=yellow_fill)
         style_cell(ws4, yr - 1970 + 4, 4, "—")
 
-    # ========== ЛИСТ 5: Работа4 ==========
-    ws4b = wb.create_sheet("Работа4")
-    ws4b['A1'] = "Работа 4 — Максимальный сток (годовые максимумы)"
+    # ========== ЛИСТ 5: Максимальный сток ==========
+    ws4b = wb.create_sheet("Максимальный сток")
+    ws4b['A1'] = "Максимальный сток (годовые максимумы)"
     ws4b['A1'].font = Font(bold=True, size=12)
     ws4b.merge_cells('A1:C1')
 
@@ -193,9 +196,9 @@ def create_unified_template(path="unified_template.xlsx"):
         style_cell(ws4b, 4 + i, 1, yr, fill=yellow_fill)
         style_cell(ws4b, 4 + i, 2, round(random.uniform(300, 900), 1), fill=yellow_fill)
 
-    # ========== ЛИСТ 4b: Кривая Q=f(H) ==========
-    ws4c = wb.create_sheet("КриваяQH")
-    ws4c['A1'] = "Работа 4 — Кривая расходов Q=f(H)"
+    # ========== ЛИСТ 5b: Кривая Q=f(H) ==========
+    ws4c = wb.create_sheet("Кривая Q(H)")
+    ws4c['A1'] = "Кривая расходов Q=f(H)"
     ws4c['A1'].font = Font(bold=True, size=12)
     ws4c.merge_cells('A1:B1')
     write_header_row(ws4c, 3, ["H, м", "Q, м³/с"])
@@ -207,9 +210,9 @@ def create_unified_template(path="unified_template.xlsx"):
         style_cell(ws4c, 4 + i, 1, h, fill=yellow_fill)
         style_cell(ws4c, 4 + i, 2, q, fill=yellow_fill)
 
-    # ========== ЛИСТ 6: Работа5 ==========
-    ws5b = wb.create_sheet("Работа5")
-    ws5b['A1'] = "Работа 5 — Ледовые явления"
+    # ========== ЛИСТ 6: Ледовые явления ==========
+    ws5b = wb.create_sheet("Ледовые явления")
+    ws5b['A1'] = "Ледовые явления"
     ws5b['A1'].font = Font(bold=True, size=12)
     ws5b.merge_cells('A1:C1')
     ws5b['A2'] = "Год | Дата ледостава | Дата вскрытия"
@@ -222,9 +225,9 @@ def create_unified_template(path="unified_template.xlsx"):
         style_cell(ws5b, 5 + i, 2, f"{yr}-11-20", fill=yellow_fill)
         style_cell(ws5b, 5 + i, 3, f"{yr + 1}-04-10", fill=yellow_fill)
 
-    # ========== ЛИСТ 7: Работа6 ==========
-    ws6b = wb.create_sheet("Работа6")
-    ws6b['A1'] = "Работа 6 — Водный баланс"
+    # ========== ЛИСТ 7: Водный баланс ==========
+    ws6b = wb.create_sheet("Водный баланс")
+    ws6b['A1'] = "Водный баланс"
     ws6b['A1'].font = Font(bold=True, size=12)
     ws6b.merge_cells('A1:C1')
 
@@ -237,9 +240,9 @@ def create_unified_template(path="unified_template.xlsx"):
         style_cell(ws6b, 4 + i, 3, round(random.uniform(150, 300), 1), fill=yellow_fill)
         style_cell(ws6b, 4 + i, 4, round(random.uniform(250, 400), 1), fill=yellow_fill)
 
-    # ========== ЛИСТ 8: Работа7 ==========
-    ws7b = wb.create_sheet("Работа7")
-    ws7b['A1'] = "Работа 7 — Ливневый сток (параметры расчёта)"
+    # ========== ЛИСТ 8: Рацион + IDF + Гидрографы ==========
+    ws7b = wb.create_sheet("Рацион + IDF + Гидрографы")
+    ws7b['A1'] = "Рацион + IDF + Гидрографы (параметры расчёта)"
     ws7b['A1'].font = Font(bold=True, size=12)
     ws7b.merge_cells('A1:B1')
 
@@ -262,9 +265,9 @@ def create_unified_template(path="unified_template.xlsx"):
     ws7b.column_dimensions['A'].width = 35
     ws7b.column_dimensions['B'].width = 15
 
-    # ========== ЛИСТ 9: Работа8 (FDC) ==========
-    ws8b = wb.create_sheet("Работа8")
-    ws8b['A1'] = "Работа 8 — Кривая обеспеченности продолжительности (FDC)"
+    # ========== ЛИСТ 9: FDC + Регрессии + Статистика ==========
+    ws8b = wb.create_sheet("FDC + Регрессии + Статистика")
+    ws8b['A1'] = "Кривая обеспеченности продолжительности (FDC)"
     ws8b['A1'].font = Font(bold=True, size=12)
     ws8b.merge_cells('A1:B1')
 
@@ -275,9 +278,9 @@ def create_unified_template(path="unified_template.xlsx"):
         style_cell(ws8b, 4 + i, 1, 1980 + i, fill=yellow_fill)
         style_cell(ws8b, 4 + i, 2, round(random.uniform(50, 300), 1), fill=yellow_fill)
 
-    # ========== ЛИСТ 10: Работа9 ==========
-    ws9b = wb.create_sheet("Работа9")
-    ws9b['A1'] = "Работа 9 — Гидротехнические расчёты (параметры)"
+    # ========== ЛИСТ 10: ППУ + ГВП + Регулирование ==========
+    ws9b = wb.create_sheet("ППУ + ГВП + Регулирование")
+    ws9b['A1'] = "ППУ + ГВП + Регулирование (параметры)"
     ws9b['A1'].font = Font(bold=True, size=12)
     ws9b.merge_cells('A1:B1')
 
@@ -290,13 +293,40 @@ def create_unified_template(path="unified_template.xlsx"):
     ws9b['A5'] = "Уклон I, м/м (или ‰):"
     ws9b['B5'] = 0.002
     ws9b['B5'].fill = yellow_fill
+    ws9b['A6'] = "Длина гребня L, м:"
+    ws9b['B6'] = 20
+    ws9b['B6'].fill = yellow_fill
+    ws9b['A7'] = "Напор H, м:"
+    ws9b['B7'] = 3
+    ws9b['B7'].fill = yellow_fill
+    ws9b['A8'] = "Тип водосброса:"
+    ws9b['B8'] = "трапеция"
+    ws9b['B8'].fill = yellow_fill
+    ws9b['A9'] = "Откос бортов m:"
+    ws9b['B9'] = 2
+    ws9b['B9'].fill = yellow_fill
+    ws9b['A10'] = "Коэфф. Маннинга n:"
+    ws9b['B10'] = 0.035
+    ws9b['B10'].fill = yellow_fill
+    ws9b['A11'] = "Уровень в водохр. Hres, м:"
+    ws9b['B11'] = 5
+    ws9b['B11'].fill = yellow_fill
+    ws9b['A12'] = "Длина участка Lbackwater, м:"
+    ws9b['B12'] = 5000
+    ws9b['B12'].fill = yellow_fill
+    ws9b['A13'] = "Средний расход Qmean, м³/с:"
+    ws9b['B13'] = 100
+    ws9b['B13'].fill = yellow_fill
+    ws9b['A14'] = "Забор воды demand, м³/с:"
+    ws9b['B14'] = 30
+    ws9b['B14'].fill = yellow_fill
 
     ws9b.column_dimensions['A'].width = 35
     ws9b.column_dimensions['B'].width = 15
 
-    # ========== ЛИСТ 11: Работа10 ==========
-    ws10b = wb.create_sheet("Работа10")
-    ws10b['A1'] = "Работа 10 — Экология и базовый сток"
+    # ========== ЛИСТ 11: Экология + Базовый сток ==========
+    ws10b = wb.create_sheet("Экология + Базовый сток")
+    ws10b['A1'] = "Экология + Базовый сток"
     ws10b['A1'].font = Font(bold=True, size=12)
     ws10b.merge_cells('A1:B1')
 

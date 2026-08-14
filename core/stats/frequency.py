@@ -99,12 +99,12 @@ def kritsky_menkel_ppf(probabilities: np.ndarray, mean: float, cv: float, cs: fl
 
     # --- Трёхпараметрическое гамма-распределение ---
     alpha = 4.0 / (cs ** 2)                          # параметр формы
-    beta = mean * cv * abs(cs) / 2.0                  # параметр масштаба
+    beta = mean * cv * cs / 2.0                  # параметр масштаба
     A0 = mean * (1.0 - 2.0 * cv / cs)               # начальная точка (сдвиг)
 
     try:
         quantiles = A0 + stats.gamma.ppf(1 - probabilities, a=alpha, scale=beta)
-    except (ValueError, TypeError, RuntimeError):
+    except (ValueError, TypeError, RuntimeError) as e:
         # Fallback на формулу Корниша-Фишера
         quantiles = pearson3_ppf(probabilities, mean, cv, cs)
 
@@ -128,28 +128,32 @@ def fit_theoretical_distributions(Q: np.ndarray, p_prob: np.ndarray) -> dict:
     try:
         params = stats.pearson3.fit(Q)
         p3 = stats.pearson3.ppf(1 - probabilities, *params)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
+        print(f"Error fitting {dist_name}: {e}")
         p3 = None
 
     # Gamma
     try:
         params = stats.gamma.fit(Q, floc=0)
         g = stats.gamma.ppf(1 - probabilities, *params)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
+        print(f"Error fitting {dist_name}: {e}")
         g = None
 
     # Lognormal
     try:
         params = stats.lognorm.fit(Q, floc=0)
         ln = stats.lognorm.ppf(1 - probabilities, *params)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
+        print(f"Error fitting {dist_name}: {e}")
         ln = None
 
     # Normal
     try:
         params = stats.norm.fit(Q)
         n = stats.norm.ppf(1 - probabilities, *params)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
+        print(f"Error fitting {dist_name}: {e}")
         n = None
 
     return {
@@ -311,6 +315,8 @@ def auto_select_cs_cv(
         }
 
     # Перебор Cs/Cv
+    if precision <= 0:
+        precision = 0.05
     cs_cv_values = np.arange(cs_cv_min, cs_cv_max + precision, precision)
     results = []
 

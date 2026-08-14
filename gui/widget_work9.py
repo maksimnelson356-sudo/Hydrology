@@ -327,7 +327,10 @@ class Work9Widget(QWidget):
         self.reg_figure.tight_layout()
         self.reg_canvas.draw()
 
-    def set_data(self, daily_df=None, Q=None, B=None, slope=None):
+    def set_data(self, daily_df=None, Q=None, B=None, slope=None,
+                 L_ridge=None, H_head=None, spillway_type=None,
+                 m_slope=None, n_roughness=None, Hres=None, L_backwater=None,
+                 Qmean=None, demand=None):
         """Приём данных из единого загрузчика."""
         if Q is not None and hasattr(self, 'sp_Q'):
             self.sp_Q.setValue(float(Q))
@@ -335,3 +338,30 @@ class Work9Widget(QWidget):
                 self.bw_Q.setValue(float(Q))
         if B is not None and hasattr(self, 'bw_B'):
             self.bw_B.setValue(float(B))
+        if slope is not None and hasattr(self, 'bw_I'):
+            self.bw_I.setValue(float(slope))
+        if L_ridge is not None and hasattr(self, 'sp_L'):
+            self.sp_L.setValue(float(L_ridge))
+        if H_head is not None and hasattr(self, 'sp_H'):
+            self.sp_H.setValue(float(H_head))
+        if spillway_type is not None and hasattr(self, 'sp_type'):
+            t = str(spillway_type).strip().lower()
+            type_map = {'тонкостенная': 0, 'трапеция': 1, 'ogee': 2, 'шахта': 3, 'орифиция': 3}
+            idx = 1
+            for key, i in type_map.items():
+                if key in t:
+                    idx = i
+                    break
+            self.sp_type.setCurrentIndex(idx)
+        if m_slope is not None and hasattr(self, 'bw_m'):
+            self.bw_m.setValue(float(m_slope))
+        if n_roughness is not None and hasattr(self, 'bw_n'):
+            self.bw_n.setValue(float(n_roughness))
+        if Hres is not None and hasattr(self, 'bw_Hres'):
+            self.bw_Hres.setValue(float(Hres))
+        if L_backwater is not None and hasattr(self, 'bw_L'):
+            self.bw_L.setValue(float(L_backwater))
+        if Qmean is not None and hasattr(self, 'reg_Qmean'):
+            self.reg_Qmean.setValue(float(Qmean))
+        if demand is not None and hasattr(self, 'reg_demand'):
+            self.reg_demand.setValue(float(demand))
