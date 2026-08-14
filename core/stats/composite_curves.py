@@ -245,9 +245,10 @@ def find_change_point(values, years=None):
     }
 
 
-def test_homogeneity_two_parts(alpha=0.05):
-    part1 = np.array([1.0, 2.0, 3.0])
-    part2 = np.array([4.0, 5.0, 6.0])
+def test_homogeneity_two_parts(part1, part2, alpha=0.05):
+    # Ensure part1 and part2 are numpy arrays
+    part1 = np.asarray(part1)
+    part2 = np.asarray(part2)
     """Обратная совместимость: тест Штрихова."""
     u_stat, u_p = stats.mannwhitneyu(part1, part2, alternative='two-sided')
     t_stat, t_p = stats.ttest_ind(part1, part2)

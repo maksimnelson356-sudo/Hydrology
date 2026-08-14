@@ -81,7 +81,7 @@ args = [
     "--hidden-import=create_unified_template",
 ]
 
-    if os.path.exists("gui/resources/logo.svg"):
+if os.path.exists("gui/resources/logo.svg"):
         args.append("--icon=gui/resources/logo.svg")
         print("OK Иконка добавлена")
 
