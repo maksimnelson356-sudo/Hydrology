@@ -15,7 +15,7 @@ def load_hydrological_data(filepath):
     """
     df_raw = pd.read_excel(filepath)
     df_raw.columns = [str(col).strip() for col in df_raw.columns]
-    
+
     # Ищем столбец с годами
     year_col = None
     for col in df_raw.columns:
@@ -24,7 +24,7 @@ def load_hydrological_data(filepath):
             break
     if year_col is None:
         year_col = df_raw.columns[0]
-    
+
     # Находим все числовые столбцы (посты)
     available_posts = []
     for col in df_raw.columns:
@@ -34,7 +34,7 @@ def load_hydrological_data(filepath):
                 available_posts.append(col)
             except (ValueError, TypeError):
                 pass  # столбец не является числовым — пропускаем
-    
+
     return df_raw, year_col, available_posts
 
 
@@ -45,10 +45,10 @@ def get_series_by_post(df_raw, year_col, post_name):
     df = pd.DataFrame()
     df['year'] = pd.to_numeric(df_raw[year_col], errors='coerce')
     df['value'] = pd.to_numeric(df_raw[post_name], errors='coerce')
-    
+
     df = df.dropna(subset=['value']).reset_index(drop=True)
     df.attrs['post'] = post_name
-    
+
     return df
 
 

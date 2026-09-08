@@ -3,41 +3,46 @@ gui/widget_work10.py
 Работа 10 — Экология, базовый сток, спектральный анализ, засухи (PyQt6)
 """
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-
-from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_resize_table
-
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTextEdit, QGroupBox, QFormLayout,
-    QTableWidget, QTableWidgetItem, QComboBox,
-    QDoubleSpinBox, QSpinBox, QFileDialog, QTabWidget, QSplitter
-)
-from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QPushButton,
+    QSpinBox,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from core.hydrorash.ecological_flow import (
-    tessmann_seasonal, ecoregime_classes, min_flow_comparison,
-    SEASONAL_TESSMANN_PARAMS
+    SEASONAL_TESSMANN_PARAMS,
+    tessmann_seasonal,
 )
 from core.stats.baseflow import (
-    baseflow_straight_line, baseflow_digital_filter,
-    baseflow_lyne_hollick, baseflow_statistics
+    baseflow_digital_filter,
+    baseflow_statistics,
 )
-from core.stats.spectral import (
-    fft_analysis, power_spectrum, hurst_exponent, find_periodicity
-)
-from core.stats.drought import (
-    spi_index, drought_classification, drought_frequency
-)
-from core.stats.sheet_reader import read_work_sheet, numeric_column
+from core.stats.drought import drought_frequency, spi_index
+from core.stats.sheet_reader import numeric_column, read_work_sheet
+from core.stats.spectral import find_periodicity, hurst_exponent, power_spectrum
+from gui.plot_style import auto_resize_table
 
 
 class Work10Widget(QWidget):
@@ -260,7 +265,7 @@ class Work10Widget(QWidget):
             QMessageBox.critical(self, "Ошибка", str(e))
 
     def manual_baseflow(self):
-        from PyQt6.QtWidgets import QPlainTextEdit, QDialog, QDialogButtonBox
+        from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QPlainTextEdit
         dlg = QDialog(self)
         dlg.setWindowTitle("Ввод данных")
         dlg.setMinimumSize(350, 250)

@@ -2,8 +2,8 @@
 test_q.py
 Тест расчёта расхода Q по формуле Маннинга с разделением на отсеки
 """
-from core.profile import MorphoProfile, ProfilePoint, PointCode
 from core.hydraulics import calculate_composite_q
+from core.profile import MorphoProfile, PointCode, ProfilePoint
 
 print("=== Тест расчёта расхода Q (формула Маннинга) ===\n")
 

@@ -6,9 +6,10 @@ core/hydrorash/min_runoff_extended.py
 экосистемного минимума согласно СП 32.13330.2018 и СП 33-101-2003.
 """
 
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional
+
 from .utils import compute_basic_stats, kritsky_menkel_quantiles
 
 
@@ -58,7 +59,12 @@ def extract_min_annual(
     if 'month' in df.columns:
         month_col = 'month'
     elif hasattr(df.index, 'month'):
-        df = df.reset_index()
+        df = df.copy()
+        df['month'] = df.index.month
+        month_col = 'month'
+    elif hasattr(daily_df.index, 'month'):
+        df = df.copy()
+        df['month'] = daily_df.loc[df.index].month
         month_col = 'month'
     else:
         month_col = None
@@ -88,7 +94,7 @@ def extract_min_annual(
 def _sliding_window_min_mean(
     values: np.ndarray,
     window_size: int
-) -> Optional[float]:
+) -> float | None:
     """
     Поиск минимального среднего значения в скользящем окне.
 
@@ -114,7 +120,7 @@ def compute_min_runoff_stats(
     min_series: pd.Series,
     period_days: int = 7,
     use_normative_Cs: bool = True
-) -> Dict:
+) -> dict:
     """
     Статистика ряда минимальных стоков (7/10-суточных).
 
@@ -157,7 +163,7 @@ def compute_min_runoff_stats(
 
 def min_runoff_frequency_curve(
     min_series: pd.Series,
-    P_values: Optional[List[float]] = None,
+    P_values: list[float] | None = None,
     use_normative_Cs: bool = True
 ) -> pd.DataFrame:
     """
@@ -203,7 +209,7 @@ def min_runoff_frequency_curve(
 def ecosystem_minimum(
     mean_annual_flow: float,
     method: str = "tenpct"
-) -> Dict:
+) -> dict:
     """
     Экосистемный (экологический) минимальный сток (СП 32.13330.2018, раздел 8).
 
@@ -265,8 +271,8 @@ def ecosystem_minimum(
 
 def q7_10(
     daily_series: pd.Series,
-    years: Optional[pd.Series] = None
-) -> Dict:
+    years: pd.Series | None = None
+) -> dict:
     """
     7-day 10-year minimum flow (7Q10) — стандартный показатель экосистемного минимума.
 
@@ -339,8 +345,8 @@ def q7_10(
 
 def q7_30(
     daily_series: pd.Series,
-    years: Optional[pd.Series] = None
-) -> Dict:
+    years: pd.Series | None = None
+) -> dict:
     """
     30-day minimum flow — показатель минимального стока для целей водоснабжения.
 
@@ -402,7 +408,7 @@ def q7_30(
 
     return {
         "Q30_values": q30_values,
-        "Q30_90": q30_values.get(90, None),
+        "Q30_90": q30_values.get(90),
         "annual_minima": min_series.round(2),
         "stats": stats,
         "method": "30-day minimum",

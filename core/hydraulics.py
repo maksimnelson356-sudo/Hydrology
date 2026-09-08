@@ -14,7 +14,7 @@ core/hydraulics.py
 """
 
 import math
-from typing import Dict
+
 from core.profile import MorphoProfile
 
 
@@ -31,7 +31,7 @@ def calculate_q_manning(omega: float, chi: float, n: float, i: float) -> float:
     return round(q, 3)
 
 
-def calculate_composite_q(profile: MorphoProfile, h: float) -> Dict[str, float]:
+def calculate_composite_q(profile: MorphoProfile, h: float) -> dict[str, float]:
     """
     Расчёт расхода с разделением на отсеки.
     Согласно СП 33-101-2003 п. 7.4 раздельно считаем русло и поймы.

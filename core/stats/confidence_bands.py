@@ -9,17 +9,17 @@ core/stats/confidence_bands.py
 - epsilon_ci — доверительный интервал для ε
 """
 
+
 import numpy as np
-from typing import Dict, List, Optional
 from scipy import stats
 
 
 def pearson3_confidence_bands(
     data: np.ndarray,
-    P_values: Optional[List[float]] = None,
+    P_values: list[float] | None = None,
     confidence: float = 0.95,
     n_bootstrap: int = 1000,
-) -> Dict:
+) -> dict:
     """
     Доверительные полосы для кривой Пирсон III (бутстреп).
 
@@ -80,7 +80,7 @@ def parametric_bootstrap_ci(
     P_target: float,
     confidence: float = 0.95,
     n_bootstrap: int = 1000,
-) -> Dict:
+) -> dict:
     """
     Доверительный интервал для квантиля Q(P) методом бутстрепа.
 
@@ -134,11 +134,15 @@ def quantile_ci_normal(
     data: np.ndarray,
     P_target: float,
     confidence: float = 0.95,
-) -> Dict:
+) -> dict:
     """
     Доверительный интервал для квантиля (нормальное приближение).
 
-    Используется когда n > 30.
+    ⚠️ ВАЖНО: Это приближение подразумевает нормальность выборки
+    и асимптотическую нормальность квантиля.
+    Для Пирсона III при малых n (<30) или высокой асимметрии (Cs>2)
+    результат может быть неточным. Рекомендуется использовать
+    bootstrap метод (parametric_bootstrap_ci) вместо этого.
 
     Parameters:
         data: наблюдения
@@ -155,9 +159,25 @@ def quantile_ci_normal(
     data = data[~np.isnan(data)]
     n = len(data)
 
+    if n < 10:
+        return {
+            'Q_point': np.nan,
+            'Q_lower': np.nan,
+            'Q_upper': np.nan,
+            'std_error': np.nan,
+            'confidence': confidence,
+            'P_target': P_target,
+            'n': n,
+            'warning': f'n={n} < 10: нормальное приближение ненадёжно',
+        }
+
     params = calculate_statistical_parameters(data)
     Q_point = pearson3_ppf([P_target], params['mean'], params['corrected_cv'], params['corrected_cs'])[0]
 
+    # SE квантиля: для Пирсона III нет простого аналитического выражения
+    # Используем delta method: SE(Q) ≈ mean * cv / sqrt(n) * K'(P)
+    # где K'(P) — производная функции квантиля.
+    # Упрощённо: SE ≈ mean * cv / sqrt(n)
     se = params['mean'] * params['corrected_cv'] / np.sqrt(n) if n > 1 else 0
 
     z = stats.norm.ppf(1 - (1 - confidence) / 2)

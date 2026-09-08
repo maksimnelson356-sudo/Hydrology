@@ -22,23 +22,25 @@ core/hydrorash/__init__.py
 - ecological_flow — экологический сток (Тессман, ECOFRAME)
 """
 
-from . import utils
-from . import hydrological_periods
-from . import intra_annual
-from . import minimal_runoff
-from . import max_runoff
-from . import ice_phenomena
-from . import min_runoff_extended
-from . import water_balance
-from . import rational_method
-from . import flood_hydrograph
-from . import snowmelt
-from . import regional_regressions
-from . import spillway
-from . import backwater
-from . import reservoir_regulation
-from . import sedimentation
-from . import ecological_flow
+from . import (
+    backwater,
+    ecological_flow,
+    flood_hydrograph,
+    hydrological_periods,
+    ice_phenomena,
+    intra_annual,
+    max_runoff,
+    min_runoff_extended,
+    minimal_runoff,
+    rational_method,
+    regional_regressions,
+    reservoir_regulation,
+    sedimentation,
+    snowmelt,
+    spillway,
+    utils,
+    water_balance,
+)
 
 __all__ = [
     "utils",

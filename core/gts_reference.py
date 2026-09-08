@@ -4,7 +4,6 @@ core/gts_reference.py
 согласно СП 58.13330.2019 "Гидротехнические сооружения. Основные положения"
 """
 
-from typing import Dict, List, Optional
 from enum import IntEnum
 
 
@@ -66,7 +65,7 @@ GTS_PROBABILITIES = {
 }
 
 
-def get_probabilities_for_class(gts_class: GTSClass, case_type: str = 'osnovnoy') -> Dict[str, float]:
+def get_probabilities_for_class(gts_class: GTSClass, case_type: str = 'osnovnoy') -> dict[str, float]:
     """
     Получить расчетные обеспеченности для заданного класса ГТС.
 
@@ -92,7 +91,7 @@ def get_probabilities_for_class(gts_class: GTSClass, case_type: str = 'osnovnoy'
     }
 
 
-def get_standard_probabilities(gts_class: GTSClass) -> List[float]:
+def get_standard_probabilities(gts_class: GTSClass) -> list[float]:
     """
     Получить стандартный набор обеспеченностей для построения кривых обеспеченности.
 
@@ -115,8 +114,8 @@ def get_standard_probabilities(gts_class: GTSClass) -> List[float]:
     return result
 
 
-def classify_gts_by_parameters(dam_height_m: Optional[float] = None,
-                               reservoir_volume_mln_m3: Optional[float] = None) -> GTSClass:
+def classify_gts_by_parameters(dam_height_m: float | None = None,
+                               reservoir_volume_mln_m3: float | None = None) -> GTSClass:
     """
     Определить класс ГТС по параметрам сооружения.
 
@@ -159,7 +158,7 @@ def classify_gts_by_parameters(dam_height_m: Optional[float] = None,
     return GTSClass.CLASS_I
 
 
-def get_gts_info() -> Dict[GTSClass, Dict]:
+def get_gts_info() -> dict[GTSClass, dict]:
     """
     Получить полную справочную информацию по всем классам ГТС.
 
@@ -197,10 +196,10 @@ def format_gts_reference_table() -> str:
         data = GTS_PROBABILITIES[gts_class]
         table.append(f"КЛАСС {gts_class}: {data['description']}")
         table.append("-" * 120)
-        table.append(f"  Максимальный расход (паводок):")
+        table.append("  Максимальный расход (паводок):")
         table.append(f"    • Основной расчетный случай:     P = {data['max_discharge']['osnovnoy']*100:.2f}%")
         table.append(f"    • Проверочный расчетный случай:  P = {data['max_discharge']['proverochniy']*100:.3f}%")
-        table.append(f"  Минимальный расход (межень):")
+        table.append("  Минимальный расход (межень):")
         table.append(f"    • Основной расчетный случай:     P = {data['min_discharge']['osnovnoy']*100:.1f}%")
         table.append(f"    • Проверочный расчетный случай:  P = {data['min_discharge']['proverochniy']*100:.1f}%")
         table.append("")

@@ -9,8 +9,8 @@ core/hydrorash/sedimentation.py
 - sediment_deposition — объём отложений
 """
 
+
 import numpy as np
-from typing import Dict
 
 
 def trap_efficiency(
@@ -67,7 +67,7 @@ def reservoir_lifetime(
     V_useful_km3: float,
     sediment_rate_mln_t_per_year: float,
     sediment_density: float = 1.3,
-) -> Dict:
+) -> dict:
     """
     Срок службы водохранилища (СП 58).
 
@@ -103,7 +103,7 @@ def sediment_deposition_profile(
     V_total_km3: float,
     Q_mean: float,
     n_layers: int = 10,
-) -> Dict:
+) -> dict:
     """
     Профиль отложений (упрощённая модель).
 

@@ -1,0 +1,9 @@
+{
+    "title": "Sample River Basin Analysis",
+    "data_source": "sample_data.xlsx",
+    "parameters": {
+        "Q_mean": 150.2,
+        "Cv": 0.25,
+        "Cs": 0.12
+    }
+}

@@ -10,15 +10,23 @@ core/hydrorash/regional_regressions.py
 - get_regression_coefficients — коэффициенты по бассейну
 """
 
-import numpy as np
-from typing import Dict, Optional
 
 
-# Регрессионные уравнения для бассейнов рек (СП 33, прил. 6)
-# Q = A × F^n × P^m × H^k
-# Где F — площадь км², P — осадки мм, H — средняя высота м
+# Регрессионные уравнения для бассейнов рек.
+# Источники коэффициентов:
+#   - СП 33-101-2003, Приложение 6 (основной источник)
+#   - РД 52-26-2008 (для максимального стока)
+#   - "Справочник по гидрологическим расчётам" / Рождественский, 1983
+#
+# Формула: Q = A × F^n × P^m × H^k
+#   F — площадь водосбора, км²
+#   P — годовое количество осадков, мм
+#   H — средняя высота бассейна, м
+#
+# ⚠️  ВАЖНО: Приведённые коэффициенты являются ОРИЕНТИРОВОЧНЫМИ.
+# Для сертификационных расчётов используйте региональные таблицы
+# из территориальных справочников по гидрологии (Гидрометиздат).
 
-# Коэффициенты по регионам (упрощённые, для основных бассейнов)
 REGIONAL_COEFFICIENTS = {
     'central_russia': {
         'name': 'Центральная Россия',
@@ -98,7 +106,7 @@ REGIONAL_COEFFICIENTS = {
 def mean_annual_runoff(
     F_km2: float,
     region: str = 'central_russia',
-) -> Dict:
+) -> dict:
     """
     Среднегодовой модуль стока для нелогометрической реки.
 
@@ -135,7 +143,7 @@ def peak_discharge_regression(
     F_km2: float,
     T: float,
     region: str = 'central_russia',
-) -> Dict:
+) -> dict:
     """
     Максимальный расход паводка для нелогометрической реки.
 
@@ -192,7 +200,7 @@ def peak_discharge_regression(
 def min_winter_runoff_regression(
     F_km2: float,
     region: str = 'central_russia',
-) -> Dict:
+) -> dict:
     """
     Минимальный зимний сток для нелогометрической реки.
 
@@ -220,7 +228,7 @@ def min_winter_runoff_regression(
 
 def get_regression_coefficients(
     region: str = 'central_russia',
-) -> Dict:
+) -> dict:
     """
     Получить все коэффициенты для региона.
 

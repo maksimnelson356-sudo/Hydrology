@@ -16,11 +16,10 @@ core/stats/series_extension.py
 - full_extension_workflow — полный цикл удлинения
 """
 
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
 from scipy import stats
-
 
 # Табличные значения Ro крит (СП 33-101-2003, Таблица 3)
 # Ключ: (n_common, alpha=0.05)
@@ -57,7 +56,7 @@ def validate_correlation(
     Q_calc: pd.Series,
     Q_analog: pd.Series,
     alpha: float = 0.05
-) -> Dict:
+) -> dict:
     """
     Проверка статистической значимости корреляционной связи.
 
@@ -114,7 +113,7 @@ def validate_correlation(
 def regression_extension(
     Q_calc: pd.Series,
     Q_analog: pd.Series
-) -> Dict:
+) -> dict:
     """
     Регрессионный метод продления ряда.
 
@@ -150,6 +149,50 @@ def regression_extension(
     common = Q_calc.index.intersection(Q_analog.index)
     Q_ext.loc[common] = Q_calc.loc[common]
 
+    # === Проверка остатков (СП 33-101-2003 п. 6.2.4) ===
+    # Остатки = наблюдаемые - предсказанные. Должны:
+    # 1) Не иметь систематического смещения (mean ~ 0)
+    # 2) Быть гомоскедастичными (σ постоянна)
+    # 3) Не содержать выбросов (|residual| > 3·σ — подозрительные)
+    residuals = Q_calc.loc[common_idx] - (a * Q_analog.loc[common_idx] + b)
+    resid_mean = float(residuals.mean())
+    resid_std = float(residuals.std())
+    outlier_mask = (residuals - resid_mean).abs() > 3 * resid_std
+    n_outliers = int(outlier_mask.sum())
+
+    # Тест на гетероскедастичность (ранговый по подвыборкам)
+    half = len(residuals) // 2
+    resid_var_1 = float(residuals.iloc[:half].var()) if half > 1 else 0.0
+    resid_var_2 = float(residuals.iloc[half:].var()) if half > 1 else 0.0
+    heteroscedasticity = (min(resid_var_1, resid_var_2) > 0 and
+                         max(resid_var_1, resid_var_2) / min(resid_var_1, resid_var_2) > 4.0)
+
+    residual_diagnostics = {
+        'resid_mean': round(resid_mean, 4),
+        'resid_std': round(resid_std, 4),
+        'n_outliers_3sigma': n_outliers,
+        'has_outliers': n_outliers > 0,
+        'var_first_half': round(resid_var_1, 4),
+        'var_second_half': round(resid_var_2, 4),
+        'heteroscedastic': heteroscedasticity,
+    }
+
+    warnings = []
+    if n_outliers > 0:
+        warnings.append(
+            f"Обнаружено {n_outliers} выбросов в остатках (>3σ). "
+            f"Проверьте исходные данные — возможны аномальные годы."
+        )
+    if heteroscedasticity:
+        warnings.append(
+            f"Гетероскедастичность остатков: дисперсия меняется в {max(resid_var_1, resid_var_2) / max(min(resid_var_1, resid_var_2), 1e-10):.1f} раз. "
+            f"Регрессия может давать смещённые интервалы."
+        )
+    if abs(resid_mean) > 0.5 * resid_std:
+        warnings.append(
+            f"Систематическое смещение в остатках: mean={resid_mean:.3f}, std={resid_std:.3f}."
+        )
+
     return {
         'a': round(a, 6),
         'b': round(b, 4),
@@ -160,6 +203,8 @@ def regression_extension(
         'is_significant': validation['is_significant'],
         'quality_class': validation['quality_class'],
         'extended_series': Q_ext,
+        'residual_diagnostics': residual_diagnostics,
+        'warnings': warnings,
         'warning': None if validation['is_significant'] else
                    f"R={validation['R']:.3f} < Ro={validation['Ro_crit']:.3f}. Связь статистически незначима!"
     }
@@ -168,7 +213,7 @@ def regression_extension(
 def proportional_extension(
     Q_calc: pd.Series,
     Q_analog: pd.Series
-) -> Dict:
+) -> dict:
     """
     Метод пропорций для продления ряда.
 
@@ -206,8 +251,8 @@ def proportional_extension(
 def estimate_extension_error(
     Q_calc: pd.Series,
     Q_analog: pd.Series,
-    regression_result: Dict
-) -> Dict:
+    regression_result: dict
+) -> dict:
     """
     Оценка погрешности продлённого ряда.
 
@@ -259,7 +304,7 @@ def full_extension_workflow(
     Q_calc: pd.Series,
     Q_analog: pd.Series,
     method: str = 'regression'
-) -> Dict:
+) -> dict:
     """
     Полный цикл удлинения ряда с валидацией.
 
@@ -311,7 +356,7 @@ def full_extension_workflow(
 
 def multi_analog_extension(
     Q_calc: pd.Series,
-    analogs: Dict[str, pd.Series],
+    analogs: dict[str, pd.Series],
     n_min: int = 6,
     ro_cr: float = 0.7,
     ro_over_sigma: float = 2.0,
@@ -319,7 +364,7 @@ def multi_analog_extension(
     y_over_sigma: float = 0.2,
     max_analogs: int = 3,
     exclude_negative: bool = True,
-) -> Dict:
+) -> dict:
     """
     Удлинение ряда множественной регрессией по рекам-аналогам.
 
@@ -405,7 +450,7 @@ def multi_analog_extension(
 
     checks = {
         'n_common_ok': n_common >= n_min,
-        'R_ok': R >= ro_cr,
+        'R_ok': ro_cr <= R,
         'ro_over_sigma_ok': (R / sigma_ro) >= ro_over_sigma if sigma_ro > 0 else False,
         'k_over_sigma_ok': bool(np.all(ratio_k[1:] >= k_over_sigma)),
         'y_over_sigma_ok': ratio_y <= y_over_sigma,
@@ -469,7 +514,7 @@ def multi_analog_extension(
 # - Экстремумы = границы периодов повышенных/пониженных значений
 
 
-def compute_integral_curves(data: pd.Series) -> Dict:
+def compute_integral_curves(data: pd.Series) -> dict:
     """
     Вычисление интегральной и разностно-интегральной кривых.
 

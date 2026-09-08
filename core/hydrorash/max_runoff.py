@@ -14,10 +14,11 @@ core/hydrorash/max_runoff.py
 - level_from_discharge — уровень воды по расходу
 """
 
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
 from scipy import stats
+
 from .utils import compute_basic_stats
 
 
@@ -63,7 +64,7 @@ def extract_max_annual(
 def compute_max_runoff_stats(
     max_series: pd.Series,
     use_normative_Cs: bool = True
-) -> Dict:
+) -> dict:
     """
     Статистические характеристики ряда максимальных стоков.
 
@@ -115,7 +116,7 @@ def compute_max_runoff_stats(
 
 def max_runoff_frequency_curve(
     max_series: pd.Series,
-    P_values: Optional[List[float]] = None,
+    P_values: list[float] | None = None,
     use_normative_Cs: bool = True
 ) -> pd.DataFrame:
     """
@@ -164,7 +165,7 @@ def index_year_method(
     gauged_max_series: pd.Series,
     gauged_mean_annual: float,
     target_mean_annual: float,
-    P_values: Optional[List[float]] = None
+    P_values: list[float] | None = None
 ) -> pd.DataFrame:
     """
     Метод индексных годов (СП 33-101-2003 п. 8.2).
@@ -214,8 +215,8 @@ def index_year_method(
 def build_rating_curve(
     H: np.ndarray,
     Q: np.ndarray,
-    H0: Optional[float] = None
-) -> Dict:
+    H0: float | None = None
+) -> dict:
     """
     Построение кривой функционирования Q = a × (H - H0)^b.
 
@@ -263,7 +264,7 @@ def build_rating_curve(
     }
 
 
-def discharge_from_level(H: float, params: Dict) -> float:
+def discharge_from_level(H: float, params: dict) -> float:
     """
     Расход по уровню воды: Q = a × (H - H0)^b.
     """
@@ -276,7 +277,7 @@ def discharge_from_level(H: float, params: Dict) -> float:
     return float(a * (dH ** b))
 
 
-def level_from_discharge(Q: float, params: Dict) -> float:
+def level_from_discharge(Q: float, params: dict) -> float:
     """
     Уровень воды по расходу: H = H0 + (Q/a)^(1/b).
     """

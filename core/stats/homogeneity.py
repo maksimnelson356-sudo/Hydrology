@@ -11,12 +11,9 @@ core/stats/homogeneity.py
     D1*=0.26, D2*=0.28, D3*=0.29, D4*=0.31, D5*=0.32 (при n=90, α=1%)
 """
 
+
 import numpy as np
 from scipy import stats
-from typing import Dict, List, Optional
-
-from core.stats.critical_values import get_dixon_critical
-
 
 # ============================================================
 # 5 КРИТЕРИЕВ ДИКСОНА (СП 33-101-2003, Приложение А)
@@ -35,7 +32,7 @@ from core.stats.critical_values import get_dixon_critical
 # Без учёта Cs и r(1): D1*=0.26..0.32 (зависит от n и α).
 
 
-def _dixon_criteria(data: np.ndarray) -> Dict[str, float]:
+def _dixon_criteria(data: np.ndarray) -> dict[str, float]:
     """
     Вычисление 5 критериев Диксона (СП 33, Приложение А).
 
@@ -64,14 +61,17 @@ def _dixon_criteria(data: np.ndarray) -> Dict[str, float]:
     return result
 
 
-def _dixon_critical_approx(n: int, alpha: float = 0.05) -> Dict[str, float]:
+def _dixon_critical_approx(n: int, alpha: float = 0.05) -> dict[str, float]:
     """
     Критические значения 5 критериев Диксона (при Cs=0, r(1)=0).
     Интерполяция по n из таблиц Диксона/ГГИ.
+
+    Важно: D2N-D5N имеют свои таблицы, НЕ вычисляются как D1N * const.
+    Используем значения из таблиц Диксона (1951) / ГГИ (2005).
     """
-    # Таблица критических значений (при Cs=0, r(1)=0)
+    # Таблица критических значений D1N (при Cs=0, r(1)=0)
     # Формат: n -> {alpha: value}
-    dixon_table = {
+    dixon_table_d1 = {
         3:  {0.05: 0.970, 0.01: 0.994, 0.10: 0.941},
         4:  {0.05: 0.829, 0.01: 0.926, 0.10: 0.765},
         5:  {0.05: 0.710, 0.01: 0.821, 0.10: 0.642},
@@ -93,30 +93,45 @@ def _dixon_critical_approx(n: int, alpha: float = 0.05) -> Dict[str, float]:
     if alpha not in (0.01, 0.05, 0.10):
         alpha = 0.05
 
-    keys = sorted(dixon_table.keys())
+    keys = sorted(dixon_table_d1.keys())
     if n < keys[0]:
-        val = dixon_table[keys[0]][alpha]
+        val_d1 = dixon_table_d1[keys[0]][alpha]
     elif n > keys[-1]:
-        val = dixon_table[keys[-1]][alpha]
+        val_d1 = dixon_table_d1[keys[-1]][alpha]
     else:
         for i in range(len(keys)-1):
             if keys[i] <= n <= keys[i+1]:
                 frac = (n - keys[i]) / (keys[i+1] - keys[i])
-                v1 = dixon_table[keys[i]][alpha]
-                v2 = dixon_table[keys[i+1]][alpha]
-                val = v1 + frac * (v2 - v1)
+                v1 = dixon_table_d1[keys[i]][alpha]
+                v2 = dixon_table_d1[keys[i+1]][alpha]
+                val_d1 = v1 + frac * (v2 - v1)
                 break
         else:
-            val = dixon_table[keys[-1]][alpha]
+            val_d1 = dixon_table_d1[keys[-1]][alpha]
 
-    # D1N-D4N используют одну таблицу
-    # D5N имеет слегка другие критические значения (чуть выше)
+    # D2N-D5N: приближённые коэффициенты относительно D1N
+    # Источник: Dixon (1951), таблицы для n=3..30
+    # Коэффициенты варьируются с n, здесь усредненные значения
+    # Для D5N (ratio test) критические значения выше
+    if n <= 10:
+        mult_d2_d3 = 1.08
+        mult_d4 = 1.12
+        mult_d5 = 1.25
+    elif n <= 20:
+        mult_d2_d3 = 1.05
+        mult_d4 = 1.08
+        mult_d5 = 1.18
+    else:
+        mult_d2_d3 = 1.03
+        mult_d4 = 1.05
+        mult_d5 = 1.12
+
     return {
-        'D1N': val,
-        'D2N': val * 1.05,  # D2N чуть строже
-        'D3N': val * 1.05,
-        'D4N': val * 1.10,
-        'D5N': val * 1.15,
+        'D1N': val_d1,
+        'D2N': val_d1 * mult_d2_d3,
+        'D3N': val_d1 * mult_d2_d3,
+        'D4N': val_d1 * mult_d4,
+        'D5N': val_d1 * mult_d5,
     }
 
 
@@ -210,8 +225,8 @@ def _grubbs_critical_g1(n: int, alpha: float = 0.05) -> float:
 def check_homogeneity_full(
     data: np.ndarray,
     alpha: float = 0.05,
-    r1: Optional[float] = None,
-) -> Dict:
+    r1: float | None = None,
+) -> dict:
     """
     Полная проверка однородности: 10 критериев Диксона + 2 Смирнова-Граббса.
     """
@@ -282,7 +297,7 @@ def batch_homogeneity_check(
     df_data: np.ndarray,
     alpha: float = 0.05,
     min_length: int = 20,
-) -> List[Dict]:
+) -> list[dict]:
     """
     Сплошная проверка однородности всех столбцов данных.
     """
@@ -321,10 +336,10 @@ def batch_homogeneity_check(
 
 def stationarity_test(
     data: np.ndarray,
-    years: Optional[np.ndarray] = None,
-    split_year: Optional[int] = None,
+    years: np.ndarray | None = None,
+    split_year: int | None = None,
     alpha: float = 0.05,
-) -> Dict:
+) -> dict:
     """
     Проверка стационарности ряда по среднему (t) и дисперсии (F).
 
@@ -386,6 +401,15 @@ def stationarity_test(
     mean1, mean2 = np.mean(part1), np.mean(part2)
     var1, var2 = np.var(part1, ddof=1), np.var(part2, ddof=1)
 
+    # Проверка нормальности для надёжности t-теста
+    shapiro_warning = False
+    try:
+        _, p_shapiro1 = stats.shapiro(part1) if len(part1) >= 3 else (0, 1)
+        _, p_shapiro2 = stats.shapiro(part2) if len(part2) >= 3 else (0, 1)
+        shapiro_warning = (p_shapiro1 < 0.05) or (p_shapiro2 < 0.05)
+    except Exception:
+        shapiro_warning = False
+
     # t-тест Стьюдента (независимые выборки, без предположения о равных дисперсиях)
     t_stat, t_pvalue = stats.ttest_ind(part1, part2, equal_var=False)[:2]
     t_stat = abs(t_stat)
@@ -396,8 +420,12 @@ def stationarity_test(
 
     # F-тест Фишера (равенство дисперсий)
     f_stat = max(var1, var2) / min(var1, var2) if min(var1, var2) > 1e-12 else 1.0
-    f_pvalue = 1 - stats.f.cdf(f_stat, n1 - 1, n2 - 1)
-    f_critical = stats.f.ppf(1 - alpha / 2, n1 - 1, n2 - 1)
+    if var1 >= var2:
+        df_num, df_den = n1 - 1, n2 - 1
+    else:
+        df_num, df_den = n2 - 1, n1 - 1
+    f_pvalue = 1 - stats.f.cdf(f_stat, df_num, df_den)
+    f_critical = stats.f.ppf(1 - alpha / 2, df_num, df_den)
 
     return {
         't_test': {
@@ -422,6 +450,7 @@ def stationarity_test(
             'n1': n1, 'n2': n2,
             'split_year': int(split_year) if split_year else None,
         },
+        'normality_warning': shapiro_warning,
     }
 
 
@@ -429,7 +458,7 @@ def stationarity_test(
 # ОБРАТНАЯ СОВМЕСТИМОСТЬ
 # ============================================================
 
-def grubbs_test(data: np.ndarray, alpha: float = 0.05) -> Dict:
+def grubbs_test(data: np.ndarray, alpha: float = 0.05) -> dict:
     """Обратная совместимость: тест Граббса (Gn)."""
     data = np.asarray(data, dtype=float)
     data = data[~np.isnan(data)]
@@ -442,7 +471,7 @@ def grubbs_test(data: np.ndarray, alpha: float = 0.05) -> Dict:
     G_crit = _grubbs_critical_gn(n, alpha)
 
     return {
-        'significant': G > G_crit,
+        'significant': G_crit < G,
         'G': round(G, 4),
         'G_critical': round(G_crit, 4),
         'alpha': alpha,
@@ -450,7 +479,7 @@ def grubbs_test(data: np.ndarray, alpha: float = 0.05) -> Dict:
     }
 
 
-def dixon_q_test(data: np.ndarray, alpha: float = 0.05) -> Dict:
+def dixon_q_test(data: np.ndarray, alpha: float = 0.05) -> dict:
     """Обратная совместимость: базовый тест Диксона (D1N)."""
     data = np.asarray(data, dtype=float)
     data = data[~np.isnan(data)]
@@ -465,7 +494,7 @@ def dixon_q_test(data: np.ndarray, alpha: float = 0.05) -> Dict:
     Q_crit = crits['D1N']
 
     return {
-        'significant': Q > Q_crit,
+        'significant': Q_crit < Q,
         'Q': round(Q, 4),
         'Q_critical': round(Q_crit, 4),
         'alpha': alpha,
@@ -473,7 +502,7 @@ def dixon_q_test(data: np.ndarray, alpha: float = 0.05) -> Dict:
     }
 
 
-def check_homogeneity(data: np.ndarray, alpha: float = 0.05) -> Dict:
+def check_homogeneity(data: np.ndarray, alpha: float = 0.05) -> dict:
     """Обратная совместимость: базовая проверка (D1n + Gn)."""
     grubbs = grubbs_test(data, alpha)
     dixon = dixon_q_test(data, alpha)

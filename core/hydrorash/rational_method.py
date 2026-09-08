@@ -21,8 +21,6 @@ IDF-кривые: i = A × T^m / (t + B)^n
 - check_rational_validity — проверка применимости метода
 """
 
-import numpy as np
-from typing import Dict, List, Optional, Tuple
 
 
 # Параметры IDF по климатическим зонам РФ (СП 33, прил. 5; СН 4357-87)
@@ -80,10 +78,10 @@ def idf_intensity(
     t: float,
     T: float,
     zone: str = 'zone_3',
-    A: Optional[float] = None,
-    B: Optional[float] = None,
-    n: Optional[float] = None,
-    m: Optional[float] = None,
+    A: float | None = None,
+    B: float | None = None,
+    n: float | None = None,
+    m: float | None = None,
 ) -> float:
     """
     Интенсивность дождя по IDF-кривой.
@@ -118,10 +116,10 @@ def idf_intensity(
 
 def idf_curve(
     T: float,
-    durations: Optional[List[float]] = None,
+    durations: list[float] | None = None,
     zone: str = 'zone_3',
     **kwargs,
-) -> Dict:
+) -> dict:
     """
     Построение IDF-кривой для заданной обеспеченности.
 
@@ -153,7 +151,7 @@ def design_rainfall(
     t: float,
     zone: str = 'zone_3',
     **kwargs,
-) -> Dict:
+) -> dict:
     """
     Расчётный дождь (СП 33 п.8.3).
 
@@ -186,7 +184,7 @@ def rational_method(
     alpha: float = 0.7,
     zone: str = 'zone_3',
     **kwargs,
-) -> Dict:
+) -> dict:
     """
     Метод рациона (СП 33 п.8.3).
 
@@ -238,12 +236,13 @@ def time_of_concentration(
     if L <= 0 or I <= 0:
         raise ValueError("Длина русла L и уклон I должны быть положительными")
 
+    L_m = L * 1000.0
     if method == 'kirpich':
-        t_c = 0.0195 * (L ** 0.77) * (I ** (-0.385))
+        t_c = 0.0195 * (L_m ** 0.77) * (I ** (-0.385))
     elif method == 'babuškin':
-        t_c = 0.93 * (L ** 0.57) * (I ** (-0.33))
+        t_c = 0.93 * (L_m ** 0.57) * (I ** (-0.33))
     else:
-        t_c = 0.0195 * (L ** 0.77) * (I ** (-0.385))
+        t_c = 0.0195 * (L_m ** 0.77) * (I ** (-0.385))
 
     return float(t_c)
 
@@ -252,7 +251,7 @@ def check_rational_validity(
     F: float,
     t: float,
     zone: str = 'zone_3',
-) -> Dict:
+) -> dict:
     """
     Проверка применимости метода рациона (СП 33 п.8.3).
 
@@ -278,7 +277,7 @@ def check_rational_validity(
 
     is_valid = True
 
-    if F > F_max:
+    if F_max < F:
         warnings.append(f"Площадь F={F} км² > рекомендуемой ({F_max} км²). Используйте регрессионные уравнения.")
         is_valid = False
 
@@ -297,10 +296,10 @@ def check_rational_validity(
 
 
 def rational_method_catchment(
-    subcatchments: List[Dict],
+    subcatchments: list[dict],
     T: float,
     zone: str = 'zone_3',
-) -> Dict:
+) -> dict:
     """
     Метод рациона для неоднородного бассейна (суммирование по подбассейнам).
 

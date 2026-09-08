@@ -3,37 +3,42 @@ gui/widget_work9.py
 Работа 9 — Гидротехнические расчёты: ППУ, ГВП, регулирование (PyQt6)
 """
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-
-from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_resize_table
-
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTextEdit, QGroupBox, QFormLayout, QLineEdit,
-    QTableWidget, QTableWidgetItem, QComboBox,
-    QDoubleSpinBox, QSpinBox, QFileDialog, QTabWidget, QSplitter
-)
-from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
-
-from core.hydrorash.spillway import (
-    free_overfall, weir_flow, orifice_flow,
-    spillway_capacity_check, emergency_flood_passage
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QGroupBox,
+    QPushButton,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
+
 from core.hydrorash.backwater import (
-    normal_depth, critical_depth, backwater_curve_step,
-    backwater_from_reservoir
+    backwater_from_reservoir,
 )
 from core.hydrorash.reservoir_regulation import (
-    multi_year_regulation, annual_regulation_table,
-    reservoir_storage_calculation
+    annual_regulation_table,
+    multi_year_regulation,
 )
+from core.hydrorash.spillway import (
+    orifice_flow,
+    spillway_capacity_check,
+)
+from gui.plot_style import auto_resize_table
 
 
 class Work9Widget(QWidget):
@@ -246,7 +251,7 @@ class Work9Widget(QWidget):
         if result['is_sufficient']:
             self.sp_result.append(f"✅ Водосброс ПРОПУСКАЕТ паводок (Q={result['Q_capacity_m3_s']:.1f} м³/с)")
         else:
-            self.sp_result.append(f"❌ Водосброс НЕ ПРОПУСКАЕТ паводок!")
+            self.sp_result.append("❌ Водосброс НЕ ПРОПУСКАЕТ паводок!")
         self.sp_result.append(f"Пропускная способность: {result['Q_capacity_m3_s']:.1f} м³/с")
         self.sp_result.append(f"Расчётный расход: {result['Q_design_m3_s']:.1f} м³/с")
         self.sp_result.append(f"Запас: {result['margin_percent']:.1f}%")

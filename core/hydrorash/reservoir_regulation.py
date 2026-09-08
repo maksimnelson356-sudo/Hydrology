@@ -9,15 +9,15 @@ core/hydrorash/reservoir_regulation.py
 - annual_regulation_table — таблица годового регулирования
 """
 
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional
 
 
 def multi_year_regulation(
     Q_annual: np.ndarray,
     demand_m3_s: float,
-) -> Dict:
+) -> dict:
     """
     Многолетнее регулирование стока (метод Риппла / Монте-Карло).
 
@@ -42,7 +42,7 @@ def multi_year_regulation(
     Q_min = float(np.min(Q))
 
     if demand_m3_s > Q_mean:
-        guarantee = max(0, (Q >= demand_m3_s).mean() * 100)
+        guarantee = max(0, (demand_m3_s <= Q).mean() * 100)
         return {
             'required_volume_km3': float('inf'),
             'guarantee_percent': round(guarantee, 1),
@@ -85,7 +85,7 @@ def multi_year_regulation(
 
 def storage_yield_curve(
     Q_annual: np.ndarray,
-    V_range_km3: Optional[List[float]] = None,
+    V_range_km3: list[float] | None = None,
 ) -> pd.DataFrame:
     """
     Кривая «объём водохранилища — обеспеченность водоснабжения».
@@ -112,13 +112,23 @@ def storage_yield_curve(
         V_m3 = V_km3 * 1e9
         V_per_year = V_m3 / (365.25 * 86400)
 
-        max_demand = Q_mean
-        result = multi_year_regulation(Q, max_demand)
+        # Ищем максимальный demand, при котором required_volume <= V_km3
+        best_demand = 0.0
+        step = Q_mean / 100.0
+        for demand_try in np.arange(0.01, Q_mean * 1.01, step):
+            res = multi_year_regulation(Q, demand_try)
+            if res['required_volume_km3'] <= V_km3:
+                best_demand = demand_try
+            else:
+                break
+
+        # Пересчитываем гарантию для найденного demand
+        result = multi_year_regulation(Q, best_demand)
 
         rows.append({
             'V_km3': V_km3,
             'V_per_year_m3_s': round(V_per_year, 2),
-            'Q_max_demand': round(max_demand, 2),
+            'Q_max_demand': round(best_demand, 2),
             'guarantee_%': result['guarantee_percent'],
         })
 
@@ -126,10 +136,10 @@ def storage_yield_curve(
 
 
 def reservoir_storage_calculation(
-    H_list: List[float],
-    A_list: List[float],
+    H_list: list[float],
+    A_list: list[float],
     method: str = 'trapezoid',
-) -> Dict:
+) -> dict:
     """
     Объём водохранилища по данных нивелировки (кривая «уровень-площадь-объём»).
 
@@ -147,7 +157,7 @@ def reservoir_storage_calculation(
 
     V_cumulative = [0.0]
     for i in range(1, len(H)):
-        dV = (A[i - 1] + A[i]) / 2 * (H[i] - H[i - 1])
+        dV = (A[i - 1] + A[i]) / 2 * (H[i] - H[i - 1]) / 1000.0
         V_cumulative.append(V_cumulative[-1] + dV)
 
     df = pd.DataFrame({

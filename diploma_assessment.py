@@ -1,7 +1,8 @@
-from docx import Document
-from docx.shared import Pt, Cm
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 import os
+
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Pt
 
 doc = Document()
 
@@ -59,7 +60,7 @@ doc.add_paragraph()
 doc.add_paragraph()
 title = doc.add_paragraph()
 title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-run = title.add_run('ОЦЕНКА ПРОЕКTA «ГИДРОСТАТИСТИКА 2026»\nДЛЯ ЗАЩИТЫ ДИПЛОМА В РГГМУ')
+run = title.add_run('ОЦЕНКА ПРОЕКTA «HydroSphere»\nДЛЯ ЗАЩИТЫ ДИПЛОМА В РГГМУ')
 run.font.name = 'Times New Roman'
 run.font.size = Pt(16)
 run.bold = True
@@ -84,7 +85,7 @@ doc.add_page_break()
 add_heading_styled('1. Общая характеристика проекта', level=1)
 
 add_para(
-    'Проект «ГидроСтатистика 2026» (hydrolib) — это полноценное гидрологическое\n'
+    'Проект «HydroSphere» (hydrolib) — это полноценное гидрологическое\n'
     'программное обеспечение, разработанное на языке Python с использованием\n'
     'графической библиотеки PyQt6 и научного стека NumPy, SciPy, pandas, matplotlib.'
 )
@@ -173,7 +174,7 @@ add_heading_styled('2. Соответствие требованиям дипл�
 add_heading_styled('2.1. Что проект уже закрывает', level=2)
 
 add_para(
-    'Проект «ГидроСтатистика 2026» демонстрирует следующие компетенции,\n'
+    'Проект «HydroSphere» демонстрирует следующие компетенции,\n'
     'ценные для дипломной работы в РГГМУ:'
 )
 
@@ -318,7 +319,7 @@ add_para(
 add_heading_styled('8. Заключение', level=1)
 
 add_para(
-    'Проект «ГидроСтатистика 2026» (hydrolib) является достаточно зрелым\n'
+    'Проект «HydroSphere» (hydrolib) является достаточно зрелым\n'
     'и комплексным гидрологическим программным обеспечением, которое покрывает\n'
     'большинство основных направлений гидрологических расчётов, используемых в\n'
     'практической гидрологии и гидрометеорологии.\n\n'

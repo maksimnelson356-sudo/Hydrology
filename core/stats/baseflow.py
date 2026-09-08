@@ -9,14 +9,14 @@ core/stats/baseflow.py
 - baseflow_statistics — статистика базового стока
 """
 
+
 import numpy as np
-from typing import Dict, Optional
 
 
 def baseflow_straight_line(
     Q: np.ndarray,
     min_separation: int = 5,
-) -> Dict:
+) -> dict:
     """
     Прямолинейное разделение стока на поверхностный и подземный.
 
@@ -76,7 +76,7 @@ def baseflow_digital_filter(
     alpha: float = 0.925,
     threshold: float = 0.9,
     passes: int = 3,
-) -> Dict:
+) -> dict:
     """
     Цифровой фильтр базового стока ( Boughton, 1968; Eckhardt, 2005).
 
@@ -120,7 +120,7 @@ def baseflow_digital_filter(
 def baseflow_lyne_hollick(
     Q: np.ndarray,
     a: float = 0.97,
-) -> Dict:
+) -> dict:
     """
     Фильтр Лайна-Холлика (1979) — быстрый цифровой фильтр.
 
@@ -158,7 +158,7 @@ def baseflow_lyne_hollick(
 def baseflow_statistics(
     Q: np.ndarray,
     baseflow: np.ndarray,
-) -> Dict:
+) -> dict:
     """
     Статистика базового стока.
 

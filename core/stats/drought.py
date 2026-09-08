@@ -9,15 +9,14 @@ core/stats/drought.py
 - drought_frequency — частота засух
 """
 
+
 import numpy as np
-from scipy import stats
-from typing import Dict, List, Optional
 
 
 def spi_index(
     P: np.ndarray,
     scale: int = 12,
-) -> Dict:
+) -> dict:
     """
     Стандартный индекс осадков (SPI) — McKee et al., 1993.
 
@@ -92,7 +91,7 @@ def spei_index(
     P: np.ndarray,
     PET: np.ndarray,
     scale: int = 12,
-) -> Dict:
+) -> dict:
     """
     Индекс осадков-испарения (SPEI) — Vicente-Serrano et al., 2010.
 
@@ -122,7 +121,7 @@ def spei_index(
     return spi_index(D, scale)
 
 
-def drought_classification(spi_value: float) -> Dict:
+def drought_classification(spi_value: float) -> dict:
     """
     Классификация засухи по SPI (WMO).
 
@@ -176,7 +175,7 @@ def drought_classification(spi_value: float) -> Dict:
 def drought_frequency(
     spi_values: np.ndarray,
     threshold: float = -1.0,
-) -> Dict:
+) -> dict:
     """
     Частота и длительность засух.
 

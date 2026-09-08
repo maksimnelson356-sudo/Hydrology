@@ -3,32 +3,39 @@ gui/widget_work6.py
 Работа 6 — Водный баланс и испарение (PyQt6)
 """
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import numpy as np
-import pandas as pd
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTextEdit, QMessageBox, QGroupBox, QFormLayout,
-    QLineEdit, QTableWidget, QTableWidgetItem, QComboBox, QSplitter
-)
-from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QFormLayout,
+    QGroupBox,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
-from gui.plot_style import auto_resize_table
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
-
+from core.hydrorash.min_runoff_extended import ecosystem_minimum
 from core.hydrorash.water_balance import (
-    water_balance, evaporation_dalton, evaporation_meschersky,
-    pan_evaporation_to_lake, runoff_coefficient, water_budget_coefficient
+    evaporation_dalton,
+    evaporation_meschersky,
+    pan_evaporation_to_lake,
+    runoff_coefficient,
+    water_balance,
+    water_budget_coefficient,
 )
-from core.hydrorash.min_runoff_extended import (
-    ecosystem_minimum, q7_10, compare_minimum_methods
-)
+from gui.plot_style import auto_resize_table
 
 
 class Work6Widget(QWidget):
@@ -160,14 +167,16 @@ class Work6Widget(QWidget):
 
             if self.combo_evap_method.currentText() == "Дальтон":
                 E = evaporation_dalton(T_w, T_a, U)
+                E_monthly = E * 30  # мм/сут → мм/мес
                 method = "Дальтон"
                 unit = "мм/сут"
             else:
-                E = evaporation_meschersky(T_a)
+                E = evaporation_meschersky(T_a, month=7)
+                E_monthly = E  # уже мм/мес
                 method = "Мещерский"
                 unit = "мм/мес"
 
-            E_lake = pan_evaporation_to_lake(E * 30)
+            E_lake = pan_evaporation_to_lake(E_monthly)
 
             self.result_box.clear()
             self.result_box.append(f"=== ИСПАРЕНИЕ ({method}) ===")

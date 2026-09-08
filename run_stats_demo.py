@@ -3,13 +3,11 @@ run_stats_demo.py
 Полноценная демонстрация статистической обработки
 """
 
-import numpy as np
-import pandas as pd
-from core.stats.data_loader import load_hydrological_data, get_series_by_post, get_basic_stats
+from core.stats.data_loader import get_basic_stats, get_series_by_post, load_hydrological_data
 from core.stats.frequency import calculate_frequency_curve, fit_pearson3
 from core.stats.missing_data import detect_missing, fill_missing_interpolation
-from core.stats.report import save_report_to_excel
 from core.stats.parameters import calculate_statistical_parameters
+from core.stats.report import save_report_to_excel
 
 print("=" * 80)
 print("ПОЛНОЦЕННАЯ ДЕМОНСТРАЦИЯ СТАТИСТИЧЕСКОЙ ОБРАБОТКИ")

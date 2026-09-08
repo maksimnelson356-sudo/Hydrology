@@ -3,9 +3,10 @@ run_profile_calc.py
 Простой расчёт кривой Q(H) по морфопрофилю
 """
 
-from core.profile import MorphoProfile, ProfilePoint, PointCode
-from core.hydraulics import calculate_composite_q
 import pandas as pd
+
+from core.hydraulics import calculate_composite_q
+from core.profile import MorphoProfile, PointCode, ProfilePoint
 
 print("=" * 60)
 print("РАСЧЁТ КРИВОЙ Q(H) ПО МОРФОПОФИЛЮ")

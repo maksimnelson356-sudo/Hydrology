@@ -10,16 +10,15 @@ core/stats/flow_duration.py
 - exceedance_probability — вероятность превышения расхода
 """
 
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
-from scipy import stats
 
 
 def flow_duration_curve(
     Q: np.ndarray,
-    exceedance_probs: Optional[List[float]] = None,
-) -> Dict:
+    exceedance_probs: list[float] | None = None,
+) -> dict:
     """
     Построение кривой длительностей (FDC).
 
@@ -64,8 +63,8 @@ def flow_duration_curve(
 
 def fdc_percentiles(
     Q: np.ndarray,
-    percentiles: Optional[List[float]] = None,
-) -> Dict:
+    percentiles: list[float] | None = None,
+) -> dict:
     """
     Перцентили кривой длительностей.
 
@@ -92,7 +91,7 @@ def fdc_percentiles(
 
 def fdc_slope_index(
     Q: np.ndarray,
-) -> Dict:
+) -> dict:
     """
     Показатели формы FDC.
 
@@ -147,7 +146,7 @@ def fdc_slope_index(
 
 def flow_regime_classification(
     Q: np.ndarray,
-) -> Dict:
+) -> dict:
     """
     Классификация режима реки по форме FDC (методинг РГГМУ).
 
@@ -218,7 +217,7 @@ def exceedance_probability(
 def fdc_from_monthly(
     monthly_df: pd.DataFrame,
     q_col: str = 'value',
-) -> Dict:
+) -> dict:
     """
     FDC из месячных данных (для водного баланса и экологии).
 

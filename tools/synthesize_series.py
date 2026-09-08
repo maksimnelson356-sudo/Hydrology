@@ -18,12 +18,12 @@ AR(1)-преобразование нормальной величины чер�
 программы HydroStatCalc (протоколы Статистики.txt, Расчет Nэкв.txt).
 """
 
+
 import numpy as np
 from scipy import stats
-from typing import Optional
 
 
-def ar1_normal(n: int, r1: float, seed: Optional[int] = None) -> np.ndarray:
+def ar1_normal(n: int, r1: float, seed: int | None = None) -> np.ndarray:
     """AR(1)-процесс стандартной нормальной величины с заданным r1."""
     rng = np.random.default_rng(seed)
     eps = rng.normal(size=n)
@@ -64,7 +64,7 @@ def synthesize_series(
     cv: float,
     cs: float,
     r1: float = 0.0,
-    seed: Optional[int] = 42,
+    seed: int | None = 42,
 ) -> np.ndarray:
     """
     Синтез ряда, выборочные статистики которого (mean, cv, cs, r1)

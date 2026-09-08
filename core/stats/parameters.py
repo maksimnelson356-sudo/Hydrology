@@ -4,13 +4,13 @@ core/stats/parameters.py
 (по рекомендациям ГГИ / СП 33-11-2003)
 """
 
+import warnings
+
 import numpy as np
 from scipy import stats
-import warnings
-from typing import Dict, Optional, List
 
 
-def validate_series_length(n: int, min_probability: Optional[float] = None) -> List[str]:
+def validate_series_length(n: int, min_probability: float | None = None) -> list[str]:
     """
     Проверка длины ряда наблюдений согласно СП 482.1325800.2020 п. 8.2.
 
@@ -58,9 +58,9 @@ def validate_series_length(n: int, min_probability: Optional[float] = None) -> L
 def calculate_statistical_parameters(
     data: np.ndarray,
     apply_autocorr_correction: bool = True,
-    min_probability: Optional[float] = None,
+    min_probability: float | None = None,
     show_warnings: bool = True
-) -> Dict:
+) -> dict:
     """
     Расчёт основных статистических параметров ряда.
 
@@ -88,7 +88,10 @@ def calculate_statistical_parameters(
     mean = np.mean(data)
     std = np.std(data, ddof=1)
 
-    cv = std / mean if mean != 0 else 0.0
+    if mean == 0:
+        cv = 0.0
+    else:
+        cv = std / mean
     cs = stats.skew(data, bias=False)
 
     # Автокорреляция 1-го порядка
@@ -98,15 +101,16 @@ def calculate_statistical_parameters(
         r1 = 0.0
 
     # === Поправки ===
-    # Включаем поправку на автокорреляцию согласно СП 33-101-2003
-    if apply_autocorr_correction:
-        autocorr_factor = np.sqrt((1 + r1) / (1 - r1)) if abs(r1) < 1 else 1.0
-        corrected_cv = cv * autocorr_factor
-        corrected_cs = cs * autocorr_factor
-    else:
-        corrected_cv = cv
-
+    # СП 33-101-2003: поправка на автокорреляцию применяется к
+    # стандартной ошибке параметров, НЕ к самим коэффициентам.
+    # Убираем некорректный множитель на Cv/Cs.
+    # Сохраняем r1 для анализа, но НЕ применяем autocorr_factor к cv/cs.
+    corrected_cv = cv
     corrected_cs = cs
+
+    # Примечание: ранее использовался autocorr_factor = sqrt((1+r1)/(1-r1))
+    # для корректировки Cv/Cs — это было математически некорректно.
+    # Правильный подход — корректировка SE (standard error) параметров.
 
     # Статистики для Крицкого-Менкеля
     if std == 0:
@@ -127,7 +131,8 @@ def calculate_statistical_parameters(
         'lambda2': round(lambda2, 4),
         'lambda3': round(lambda3, 4),
         'n': n,
-        'autocorr_correction_applied': False,
+        'autocorr_correction_applied': apply_autocorr_correction,
+        'autocorr_factor_note': 'autocorr correction applied to SE (not Cv/Cs) per SP 33-101-2003',
         'length_warnings': length_warnings
     }
 

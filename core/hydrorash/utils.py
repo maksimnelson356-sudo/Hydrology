@@ -12,18 +12,18 @@ core/hydrorash/utils.py
 - module_layer — расчёт модуля, объёма и слоя стока
 """
 
+
 import numpy as np
 import pandas as pd
-from scipy.stats import pearson3, linregress
-from typing import Dict, List, Optional, Tuple
+from scipy.stats import linregress, pearson3
 
 
 def compute_basic_stats(
     Q: pd.Series,
-    r: Optional[float] = None,
+    r: float | None = None,
     ddof: int = 1,
     use_normative_Cs: bool = True
-) -> Dict:
+) -> dict:
     """
     Расчёт основных статистических характеристик ряда годового стока
     согласно СП 33-101-2003 и СП 529.1325800.2023.
@@ -98,7 +98,7 @@ def compute_basic_stats(
 def linear_regression_reduction(
     Q_calc: pd.Series,
     Q_analog: pd.Series
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Линейная регрессия для приведения ряда к многолетнему периоду.
 
@@ -125,7 +125,7 @@ def linear_regression_reduction(
     }
 
 
-def extend_series(Q_calc: pd.Series, Q_analog: pd.Series, reg: Dict) -> pd.Series:
+def extend_series(Q_calc: pd.Series, Q_analog: pd.Series, reg: dict) -> pd.Series:
     """
     Продление ряда расчётной реки по данным аналога.
 
@@ -168,7 +168,7 @@ def kritsky_menkel_quantiles(
     mean: float,
     Cv: float,
     Cs_over_Cv: float,
-    P_list: Optional[List[float]] = None
+    P_list: list[float] | None = None
 ) -> pd.DataFrame:
     """
     Аналитическая кривая обеспеченностей по методу Крицкого-Менкеля
@@ -194,13 +194,13 @@ def kritsky_menkel_quantiles(
             t = pearson3.ppf(1 - P / 100, skew=Cs, loc=0, scale=1)
         except (ValueError, TypeError):
             t = 0.0
-        kp = 1 + Cv * t
+        kp = max(1.0 + Cv * t, 0.0)
         results.append({"P_%": P, "Φp": t, "kp": kp, "Q_p": mean * kp})
 
     return pd.DataFrame(results)
 
 
-def module_layer(Qmean: float, F: float) -> Dict[str, float]:
+def module_layer(Qmean: float, F: float) -> dict[str, float]:
     """
     Расчёт модуля, объёма и слоя стока.
 

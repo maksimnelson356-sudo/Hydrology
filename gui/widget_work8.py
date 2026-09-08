@@ -3,42 +3,56 @@ gui/widget_work8.py
 Работа 8 — Кривая длительностей FDC, регрессии, продвинутая статистика (PyQt6)
 """
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-
-from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_resize_table
-
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTextEdit, QGroupBox, QFormLayout, QComboBox,
-    QTableWidget, QTableWidgetItem, QDoubleSpinBox, QFileDialog,
-    QTabWidget, QSplitter
-)
-from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
-from scipy import stats
-
-from core.stats.flow_duration import (
-    flow_duration_curve, fdc_percentiles, fdc_slope_index,
-    flow_regime_classification
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
+
 from core.hydrorash.regional_regressions import (
-    mean_annual_runoff, peak_discharge_regression,
-    min_winter_runoff_regression, available_regions
+    available_regions,
+    mean_annual_runoff,
+    min_winter_runoff_regression,
+    peak_discharge_regression,
 )
 from core.stats.advanced_frequency import (
-    mle_pearson3, lmom_pearson3, fit_gev, fit_weibull3,
-    peaks_over_threshold, compare_distributions,
-    qq_plot_data, pp_plot_data, weibull_plotting_position,
-    fit_logpearson3
+    compare_distributions,
+    fit_gev,
+    lmom_pearson3,
+    mle_pearson3,
+    pp_plot_data,
+    qq_plot_data,
 )
-from core.stats.sheet_reader import read_work_sheet, numeric_column
+from core.stats.flow_duration import (
+    fdc_percentiles,
+    fdc_slope_index,
+    flow_duration_curve,
+    flow_regime_classification,
+)
+from core.stats.sheet_reader import numeric_column, read_work_sheet
+from gui.plot_style import auto_resize_table
 
 
 class Work8Widget(QWidget):
@@ -199,7 +213,7 @@ class Work8Widget(QWidget):
             QMessageBox.critical(self, "Ошибка", str(e))
 
     def manual_input_fdc(self):
-        from PyQt6.QtWidgets import QPlainTextEdit, QDialog, QDialogButtonBox
+        from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QPlainTextEdit
         dlg = QDialog(self)
         dlg.setWindowTitle("Ввод данных для FDC")
         dlg.setMinimumSize(350, 250)

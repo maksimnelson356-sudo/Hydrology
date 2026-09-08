@@ -3,18 +3,23 @@ test_sp_compliance.py
 Тестирование исправлений для соответствия СП
 """
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np
-from core.profile import MorphoProfile, ProfilePoint, PointCode
-from core.hydraulics import calculate_composite_q
-from core.stats.parameters import calculate_statistical_parameters, validate_series_length
+
 from core.gts_reference import (
-    GTSClass, get_probabilities_for_class, classify_gts_by_parameters,
-    format_gts_reference_table, get_standard_probabilities
+    GTSClass,
+    classify_gts_by_parameters,
+    format_gts_reference_table,
+    get_probabilities_for_class,
+    get_standard_probabilities,
 )
+from core.hydraulics import calculate_composite_q
+from core.profile import MorphoProfile, PointCode, ProfilePoint
+from core.stats.parameters import calculate_statistical_parameters, validate_series_length
 
 
 def test_compartment_separation():
@@ -207,7 +212,7 @@ def test_gts_reference():
     std_probs = get_standard_probabilities(GTSClass.CLASS_II)
     print(f"Количество точек: {len(std_probs)}")
     print(f"Обеспеченности: {[f'{p*100:.2f}%' for p in std_probs[:8]]}...")
-    print(f"✅ Включены расчетные точки: 0.3% и 95%")
+    print("✅ Включены расчетные точки: 0.3% и 95%")
 
     # Тест 4.4: Форматирование таблицы
     print("\n--- Тест 4.4: Справочная таблица ---")

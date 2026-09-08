@@ -11,9 +11,9 @@ core/short_series.py
 Используется совместно с gui/widget_short.py
 """
 
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Any
 from scipy import stats
 
 from core.stats.series_extension import get_ro_critical
@@ -129,14 +129,14 @@ def fit_analog_relationship(
 def restore_year(
     year: int,
     Q_calc: pd.Series,
-    analogs_data: Dict[str, pd.Series],
-    fits: Dict[str, dict],
-    selected_analogs: List[str],
-    excluded_analogs: Optional[List[str]] = None,
+    analogs_data: dict[str, pd.Series],
+    fits: dict[str, dict],
+    selected_analogs: list[str],
+    excluded_analogs: list[str] | None = None,
     min_analogs: int = 5,
     exclude_negative: bool = True,
     z_limit: float = 3.0,
-) -> Optional[dict]:
+) -> dict | None:
     """
     Восстановление значения за один пропущенный год.
 
@@ -240,13 +240,13 @@ def restore_year(
 
 def restore_short_series(
     Q_calc: pd.Series,
-    analogs: Dict[str, pd.Series],
-    selected_analogs: List[str],
+    analogs: dict[str, pd.Series],
+    selected_analogs: list[str],
     min_analogs: int = 5,
     use_single_solution: bool = True,
     use_module_conversion: bool = False,
-    areas: Optional[Dict[str, float]] = None,
-    excluded_analogs: Optional[List[str]] = None,
+    areas: dict[str, float] | None = None,
+    excluded_analogs: list[str] | None = None,
     alpha: float = 0.05,
 ) -> dict:
     """

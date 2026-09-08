@@ -1,11 +1,13 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Тестирование граничных случаев и потенциальных проблем"""
 import sys
+
 sys.path.insert(0, '.')
+import warnings
+
 import numpy as np
 import pandas as pd
-import warnings
+
 warnings.filterwarnings('ignore')
 
 print('=' * 70)
@@ -26,7 +28,7 @@ def check(name, condition, msg=''):
 # =============================================
 print()
 print('=== 1. short_series.py ===')
-from core.short_series import restore_short_series, fit_analog_relationship
+from core.short_series import restore_short_series
 
 # Мало данных
 check('short_1_year',
@@ -73,7 +75,7 @@ check('stat_n4', stationarity_test(np.array([10, 20, 30, 40]))['is_stationary'] 
 # =============================================
 print()
 print('=== 3. frequency.py ===')
-from core.stats.frequency import calculate_frequency_curve, auto_select_cs_cv, pearson3_ppf
+from core.stats.frequency import auto_select_cs_cv, calculate_frequency_curve, pearson3_ppf
 
 # Мало данных
 check('freq_n5', len(calculate_frequency_curve(np.array([1,2,3,4,5]))) > 0, 'n=5 should work')
@@ -95,7 +97,7 @@ check('auto_cs_cv_n5', auto_select_cs_cv(np.array([1,2,3,4,5]))['cs_cv_optimal']
 # =============================================
 print()
 print('=== 4. series_extension.py ===')
-from core.stats.series_extension import validate_correlation, regression_extension, compute_integral_curves
+from core.stats.series_extension import compute_integral_curves, validate_correlation
 
 # Мало данных
 check('validate_n3', validate_correlation(pd.Series([1,2,3]), pd.Series([1,2,3]))['R'] is not None, 'n=3 should work')
@@ -129,7 +131,8 @@ print()
 print('=== 6. Logic checks ===')
 
 # Pearson3 vs Kritsky-Menkel: одинаковые ли результаты при Cs=0?
-from core.stats.frequency import pearson3_ppf, kritsky_menkel_ppf
+from core.stats.frequency import kritsky_menkel_ppf, pearson3_ppf
+
 p = np.array([0.01, 0.05, 0.5, 0.95, 0.99])
 q_p3 = pearson3_ppf(p, 100, 0.2, 0)
 q_km = kritsky_menkel_ppf(p, 100, 0.2, 0)

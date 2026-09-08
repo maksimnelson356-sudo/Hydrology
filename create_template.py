@@ -1,14 +1,15 @@
 """
 create_template.py
-Генерация единого Excel-шаблона для ГидроСтатистика 2026.
+Генерация единого Excel-шаблона для HydroSphere.
 
 Запуск:  python create_template.py
 Результат: шаблон_данных.xlsx
 """
 
+from datetime import datetime, timedelta
+
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
 
 np.random.seed(42)
 

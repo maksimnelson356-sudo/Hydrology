@@ -3,37 +3,44 @@ gui/widget_work7.py
 Работа 7 — Метод рациона, IDF, паводочная кривая, снеготаяние (PyQt6)
 """
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-
-from gui.plot_style import apply_global_style, setup_axes_style, COLORS
-
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTextEdit, QGroupBox, QFormLayout, QLineEdit,
-    QTableWidget, QTableWidgetItem, QComboBox, QTabWidget,
-    QDoubleSpinBox, QSpinBox, QSplitter
-)
-from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
-
-from core.hydrorash.rational_method import (
-    rational_method, idf_curve, design_rainfall,
-    time_of_concentration, check_rational_validity,
-    IDF_ZONES, ZONE_RUNOFF_COEFFICIENTS
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QPushButton,
+    QSpinBox,
+    QSplitter,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
+
 from core.hydrorash.flood_hydrograph import (
-    triangular_hydrograph, gamma_hydrograph,
-    unit_hydrograph, flood_volume
+    flood_volume,
+    gamma_hydrograph,
+    triangular_hydrograph,
+)
+from core.hydrorash.rational_method import (
+    IDF_ZONES,
+    check_rational_validity,
+    idf_curve,
+    rational_method,
 )
 from core.hydrorash.snowmelt import (
-    snowmelt_degree_day, snowmelt_peak_runoff,
-    melt_rate_by_zone, MELT_COEFFICIENTS
+    MELT_COEFFICIENTS,
+    snowmelt_degree_day,
 )
 
 

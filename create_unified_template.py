@@ -24,7 +24,7 @@ import sys
 
 import pandas as pd
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 # Windows-консоль cp1251 не умеет кодировать эмодзи (✅) в print.
 # Перенаправляем stdout в UTF-8, чтобы скрипт не падал в конце.

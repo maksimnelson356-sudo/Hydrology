@@ -16,9 +16,8 @@ core/hydrorash/snowmelt.py
 - snowmelt_hydrograph — гидрограф таяния
 """
 
-import numpy as np
-from typing import Dict, List, Optional
 
+import numpy as np
 
 # Степень таяния по климатическим зонам (мм/сутки при T=+10°С)
 # A = M / T_air, где M — мм/сутки при среднесуточной T
@@ -51,7 +50,7 @@ def snow_water_equivalent(
     Returns:
         Запас воды в снеге, мм
     """
-    return float(H_snow * rho_snow / 1000)
+    return float(H_snow * rho_snow / 100)
 
 
 def melt_rate_by_zone(
@@ -84,7 +83,7 @@ def snowmelt_degree_day(
     albedo: float = 0.3,
     net_coeff: float = 0.85,
     dt_days: float = 1.0,
-) -> Dict:
+) -> dict:
     """
     Градусно-суточный метод расчёта таяния снега (СП 33 п.8.1).
 
@@ -139,7 +138,7 @@ def snowmelt_balance(
     T_air: float,
     A: float = 3.5,
     days: int = 30,
-) -> Dict:
+) -> dict:
     """
     Снеговой баланс бассейна за период таяния.
 
@@ -177,7 +176,7 @@ def snowmelt_peak_runoff(
     T_peak_temp: float = 10.0,
     concentration_time_h: float = 24.0,
     alpha: float = 0.7,
-) -> Dict:
+) -> dict:
     """
     Максимальный расход талых вод (СП 33 п.8.1).
 
@@ -202,7 +201,7 @@ def snowmelt_peak_runoff(
     if M * 10 > W:
         M = W / 10
 
-    Q_peak = (M * F_km2 * alpha) / (3.6 * concentration_time_h)
+    Q_peak = (M / 24.0 * F_km2 * alpha) / (3.6 * concentration_time_h)
 
     return {
         'Q_peak_m3_s': round(float(Q_peak), 2),
@@ -221,7 +220,7 @@ def snowmelt_hydrograph(
     alpha: float = 0.7,
     concentration_time_h: float = 24.0,
     dt_days: float = 1.0,
-) -> Dict:
+) -> dict:
     """
     Гидрограф таяния снега.
 
@@ -250,7 +249,7 @@ def snowmelt_hydrograph(
         if T > 0 and W > 0:
             melt = A * T * dt_days
             melt = min(melt, W)
-            Q = (melt * F_km2 * alpha) / (3.6 * concentration_time_h)
+            Q = (melt / 24.0 * F_km2 * alpha) / (3.6 * concentration_time_h)
             W -= melt
         else:
             melt = 0

@@ -4,12 +4,13 @@ core/profile.py
 """
 
 from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
+from enum import IntEnum
+
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass, field
-from typing import List, Optional, Dict
-from enum import IntEnum
-import math
 
 
 class PointCode(IntEnum):
@@ -24,17 +25,17 @@ class ProfilePoint:
     b: float
     h: float
     code: PointCode = PointCode.NORMAL
-    n: Optional[float] = None
-    alpha_deg: Optional[float] = None
+    n: float | None = None
+    alpha_deg: float | None = None
 
 
 @dataclass
 class MorphoProfile:
     name: str = "Профиль 1"
-    points: List[ProfilePoint] = field(default_factory=list)
-    thalweg_h: Optional[float] = None
-    left_poyma_bound_b: Optional[float] = None
-    right_poyma_bound_b: Optional[float] = None
+    points: list[ProfilePoint] = field(default_factory=list)
+    thalweg_h: float | None = None
+    left_poyma_bound_b: float | None = None
+    right_poyma_bound_b: float | None = None
     slope_i: float = 0.0001
     n_ruslo: float = 0.025
     n_left: float = 0.035
@@ -65,8 +66,8 @@ class MorphoProfile:
                 self.right_poyma_bound_b = sorted_bounds[-1].b
 
     @classmethod
-    def from_excel(cls, filepath: str, sheet_name=0, 
-                   col_b='B', col_h='H', col_code='Код', 
+    def from_excel(cls, filepath: str, sheet_name=0,
+                   col_b='B', col_h='H', col_code='Код',
                    col_n='n', col_alpha='alpha', profile_name=None):
         df = pd.read_excel(filepath, sheet_name=sheet_name)
         points = []
@@ -87,7 +88,7 @@ class MorphoProfile:
     def get_sorted_points(self):
         return sorted(self.points, key=lambda p: p.b)
 
-    def compute_geometry_at_h(self, h: float) -> Dict[str, float]:
+    def compute_geometry_at_h(self, h: float) -> dict[str, float]:
         """
         Расчёт площади живого сечения (ω), ширины поверхности (B)
         и смоченного периметра (χ) при заданном уровне воды h.
@@ -165,7 +166,7 @@ class MorphoProfile:
             'h': round(h, 2)
         }
 
-    def get_geometry_by_compartments(self, h: float) -> Dict[str, Dict]:
+    def get_geometry_by_compartments(self, h: float) -> dict[str, dict]:
         """
         РЕАЛЬНОЕ разделение на отсеки по границам поймы.
         Согласно СП 33-101-2003 п. 7.4 разделяем на:
@@ -203,7 +204,7 @@ class MorphoProfile:
             'right_poyma': right_poyma
         }
 
-    def _compute_compartment_geometry(self, h: float, b_start: float, b_end: float) -> Dict[str, float]:
+    def _compute_compartment_geometry(self, h: float, b_start: float, b_end: float) -> dict[str, float]:
         """
         Расчет геометрических характеристик для отсека между b_start и b_end.
         """

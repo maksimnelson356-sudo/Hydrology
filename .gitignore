@@ -15,3 +15,7 @@ Thumbs.db
 !unified_template.xlsx
 *.docx
 data/
+venv/
+.venv/
+installer_output/
+*.spec

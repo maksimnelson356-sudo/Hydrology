@@ -1,11 +1,13 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Комплексное тестирование всех функций"""
 import sys
+
 sys.path.insert(0, '.')
+import warnings
+
 import numpy as np
 import pandas as pd
-import warnings
+
 warnings.filterwarnings('ignore')
 
 print('=' * 70)
@@ -16,7 +18,7 @@ errors = []
 passed = 0
 failed = 0
 
-def test(name, func):
+def run_test(name, func):
     global passed, failed
     try:
         func()
@@ -33,9 +35,12 @@ def test(name, func):
 print()
 print('=== 1. short_series.py ===')
 from core.short_series import (
-    fit_analog_relationship, restore_year, restore_short_series,
-    build_protocol, convert_to_module_flow, convert_from_module_flow
+    build_protocol,
+    convert_from_module_flow,
+    convert_to_module_flow,
+    restore_short_series,
 )
+
 
 def test_short_basic():
     np.random.seed(42)
@@ -47,7 +52,7 @@ def test_short_basic():
     assert result['n_restored'] > 0, 'No years restored'
     assert result['n_restored'] == len(result['missing_years']), 'Missing years mismatch'
 
-test('short_basic', test_short_basic)
+run_test('short_basic', test_short_basic)
 
 def test_short_protocol():
     np.random.seed(42)
@@ -58,7 +63,7 @@ def test_short_protocol():
     protocol = build_protocol(result)
     assert 'restore' in protocol.lower() or len(protocol) > 100, 'Protocol too short'
 
-test('short_protocol', test_short_protocol)
+run_test('short_protocol', test_short_protocol)
 
 def test_short_module_flow():
     Q = pd.Series([10.0, 20.0], index=[2000, 2001])
@@ -66,7 +71,7 @@ def test_short_module_flow():
     Q_back = convert_from_module_flow(q, F=500.0)
     assert abs(Q_back.iloc[0] - 10.0) < 0.01, 'Module flow conversion error'
 
-test('short_module_flow', test_short_module_flow)
+run_test('short_module_flow', test_short_module_flow)
 
 # =============================================
 # 2. HOMOGENEITY
@@ -74,9 +79,14 @@ test('short_module_flow', test_short_module_flow)
 print()
 print('=== 2. homogeneity.py ===')
 from core.stats.homogeneity import (
-    check_homogeneity_full, batch_homogeneity_check, stationarity_test,
-    grubbs_test, dixon_q_test, check_homogeneity
+    batch_homogeneity_check,
+    check_homogeneity,
+    check_homogeneity_full,
+    dixon_q_test,
+    grubbs_test,
+    stationarity_test,
 )
+
 
 def test_homogeneity_clean():
     np.random.seed(42)
@@ -85,7 +95,7 @@ def test_homogeneity_clean():
     assert r['n'] == 30, f'Wrong n: {r["n"]}'
     assert len(r['criteria']) == 7, f'Wrong criteria count: {len(r["criteria"])}'
 
-test('homogeneity_clean', test_homogeneity_clean)
+run_test('homogeneity_clean', test_homogeneity_clean)
 
 def test_homogeneity_outlier():
     np.random.seed(42)
@@ -94,7 +104,7 @@ def test_homogeneity_outlier():
     r = check_homogeneity_full(data, alpha=0.05)
     assert r['n_heterogeneous'] > 0, 'Outlier not detected'
 
-test('homogeneity_outlier', test_homogeneity_outlier)
+run_test('homogeneity_outlier', test_homogeneity_outlier)
 
 def test_homogeneity_batch():
     np.random.seed(42)
@@ -102,7 +112,7 @@ def test_homogeneity_batch():
     batch = batch_homogeneity_check(data, alpha=0.05, min_length=20)
     assert len(batch) == 4, f'Wrong batch count: {len(batch)}'
 
-test('homogeneity_batch', test_homogeneity_batch)
+run_test('homogeneity_batch', test_homogeneity_batch)
 
 def test_stationarity():
     np.random.seed(42)
@@ -112,7 +122,7 @@ def test_stationarity():
     assert 'f_test' in r, 'No f_test'
     assert 'is_stationary' in r, 'No is_stationary'
 
-test('stationarity', test_stationarity)
+run_test('stationarity', test_stationarity)
 
 def test_homogeneity_compat():
     np.random.seed(42)
@@ -124,7 +134,7 @@ def test_homogeneity_compat():
     assert 'Q' in d, 'No Q in dixon'
     assert 'is_homogeneous' in old, 'No is_homogeneous'
 
-test('homogeneity_compat', test_homogeneity_compat)
+run_test('homogeneity_compat', test_homogeneity_compat)
 
 # =============================================
 # 3. FREQUENCY
@@ -132,9 +142,14 @@ test('homogeneity_compat', test_homogeneity_compat)
 print()
 print('=== 3. frequency.py ===')
 from core.stats.frequency import (
-    calculate_frequency_curve, auto_select_cs_cv, pearson3_ppf,
-    kritsky_menkel_ppf, HistoricalExtreme, compute_params_with_extremes
+    HistoricalExtreme,
+    auto_select_cs_cv,
+    calculate_frequency_curve,
+    compute_params_with_extremes,
+    kritsky_menkel_ppf,
+    pearson3_ppf,
 )
+
 
 def test_frequency_types():
     np.random.seed(42)
@@ -144,7 +159,7 @@ def test_frequency_types():
         assert 'P_%' in df.columns, f'Missing P_% in {ct}'
         assert 'Q' in df.columns, f'Missing Q in {ct}'
 
-test('frequency_types', test_frequency_types)
+run_test('frequency_types', test_frequency_types)
 
 def test_auto_cs_cv():
     np.random.seed(42)
@@ -153,7 +168,7 @@ def test_auto_cs_cv():
     assert r['cs_cv_optimal'] is not None, 'Cs/Cv not found'
     assert r['ss_min'] < float('inf'), 'SS not finite'
 
-test('auto_cs_cv', test_auto_cs_cv)
+run_test('auto_cs_cv', test_auto_cs_cv)
 
 def test_pearson3_ppf():
     p = np.array([0.01, 0.05, 0.5, 0.95, 0.99])
@@ -161,14 +176,14 @@ def test_pearson3_ppf():
     assert len(q) == 5, f'Wrong length: {len(q)}'
     assert q[0] > q[4], 'Monotonicity violated'
 
-test('pearson3_ppf', test_pearson3_ppf)
+run_test('pearson3_ppf', test_pearson3_ppf)
 
 def test_kritsky_menkel_ppf():
     p = np.array([0.01, 0.05, 0.5, 0.95, 0.99])
     q = kritsky_menkel_ppf(p, 100, 0.2, 0.5)
     assert len(q) == 5, f'Wrong length: {len(q)}'
 
-test('kritsky_menkel_ppf', test_kritsky_menkel_ppf)
+run_test('kritsky_menkel_ppf', test_kritsky_menkel_ppf)
 
 def test_historical_extremes():
     np.random.seed(42)
@@ -177,7 +192,7 @@ def test_historical_extremes():
     r = compute_params_with_extremes(data, ext, is_max=True)
     assert r['mean_corrected'] > r['mean_raw'], 'Mean not increased'
 
-test('historical_extremes', test_historical_extremes)
+run_test('historical_extremes', test_historical_extremes)
 
 # =============================================
 # 4. SERIES_EXTENSION
@@ -185,15 +200,18 @@ test('historical_extremes', test_historical_extremes)
 print()
 print('=== 4. series_extension.py ===')
 from core.stats.series_extension import (
-    get_ro_critical, validate_correlation, regression_extension,
-    proportional_extension, compute_integral_curves
+    compute_integral_curves,
+    get_ro_critical,
+    regression_extension,
+    validate_correlation,
 )
+
 
 def test_ro_critical():
     ro = get_ro_critical(20, 0.05)
     assert 0 < ro < 1, f'Wrong Ro: {ro}'
 
-test('ro_critical', test_ro_critical)
+run_test('ro_critical', test_ro_critical)
 
 def test_validate_correlation():
     np.random.seed(42)
@@ -203,7 +221,7 @@ def test_validate_correlation():
     assert 'R' in r, 'No R'
     assert 'is_significant' in r, 'No is_significant'
 
-test('validate_correlation', test_validate_correlation)
+run_test('validate_correlation', test_validate_correlation)
 
 def test_regression():
     np.random.seed(42)
@@ -212,7 +230,7 @@ def test_regression():
     r = regression_extension(Q_calc, Q_analog)
     assert 'extended_series' in r, 'No extended_series'
 
-test('regression', test_regression)
+run_test('regression', test_regression)
 
 def test_integral_curves():
     np.random.seed(42)
@@ -222,7 +240,7 @@ def test_integral_curves():
     assert 'diff_integral_curve' in r, 'No diff_integral_curve'
     assert len(r['integral_curve']) == len(data), 'Wrong length'
 
-test('integral_curves', test_integral_curves)
+run_test('integral_curves', test_integral_curves)
 
 # =============================================
 # 5. COMPOSITE_CURVES
@@ -230,10 +248,13 @@ test('integral_curves', test_integral_curves)
 print()
 print('=== 5. composite_curves.py ===')
 from core.stats.composite_curves import (
+    compute_composite_curve,
     compute_composite_curve_rodzhestvensky,
-    find_change_point, test_homogeneity_two_parts,
-    compute_part_stats, compute_composite_curve
+    compute_part_stats,
+    find_change_point,
+    homogeneity_two_parts,
 )
+
 
 def test_rodzhestvensky():
     np.random.seed(42)
@@ -243,7 +264,7 @@ def test_rodzhestvensky():
     assert 'error' not in r, f'Error: {r.get("error")}'
     assert r['total_years'] == 35, f'Wrong N: {r["total_years"]}'
 
-test('rodzhestvensky', test_rodzhestvensky)
+run_test('rodzhestvensky', test_rodzhestvensky)
 
 def test_change_point():
     np.random.seed(42)
@@ -251,15 +272,15 @@ def test_change_point():
     r = find_change_point(data)
     assert 'change_year' in r, 'No change_year'
 
-test('change_point', test_change_point)
+run_test('change_point', test_change_point)
 
 def test_homogeneity_two_parts_func():
     np.random.seed(42)
     data = np.concatenate([np.random.normal(100, 10, 20), np.random.normal(120, 10, 20)])
-    r = test_homogeneity_two_parts(data[:20], data[20:])
+    r = homogeneity_two_parts(data[:20], data[20:])
     assert 'is_homogeneous' in r, 'No is_homogeneous'
 
-test('homogeneity_two_parts', test_homogeneity_two_parts_func)
+run_test('homogeneity_two_parts', test_homogeneity_two_parts_func)
 
 def test_part_stats():
     np.random.seed(42)
@@ -268,7 +289,7 @@ def test_part_stats():
     assert r['n'] == 20, f'Wrong n: {r["n"]}'
     assert r['mean'] > 0, f'Wrong mean: {r["mean"]}'
 
-test('part_stats', test_part_stats)
+run_test('part_stats', test_part_stats)
 
 def test_composite_old():
     np.random.seed(42)
@@ -277,7 +298,7 @@ def test_composite_old():
     r = compute_composite_curve(values, years, break_year=15)
     assert 'curve_df' in r, 'No curve_df'
 
-test('composite_old', test_composite_old)
+run_test('composite_old', test_composite_old)
 
 # =============================================
 # 6. PARAMETERS
@@ -285,6 +306,7 @@ test('composite_old', test_composite_old)
 print()
 print('=== 6. parameters.py ===')
 from core.stats.parameters import calculate_statistical_parameters
+
 
 def test_parameters():
     np.random.seed(42)
@@ -294,7 +316,7 @@ def test_parameters():
     assert abs(p['mean'] - 100) < 5, f'Wrong mean: {p["mean"]}'
     assert 0 < p['cv'] < 1, f'Wrong cv: {p["cv"]}'
 
-test('parameters', test_parameters)
+run_test('parameters', test_parameters)
 
 # =============================================
 # 7. COMPLEX INTEGRATION
@@ -324,7 +346,7 @@ def test_complex():
     cat2 = {'data': data[data <= data.median()].values, 'name': 'Low'}
     r_comp = compute_composite_curve_rodzhestvensky([cat1, cat2])
 
-test('complex', test_complex)
+run_test('complex', test_complex)
 
 # =============================================
 # RESULTS

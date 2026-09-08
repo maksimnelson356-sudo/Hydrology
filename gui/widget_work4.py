@@ -3,34 +3,50 @@ gui/widget_work4.py
 Работа 4 — Максимальный сток (паводки) (PyQt6)
 """
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-
-from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_resize_table
-
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTextEdit, QFileDialog, QMessageBox, QGroupBox, QFormLayout,
-    QLineEdit, QTableWidget, QTableWidgetItem, QComboBox, QTabWidget,
-    QPlainTextEdit, QDialog, QDialogButtonBox, QSplitter
-)
-from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 from scipy import stats
 
 from core.hydrorash.max_runoff import (
-    extract_max_annual, compute_max_runoff_stats,
-    max_runoff_frequency_curve, index_year_method,
-    build_rating_curve, discharge_from_level, level_from_discharge
+    build_rating_curve,
+    compute_max_runoff_stats,
+    discharge_from_level,
+    extract_max_annual,
+    index_year_method,
+    max_runoff_frequency_curve,
 )
-from core.stats.frequency import pearson3_ppf, empirical_plotting_positions
-from core.stats.sheet_reader import read_work_sheet, clean_column_name
+from core.stats.frequency import empirical_plotting_positions, pearson3_ppf
+from core.stats.sheet_reader import clean_column_name, read_work_sheet
+from gui.plot_style import auto_resize_table
 
 
 class Work4Widget(QWidget):

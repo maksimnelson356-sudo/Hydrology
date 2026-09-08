@@ -5,16 +5,17 @@ core/hydrorash/minimal_runoff.py
 Перенесено из HydroRash с адаптацией под hydrolib.
 """
 
-import pandas as pd
+
 import numpy as np
-from typing import Dict, List, Optional, Tuple
+import pandas as pd
+
 from .utils import compute_basic_stats, kritsky_menkel_quantiles
 
 
 def prepare_minimal_series(
     winter_minimals: pd.Series,
     summer_minimals: pd.Series
-) -> Dict[str, pd.Series]:
+) -> dict[str, pd.Series]:
     """Подготовка рядов минимальных расходов (зима/лето)."""
     return {
         "зима": winter_minimals.dropna(),
@@ -23,8 +24,8 @@ def prepare_minimal_series(
 
 
 def compute_minimal_stats(
-    minimal_series: Dict[str, pd.Series]
-) -> Dict[str, Dict[str, float]]:
+    minimal_series: dict[str, pd.Series]
+) -> dict[str, dict[str, float]]:
     """Расчёт характеристик минимальных расходов (отдельно зима/лето)."""
     stats = {}
 
@@ -53,9 +54,9 @@ def compute_minimal_stats(
 
 
 def calculate_probability_curves(
-    stats: Dict[str, Dict[str, float]],
-    P_values: Optional[List[float]] = None
-) -> Dict[str, pd.DataFrame]:
+    stats: dict[str, dict[str, float]],
+    P_values: list[float] | None = None
+) -> dict[str, pd.DataFrame]:
     """
     Расчёт аналитических кривых обеспеченностей минимальных расходов
     по методу Крицкого-Менкеля (СП 33-101-2003, раздел 7).
@@ -86,8 +87,8 @@ def calculate_probability_curves(
 def proportional_method(
     short_series: pd.Series,
     analog_series: pd.Series,
-    analog_stats: Dict[str, float],
-    P_values: Optional[List[float]] = None
+    analog_stats: dict[str, float],
+    P_values: list[float] | None = None
 ) -> pd.DataFrame:
     """
     Метод пропорций для коротких рядов (n < 6).
@@ -127,14 +128,14 @@ def proportional_method(
 
 
 def compare_methods(
-    statistical_q: Dict[float, float],
+    statistical_q: dict[float, float],
     proportional_q: pd.DataFrame
 ) -> pd.DataFrame:
     """Сравнение статистического и пропорционального методов."""
     comparison = []
 
     for P in proportional_q["P_%"]:
-        stat_val = statistical_q.get(P, None)
+        stat_val = statistical_q.get(P)
         prop_val = proportional_q[proportional_q["P_%"] == P]["Q_p (пропорции)"].values[0]
 
         diff = None

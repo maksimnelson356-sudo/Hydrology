@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Полный тест на реальных данных"""
 import sys
+
 sys.path.insert(0, '.')
 import numpy as np
 import pandas as pd
@@ -11,23 +11,43 @@ print('ПОЛНЫЙ ТЕСТ НА РЕАЛЬНЫХ ДАННЫХ')
 print('=' * 60)
 
 # Загрузка данных из 1122.txt
+import os
+
 print()
 print('--- Данные: 1122.txt (4 поста, 12 лет) ---')
 # Читаем вручную, т.к. формат нестандартный
 lines = []
-with open(r'D:\!Учеба\ForFor\Данные\1122.txt', 'r', encoding='utf-8') as f:
-    for line in f:
-        line = line.strip()
-        if not line or 'Год' in line:
-            continue
-        parts = line.split('\t')
-        if len(parts) >= 2:
-            try:
-                year = int(parts[0])
-                vals = [float(x) if x.strip() else np.nan for x in parts[1:5]]
-                lines.append([year] + vals)
-            except:
-                continue
+# Попробуем найти файл в нескольких местах
+test_data_paths = [
+    r'D:\!Учеба\ForFor\Данные\1122.txt',
+    'data/1122.txt',
+    'test_data/1122.txt',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', '1122.txt'),
+]
+data_found = False
+for data_path in test_data_paths:
+    if os.path.exists(data_path):
+        print(f'Using data file: {data_path}')
+        with open(data_path, encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or 'Год' in line:
+                    continue
+                parts = line.split('\t')
+                if len(parts) >= 2:
+                    try:
+                        year = int(parts[0])
+                        vals = [float(x) if x.strip() else np.nan for x in parts[1:5]]
+                        lines.append([year] + vals)
+                    except Exception:
+                        continue
+        data_found = True
+        break
+
+if not data_found:
+    print('TEST SKIPPED: data file 1122.txt not found.')
+    print(f'  Looked in: {", ".join(test_data_paths)}')
+    sys.exit(0)
 
 df = pd.DataFrame(lines, columns=['Годы', '10001', '10002', '10003', '10004'])
 print(df.to_string(index=False))
@@ -43,6 +63,7 @@ for col in df.columns[1:]:
 print()
 print('=== Тест 1: Базовая статистика ===')
 from core.stats.parameters import calculate_statistical_parameters
+
 for name, series in posts.items():
     params = calculate_statistical_parameters(series.values)
     print(f'  {name}: Qsr={params["mean"]:.2f}, Cv={params["cv"]:.4f}, Cs={params["cs"]:.4f}')
@@ -51,6 +72,7 @@ for name, series in posts.items():
 print()
 print('=== Тест 2: Кривые обеспеченности ===')
 from core.stats.frequency import calculate_frequency_curve
+
 main_post = list(posts.values())[0]
 for ct in ['pearson3', 'kritsky_menkel', 'normal', 'piecewise']:
     df_curve = calculate_frequency_curve(main_post.values, curve_type=ct)
@@ -62,6 +84,7 @@ for ct in ['pearson3', 'kritsky_menkel', 'normal', 'piecewise']:
 print()
 print('=== Тест 3: Автоподбор Cs/Cv ===')
 from core.stats.frequency import auto_select_cs_cv
+
 result_cs = auto_select_cs_cv(main_post.values, curve_type='pearson3')
 print(f'  Opt Cs/Cv = {result_cs["cs_cv_optimal"]}')
 print(f'  Cv = {result_cs["cv"]:.4f}')
@@ -71,6 +94,7 @@ print(f'  Cs = {result_cs["cs_optimal"]:.4f}')
 print()
 print('=== Тест 4: Однородность (12 критериев) ===')
 from core.stats.homogeneity import check_homogeneity_full
+
 r_homo = check_homogeneity_full(main_post.values, alpha=0.05)
 print(f'  n={r_homo["n"]}, Cs={r_homo["cs"]:.3f}, r1={r_homo["r1"]:.3f}')
 print(f'  Homogeneous: {r_homo["is_homogeneous"]} ({r_homo["n_heterogeneous"]}/7 rejected)')
@@ -82,6 +106,7 @@ for name, c in r_homo['criteria'].items():
 print()
 print('=== Тест 5: Stationarity ===')
 from core.stats.homogeneity import stationarity_test
+
 years = main_post.index.values
 r_stat = stationarity_test(main_post.values, years=years)
 print(f'  t-test: t={r_stat["t_test"]["t_stat"]:.4f} -> {"REJECT" if r_stat["t_test"]["significant"] else "OK"}')
@@ -92,6 +117,7 @@ print(f'  Stationary: {r_stat["is_stationary"]}')
 print()
 print('=== Тест 6: Integral curve ===')
 from core.stats.series_extension import compute_integral_curves
+
 r_int = compute_integral_curves(main_post)
 print(f'  Mean: {r_int["mean"]:.2f}, Cv: {r_int["cv"]:.4f}')
 print(f'  Breakpoints: {r_int["breakpoints"][:5]}...')
@@ -100,6 +126,7 @@ print(f'  Breakpoints: {r_int["breakpoints"][:5]}...')
 print()
 print('=== Tест 7: Short (short series) ===')
 from core.short_series import restore_short_series
+
 short_series = main_post.iloc[:4]
 analog_series = {name: series for name, series in posts.items() if name != list(posts.keys())[0]}
 if len(analog_series) >= 2:
@@ -113,6 +140,7 @@ if len(analog_series) >= 2:
 print()
 print('=== Tест 8: Historical extremes ===')
 from core.stats.frequency import HistoricalExtreme, compute_params_with_extremes
+
 extremes = [HistoricalExtreme(year=1950, value=180, period=100),
             HistoricalExtreme(year=1920, value=170, period=80)]
 r_ext = compute_params_with_extremes(main_post.values, extremes, is_max=True)
@@ -123,6 +151,7 @@ print(f'  With extremes: mean={r_ext["mean_corrected"]:.2f}, cv={r_ext["cv_corre
 print()
 print('=== Tест 9: Composite curve ===')
 from core.stats.composite_curves import compute_composite_curve_rodzhestvensky
+
 median_val = main_post.median()
 cat_high = {'data': main_post[main_post >= median_val].values, 'name': 'High'}
 cat_low = {'data': main_post[main_post < median_val].values, 'name': 'Low'}

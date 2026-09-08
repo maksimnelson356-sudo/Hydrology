@@ -19,19 +19,18 @@ core/stats/composite_curves.py
   Рождественский осредняет ВЕРОЯТНОСТИ, а не квантили.
 """
 
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
 from scipy import stats
 
-from core.stats.frequency import pearson3_ppf, kritsky_menkel_ppf
-
+from core.stats.frequency import kritsky_menkel_ppf, pearson3_ppf
 
 # ============================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ============================================================
 
-def compute_category_stats(data: np.ndarray) -> Dict:
+def compute_category_stats(data: np.ndarray) -> dict:
     """Расчёт параметров для одной категории."""
     data = np.asarray(data, dtype=float)
     data = data[~np.isnan(data)]
@@ -82,11 +81,11 @@ def _interpolate_probability(
 # ============================================================
 
 def compute_composite_curve_rodzhestvensky(
-    categories: List[Dict],
-    Q_grid: Optional[np.ndarray] = None,
+    categories: list[dict],
+    Q_grid: np.ndarray | None = None,
     curve_type: str = 'pearson3',
-    P_range: Optional[tuple] = None,
-) -> Dict:
+    P_range: tuple | None = None,
+) -> dict:
     """
     Построение составной кривой по методике Рождественского.
 
@@ -219,21 +218,23 @@ def compute_composite_curve_rodzhestvensky(
 # ============================================================
 
 def find_change_point(values, years=None):
-    """Обратная совместимость: поиск точки изменения (Pettitt)."""
+    """Обратная совместимость: поиск точки изменения (Pettitt, векторизованный)."""
     n = len(values)
     if n < 10:
         return {'change_year': None, 'change_index': None,
                 'p_value': 1.0, 'max_U': 0, 'significant': False}
 
-    U_t = []
-    for t in range(1, n):
-        left = values[:t]
-        right = values[t:]
-        u = sum(np.sign(x - y) for x in right for y in left)
-        U_t.append(abs(u))
+    values = np.asarray(values, dtype=float)
+    # Векторизованный расчёт U_t через матрицу знаков
+    sign_diff = np.sign(values[None, :] - values[:, None])
+    U_t = np.array([abs(float(np.sum(sign_diff[t:, :t]))) for t in range(1, n)])
 
-    max_U = max(U_t)
-    change_idx = U_t.index(max_U)
+    if U_t.size == 0:
+        return {'change_year': None, 'change_index': None,
+                'p_value': 1.0, 'max_U': 0, 'significant': False}
+
+    max_U = float(np.max(U_t))
+    change_idx = int(np.argmax(U_t))
     p_value = min(2 * np.exp(-6 * max_U**2 / (n**3 + n**2)), 1.0)
 
     change_year = int(years[change_idx]) if years is not None and change_idx < len(years) else None
@@ -245,7 +246,7 @@ def find_change_point(values, years=None):
     }
 
 
-def test_homogeneity_two_parts(part1, part2, alpha=0.05):
+def homogeneity_two_parts(part1, part2, alpha=0.05):
     # Ensure part1 and part2 are numpy arrays
     part1 = np.asarray(part1)
     part2 = np.asarray(part2)
@@ -282,7 +283,25 @@ def compute_composite_curve(values, years, break_year,
         P_values = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5,
                     0.7, 0.8, 0.9, 0.95, 0.98, 0.99, 0.995, 0.999]
 
-    v1, y1, v2, y2 = split_series_by_year(values, years, break_year)
+    values = np.asarray(values, dtype=float)
+    years_arr = np.asarray(years, dtype=float) if years is not None else np.arange(len(values))
+
+    # Синхронизация длин: выбрасываем NaN в значениях и соответствующие годы
+    valid = ~np.isnan(values)
+    values = values[valid]
+    years_arr = years_arr[valid]
+    if len(values) < 10:
+        return {
+            'curve_df': pd.DataFrame(),
+            'part1_stats': {}, 'part2_stats': {},
+            'break_year': break_year,
+            'n_part1': 0, 'n_part2': 0,
+            'homogeneity_test': {'is_homogeneous': False, 'u_p': None, 'ks_p': None},
+            'change_point': {'change_year': None, 'p_value': 1.0, 'significant': False},
+            'error': 'Мало данных для составной кривой (нужно >= 10)',
+        }
+
+    v1, y1, v2, y2 = split_series_by_year(values, years_arr, break_year)
 
     stats1 = compute_part_stats(v1, use_normative_Cs)
     stats2 = compute_part_stats(v2, use_normative_Cs)
@@ -302,10 +321,17 @@ def compute_composite_curve(values, years, break_year,
         'Q_составная': np.round(Q_composite, 2),
     })
 
+    cp = find_change_point(values, years_arr)
+    ht = homogeneity_two_parts(v1, v2) if n1 >= 3 and n2 >= 3 else {
+        'is_homogeneous': False, 'u_p': None, 'ks_p': None,
+    }
+
     return {
         'curve_df': curve_df,
         'part1_stats': stats1,
         'part2_stats': stats2,
         'break_year': break_year,
         'n_part1': n1, 'n_part2': n2,
+        'homogeneity_test': ht,
+        'change_point': cp,
     }

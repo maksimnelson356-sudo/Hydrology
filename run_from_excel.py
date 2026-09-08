@@ -4,8 +4,9 @@ run_from_excel.py
 """
 
 import pandas as pd
-from core.profile import MorphoProfile
+
 from core.hydraulics import calculate_composite_q
+from core.profile import MorphoProfile
 
 print("=" * 75)
 print("ЗАГРУЗКА ПРОФИЛЯ ИЗ EXCEL + РАСЧЁТ РАСХОДА ПО ОТСЕКАМ")
@@ -29,7 +30,7 @@ results = []
 for h in h_values:
     res = calculate_composite_q(prof, h=h)
     results.append(res)
-    
+
     print(f"\nH = {h} м")
     print(f"  Q_total       = {res['Q_total']} м³/с")
     print(f"  Q_ruslo       = {res['Q_ruslo']} м³/с")

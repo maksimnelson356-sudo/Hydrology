@@ -9,10 +9,9 @@ core/hydrorash/ecological_flow.py
 - min_flow_comparison — сравнение методов расчёта экологического стока
 """
 
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional
-
 
 # Классы экологического режима (СП 32, РГГМУ)
 ECO_CLASSES = {
@@ -55,8 +54,8 @@ SEASONAL_TESSMANN_PARAMS = {
 def tessmann_seasonal(
     Q_annual_mean: float,
     region_type: str = 'central',
-    Q_monthly_mean: Optional[np.ndarray] = None,
-) -> Dict:
+    Q_monthly_mean: np.ndarray | None = None,
+) -> dict:
     """
     Сезонный Тессман (полный метод СП 32, прил. 8).
 
@@ -124,7 +123,7 @@ def tessmann_seasonal(
 def ecoregime_classes(
     Q: float,
     Q_mean: float,
-) -> Dict:
+) -> dict:
     """
     Класс экологического режима по соотношению Q/Q_ср.
 
@@ -157,7 +156,7 @@ def wetted_perimeter_method(
     B: np.ndarray,
     P: np.ndarray,
     Q_critical_percent: float = 70,
-) -> Dict:
+) -> dict:
     """
     Метод мокрого периметра для определения минимального экологического стока.
 
@@ -192,8 +191,8 @@ def wetted_perimeter_method(
 
 def min_flow_comparison(
     Q_annual_mean: float,
-    Q_monthly_mean: Optional[np.ndarray] = None,
-    Q_min_series: Optional[np.ndarray] = None,
+    Q_monthly_mean: np.ndarray | None = None,
+    Q_min_series: np.ndarray | None = None,
 ) -> pd.DataFrame:
     """
     Сравнение различных методов расчёта минимального экологического стока.

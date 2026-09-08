@@ -15,6 +15,8 @@ HydroStatCalc и печатной таблице (2–4 значащие циф�
 Отсутствующие ячейки помечены np.nan и интерполируются в get_ordinates.
 """
 
+import bisect
+
 import numpy as np
 
 # Обеспеченности (в процентах)
@@ -228,7 +230,7 @@ TABLES = {
         0.9: [24.3848, 14.4, 11.2, 9.95, 8.4, 6.31, 5.48, 4.47, 3.12, 2.59, 1.95, 1.4, 1.23, 1.1, 0.899, 0.746, 0.621, 0.512, 0.46, 0.409, 0.301, 0.235, 0.2, 0.149, 0.127, 0.113, 0.091],
         1.0: [28.6895, 16.7, 12.9, 11.4, 9.53, 7.06, 6.08, 4.9, 3.35, 2.74, 2.02, 1.41, 1.23, 1.09, 0.871, 0.711, 0.581, 0.469, 0.417, 0.366, 0.26, 0.197, 0.165, 0.118, 0.098, 0.086, 0.067],
         1.1: [33.5417, 19.1, 14.6, 12.8, 10.7, 7.82, 6.68, 5.33, 3.57, 2.89, 2.09, 1.41, 1.22, 1.07, 0.843, 0.676, 0.542, 0.429, 0.377, 0.327, 0.224, 0.165, 0.135, 0.093, 0.075, 0.065, 0.049],
-        1.2: [39.0844, 21.8, 16.5, 14.4, 11.9, 8.6, 7.3, 5.75, 3.77, 3.01, 2.14, 1.14, 1.09, 1.05, 0.814, 0.642, 0.507, 0.394, 0.343, 0.294, 0.195, 0.14, 0.113, 0.075, 0.06, 0.051, 0.038],
+        1.2: [39.0844, 21.8, 16.5, 14.4, 11.9, 8.6, 7.3, 5.75, 3.77, 3.01, 2.14, 1.41, 1.21, 1.05, 0.814, 0.642, 0.507, 0.394, 0.343, 0.294, 0.195, 0.14, 0.113, 0.075, 0.06, 0.051, 0.038],
         1.3: [43.5279, 24.3, 18.4, 16.0, 13.1, 9.31, 7.88, 6.17, 3.98, 3.15, 2.19, 1.41, 1.2, 1.03, 0.783, 0.607, 0.47, 0.357, 0.306, 0.258, 0.165, 0.114, 0.089, 0.056, 0.044, 0.036, 0.025],
         1.4: [48.5277, 26.9, 20.3, 17.6, 14.3, 10.2, 8.53, 6.61, 4.18, 3.27, 2.24, 1.41, 1.18, 1.01, 0.753, 0.573, 0.436, 0.324, 0.275, 0.229, 0.141, 0.094, 0.072, 0.043, 0.033, 0.027, 0.018],
         1.5: [54.0943, 29.6, 22.2, 19.2, 15.6, 10.9, 9.14, 7.03, 4.37, 3.39, 2.28, 1.4, 1.16, 0.982, 0.722, 0.541, 0.404, 0.294, 0.247, 0.203, 0.12, 0.077, 0.058, 0.033, 0.024, 0.02, 0.013],
@@ -311,28 +313,39 @@ TABLES = {
 
 
 def _get(cs_cv, p, cv):
-    """Значение ординаты в точке (cs_cv, p, cv); интерполяция по Cv и Cs/Cv."""
+    """Значение ординаты в точке (cs_cv, p, cv); интерполяция по Cv и Cs/Cv (bisect)."""
     if p < 0:
         return np.nan
+    if cs_cv not in TABLES:
+        return np.nan
 
-    # --- интерполяция по Cv ---
     cv_dict = TABLES[cs_cv]
     cvs = sorted(k for k in cv_dict.keys() if k is not None)
+
+    if not cvs:
+        return np.nan
     if cv <= cvs[0]:
-        low = cv_dict[cvs[0]][p]
-        return low
+        val = cv_dict[cvs[0]]
+        return float(val[p] if isinstance(val, (list, np.ndarray)) and p < len(val) else val.get(p, np.nan) if hasattr(val, 'get') else np.nan)
     if cv >= cvs[-1]:
-        return cv_dict[cvs[-1]][p]
-    i = 0
-    while i < len(cvs) - 1 and not (cvs[i] <= cv <= cvs[i+1]):
-        i += 1
-    if i >= len(cvs) - 1:
-        return cv_dict[cvs[-1]][p]
-    c1, c2 = cvs[i], cvs[i+1]
-    y1, y2 = cv_dict[c1][p], cv_dict[c2][p]
+        val = cv_dict[cvs[-1]]
+        return float(val[p] if isinstance(val, (list, np.ndarray)) and p < len(val) else val.get(p, np.nan) if hasattr(val, 'get') else np.nan)
+
+    # Бинарный поиск индекса
+    idx = bisect.bisect_right(cvs, cv) - 1
+    if idx < 0:
+        return float(cv_dict[cvs[0]].get(p, np.nan))
+    if idx >= len(cvs) - 1:
+        return float(cv_dict[cvs[-1]].get(p, np.nan))
+
+    c1, c2 = cvs[idx], cvs[idx + 1]
+    y1_raw = cv_dict.get(c1, [])
+    y2_raw = cv_dict.get(c2, [])
+    y1 = float(y1_raw[p] if isinstance(y1_raw, (list, np.ndarray)) and p < len(y1_raw) else (y1_raw.get(p, np.nan) if hasattr(y1_raw, 'get') else np.nan))
+    y2 = float(y2_raw[p] if isinstance(y2_raw, (list, np.ndarray)) and p < len(y2_raw) else (y2_raw.get(p, np.nan) if hasattr(y2_raw, 'get') else np.nan))
     if np.isnan(y1) or np.isnan(y2):
         return np.nan
-    t = (cv - c1) / (c2 - c1)
+    t = (cv - c1) / (c2 - c1) if (c2 - c1) > 0 else 0
     return y1 + (y2 - y1) * t
 
 
@@ -391,21 +404,27 @@ def get_ordinates(cs_cv: float, cv: float):
                 if k1 > 0 and k2 > 0 and p1 > 0 and p2 > 0 and p1 != p2:
                     t = (np.log(PROBS[p]) - np.log(p1)) / (np.log(p2) - np.log(p1))
                     result[p] = np.exp(np.log(k1) + t * (np.log(k2) - np.log(k1)))
-            elif len(left) > 0 and len(right) == 0:
-                # экстраполяция вправо
+            elif len(left) >= 2 and len(right) == 0:
+                # экстраполяция вправо (нужно минимум 2 известные точки слева)
                 i1, i2 = left[-2], left[-1]
                 p1, p2 = PROBS[i1], PROBS[i2]
                 k1, k2 = result[i1], result[i2]
                 if k1 > 0 and k2 > 0 and p1 > 0 and p2 > 0 and p1 != p2:
                     t = (np.log(PROBS[p]) - np.log(p1)) / (np.log(p2) - np.log(p1))
                     result[p] = np.exp(np.log(k1) + t * (np.log(k2) - np.log(k1)))
-            elif len(left) == 0 and len(right) > 0:
-                # экстраполяция влево
+            elif len(left) == 0 and len(right) >= 2:
+                # экстраполяция влево (нужно минимум 2 известные точки справа)
                 i1, i2 = right[0], right[1]
                 p1, p2 = PROBS[i1], PROBS[i2]
                 k1, k2 = result[i1], result[i2]
                 if k1 > 0 and k2 > 0 and p1 > 0 and p2 > 0 and p1 != p2:
                     t = (np.log(PROBS[p]) - np.log(p1)) / (np.log(p2) - np.log(p1))
                     result[p] = np.exp(np.log(k1) + t * (np.log(k2) - np.log(k1)))
+            elif len(left) == 1 and len(right) == 0:
+                # только 1 известная точка слева — копируем её
+                result[p] = result[left[0]]
+            elif len(left) == 0 and len(right) == 1:
+                # только 1 известная точка справа — копируем её
+                result[p] = result[right[0]]
     return result
 

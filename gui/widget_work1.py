@@ -3,58 +3,71 @@ gui/widget_work1.py
 Работа 1 — Норма годового стока (PyQt6)
 """
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-
-from gui.plot_style import apply_global_style, setup_axes_style, COLORS
-
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QTextEdit, QLineEdit, QFileDialog, QMessageBox, QGroupBox,
-    QFormLayout, QTableWidget, QTableWidgetItem, QSplitter
-)
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import (
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QTextEdit,
+    QVBoxLayout,
+)
 
 from core.hydrorash.utils import (
-    compute_basic_stats, linear_regression_reduction,
-    extend_series, empirical_probability, kritsky_menkel_quantiles, module_layer
+    compute_basic_stats,
+    empirical_probability,
+    extend_series,
+    kritsky_menkel_quantiles,
+    linear_regression_reduction,
+    module_layer,
 )
+from gui.controller.widget_factory import BaseWorkWidget
+from i18n import tr
 
 
-class Work1Widget(QWidget):
+class Work1Widget(BaseWorkWidget):
     """Вкладка «Работа 1: Норма годового стока»."""
 
     calculation_done = pyqtSignal(dict)
 
     def __init__(self):
-        super().__init__()
+        super().__init__(title=tr("sidebar_work1", "Работа 1: Норма стока"), calc_type="work1")
         self.last_result = None
         self._init_ui()
 
     def _init_ui(self):
-        layout = QVBoxLayout(self)
+        # Базовый UI уже создан в BaseWorkWidget
+        # Добавляем специфичные для работы 1 элементы
+        layout = self.layout()
 
         # === Верхняя панель ===
         top = QHBoxLayout()
 
-        btn_group = QGroupBox("Данные")
+        btn_group = QGroupBox(tr("group_data", "Данные"))
         btn_layout = QVBoxLayout(btn_group)
 
-        self.btn_load_calc = QPushButton("Загрузить расчётную реку (Excel)")
+        self.btn_load_calc = QPushButton(tr("btn_load_calc", "Загрузить расчётную реку (Excel)"))
         self.btn_load_calc.clicked.connect(self.load_calc_data)
         btn_layout.addWidget(self.btn_load_calc)
 
-        self.btn_load_analog = QPushButton("Загрузить реку-аналог (Excel)")
+        self.btn_load_analog = QPushButton(tr("btn_load_analog", "Загрузить реку-аналог (Excel)"))
         self.btn_load_analog.clicked.connect(self.load_analog_data)
         btn_layout.addWidget(self.btn_load_analog)
 
-        self.btn_calc = QPushButton("РАССЧИТАТЬ")
+        self.btn_calc = QPushButton(tr("btn_calc", "РАССЧИТАТЬ"))
         self.btn_calc.setStyleSheet(
             "QPushButton { background-color: #4CAF50; color: white; "
             "font-weight: bold; padding: 10px 20px; font-size: 14px; }"
@@ -63,11 +76,11 @@ class Work1Widget(QWidget):
         self.btn_calc.clicked.connect(self.calculate)
         btn_layout.addWidget(self.btn_calc)
 
-        self.btn_graphs = QPushButton("Показать графики")
+        self.btn_graphs = QPushButton(tr("btn_graphs", "Показать графики"))
         self.btn_graphs.clicked.connect(self.show_graphs)
         btn_layout.addWidget(self.btn_graphs)
 
-        self.btn_save = QPushButton("Сохранить отчёт")
+        self.btn_save = QPushButton(tr("btn_save", "Сохранить отчёт"))
         self.btn_save.setStyleSheet(
             "QPushButton { background-color: #2196F3; color: white; "
             "font-weight: bold; padding: 8px; }"
@@ -77,18 +90,18 @@ class Work1Widget(QWidget):
         btn_layout.addWidget(self.btn_save)
 
         # Поля ввода
-        form_group = QGroupBox("Параметры")
+        form_group = QGroupBox(tr("group_params", "Параметры"))
         form = QFormLayout(form_group)
 
         self.edit_f_calc = QLineEdit("31800")
         self.edit_f_analog = QLineEdit("24700")
-        self.edit_name_calc = QLineEdit("Бирюса, с. Шиткино")
-        self.edit_name_analog = QLineEdit("Бирюса, р.п. Суетиха")
+        self.edit_name_calc = QLineEdit(tr("default_name_calc", "Бирюса, с. Шиткино"))
+        self.edit_name_analog = QLineEdit(tr("default_name_analog", "Бирюса, р.п. Суетиха"))
 
-        form.addRow("Река:", self.edit_name_calc)
-        form.addRow("F расчётной (км²):", self.edit_f_calc)
-        form.addRow("Река-аналог:", self.edit_name_analog)
-        form.addRow("F аналога (км²):", self.edit_f_analog)
+        form.addRow(tr("label_river", "Река:"), self.edit_name_calc)
+        form.addRow(tr("label_f_calc", "F расчётной (км²):"), self.edit_f_calc)
+        form.addRow(tr("label_river_analog", "Река-аналог:"), self.edit_name_analog)
+        form.addRow(tr("label_f_analog", "F аналога (км²):"), self.edit_f_analog)
 
         top.addWidget(btn_group)
         top.addWidget(form_group)
@@ -109,7 +122,7 @@ class Work1Widget(QWidget):
         self.splitter.setStretchFactor(1, 3)
         self.splitter.setSizes([260, 240])
 
-        layout.addWidget(QLabel("Результаты расчёта:"))
+        layout.addWidget(QLabel(tr("label_results", "Результаты расчёта:")))
         layout.addWidget(self.splitter)
 
     def load_calc_data(self):

@@ -5,8 +5,6 @@ core/hydrorash/hydrological_periods.py
 Перенесено из HydroRash с адаптацией под hydrolib.
 """
 
-from typing import List, Optional
-import re
 
 
 class HydrologicalPeriods:
@@ -30,10 +28,10 @@ class HydrologicalPeriods:
 
     def __init__(
         self,
-        water_year_start_month: Optional[int] = None,
-        non_limiting_months: Optional[List[int]] = None,
-        limiting_months: Optional[List[int]] = None,
-        limiting_season_months: Optional[List[int]] = None
+        water_year_start_month: int | None = None,
+        non_limiting_months: list[int] | None = None,
+        limiting_months: list[int] | None = None,
+        limiting_season_months: list[int] | None = None
     ):
         self.water_year_start_month = (
             water_year_start_month or self.DEFAULT_WATER_YEAR_START
@@ -73,7 +71,7 @@ class HydrologicalPeriods:
         """Создание из текстового представления."""
         start = int(start_month_str) if not isinstance(start_month_str, int) else start_month_str
 
-        def parse_range(text: str) -> List[int]:
+        def parse_range(text: str) -> list[int]:
             months = []
             for part in text.replace(",", " ").split():
                 part = part.strip()
@@ -99,7 +97,7 @@ class HydrologicalPeriods:
                 f"ЛП: {self.months_to_str(self.limiting_months)}")
 
     @staticmethod
-    def months_to_str(months: List[int]) -> str:
+    def months_to_str(months: list[int]) -> str:
         MONTHS_SHORT = {1:"I",2:"II",3:"III",4:"IV",5:"V",6:"VI",
                         7:"VII",8:"VIII",9:"IX",10:"X",11:"XI",12:"XII"}
         return "–".join(MONTHS_SHORT.get(m, str(m)) for m in months)

@@ -10,8 +10,11 @@ core/hydrorash/flood_hydrograph.py
 - hydrograph_from_peak — восстановление гидрографа по Qpeak и Tbase
 """
 
+
 import numpy as np
-from typing import Dict, Optional
+
+if not hasattr(np, 'trapezoid'):
+    np.trapezoid = np.trapz
 
 
 def triangular_hydrograph(
@@ -20,7 +23,7 @@ def triangular_hydrograph(
     T_base: float,
     asymmetry: float = 0.3,
     dt: float = 1.0,
-) -> Dict:
+) -> dict:
     """
     Асимметричный треугольный гидрограф паводка.
 
@@ -74,7 +77,7 @@ def gamma_hydrograph(
     T_base: float,
     shape: float = 3.5,
     dt: float = 1.0,
-) -> Dict:
+) -> dict:
     """
     Гидрограф паводка по распределению Гамма (СП 33, рекомендуемая форма).
 
@@ -129,7 +132,7 @@ def unit_hydrograph(
     F_km2: float,
     shape: float = 3.5,
     dt: float = 1.0,
-) -> Dict:
+) -> dict:
     """
     Единичный гидрограф (гидрограф слоя приведённого стока 1 мм).
 
@@ -190,7 +193,7 @@ def hydrograph_convolution(
 def flood_volume(
     Q: np.ndarray,
     dt: float = 1.0,
-) -> Dict:
+) -> dict:
     """
     Объём паводка по гидрографу.
 
@@ -219,7 +222,7 @@ def hydrograph_from_peak(
     method: str = 'gamma',
     shape: float = 3.5,
     dt: float = 1.0,
-) -> Dict:
+) -> dict:
     """
     Построение гидрографа по Qpeak, Tpeak, Tbase.
 
@@ -244,7 +247,7 @@ def design_hydrograph_params(
     F_km2: float,
     Q_peak: float,
     zone: str = 'zone_3',
-) -> Dict:
+) -> dict:
     """
     Оценка параметров расчётного гидрографа по площади бассейна.
 

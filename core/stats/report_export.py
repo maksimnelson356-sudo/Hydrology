@@ -13,21 +13,20 @@ core/stats/report_export.py
 """
 
 import os
-from typing import Dict, List, Optional
 from datetime import datetime
 
 
 def generate_txt_report(
     output_path: str,
     post_name: str,
-    stats: Dict,
+    stats: dict,
     frequency_curve=None,
     max_runoff_curve=None,
     min_runoff_curve=None,
-    extension_info: Dict = None,
-    composite_info: Dict = None,
-    gts_info: Dict = None,
-    ice_info: Dict = None,
+    extension_info: dict = None,
+    composite_info: dict = None,
+    gts_info: dict = None,
+    ice_info: dict = None,
     comments: str = ""
 ) -> str:
     """
@@ -54,7 +53,7 @@ def generate_txt_report(
     lines.append("=" * 80)
     lines.append("ТЕХНИЧЕСКИЙ ОТЧЁТ")
     lines.append("Определение основных расчётных гидрологических характеристик")
-    lines.append(f"Согласно СП 482.1325800.2020, СП 33-101-2003")
+    lines.append("Согласно СП 482.1325800.2020, СП 33-101-2003")
     lines.append("=" * 80)
     lines.append("")
 
@@ -63,7 +62,7 @@ def generate_txt_report(
     lines.append(f"  Пост: {post_name}")
     lines.append(f"  Период наблюдений: {stats.get('n', '—')} лет")
     lines.append(f"  Дата формирования: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    lines.append(f"  Нормативная база: СП 482.1325800.2020, СП 33-101-2003")
+    lines.append("  Нормативная база: СП 482.1325800.2020, СП 33-101-2003")
     lines.append("")
 
     lines.append("2. СТАТИСТИЧЕСКИЕ ХАРАКТЕРИСТИКИ")
@@ -174,12 +173,13 @@ def generate_txt_report(
         lines.append("")
 
     lines.append("=" * 80)
-    lines.append("Отчёт сформирован автоматически программой ГидроСтатистика 2026")
+    lines.append("Отчёт сформирован автоматически программой HydroSphere")
     lines.append("Согласно СП 482.1325800.2020, СП 33-101-2003")
     lines.append("=" * 80)
 
     os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
-    with open(output_path, 'w', encoding='utf-8') as f:
+    # utf-8-sig: BOM для совместимости с русской Windows (блокнот, Excel)
+    with open(output_path, 'w', encoding='utf-8-sig', newline='') as f:
         f.write('\n'.join(lines))
 
     return output_path
@@ -188,7 +188,7 @@ def generate_txt_report(
 def generate_excel_report(
     output_path: str,
     post_name: str,
-    stats: Dict,
+    stats: dict,
     frequency_curve=None,
     max_runoff_curve=None,
     min_runoff_curve=None,

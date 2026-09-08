@@ -3,8 +3,8 @@ create_test_data.py
 Генерация чистого тестового файла для проверки кривых обеспеченности
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from scipy import stats
 
 # Параметры распределения (близко к реальным расходам)

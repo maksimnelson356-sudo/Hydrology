@@ -10,8 +10,8 @@ core/hydrorash/spillway.py
 - emergency_flood_passage — пропуск ПФР (паводок разового вызова)
 """
 
+
 import numpy as np
-from typing import Dict, List, Optional
 
 
 def free_overfall(
@@ -44,9 +44,9 @@ def weir_flow(
     H: float,
     L: float,
     weir_type: str = 'sharp_crested',
-    Cd: Optional[float] = None,
+    Cd: float | None = None,
     submergence: float = 1.0,
-) -> Dict:
+) -> dict:
     """
     Расход через лотковый водосброс.
 
@@ -109,12 +109,12 @@ def spillway_capacity_check(
     H_max: float,
     L: float,
     weir_type: str = 'sharp_crested',
-    Cd: Optional[float] = None,
+    Cd: float | None = None,
     n_openings: int = 1,
     opening_width: float = 0,
     opening_height: float = 0,
     orifice_Cd: float = 0.62,
-) -> Dict:
+) -> dict:
     """
     Проверка пропускной способности ППУ (СП 58 п.6).
 
@@ -156,7 +156,7 @@ def emergency_flood_passage(
     L: float,
     Cd: float = 1.84,
     max_H: float = 5.0,
-) -> Dict:
+) -> dict:
     """
     Расчёт НПР (напора при пропуске ПФР) для определения высоты плотины.
 

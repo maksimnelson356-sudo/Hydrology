@@ -3,13 +3,12 @@ build_nuitka.py
 Сборка через Nuitka (исправленная версия под SciPy)
 """
 
-import subprocess
-import shlex
-import sys
 import os
+import subprocess
+import sys
 
 script = "gui/main_window.py"
-name = "ГидроСтатистика_2026"
+name = "HydroSphere"
 
 cmd = [
     sys.executable, "-m", "nuitka",
@@ -34,12 +33,16 @@ cmd = [
     "--remove-output",
 ]
 
-    if os.path.exists("gui/resources/logo.svg"):
-        cmd.append("--windows-icon-from-ico=gui/resources/logo.svg")
-        cmd.append("--include-data-files=gui/resources/logo.svg;.")
-        print("✅ Иконка добавлена")
-    else:
-        print("⚠️ logo.svg не найден")
+if os.path.exists("gui/resources/logo.png"):
+    cmd.append("--windows-icon-from-ico=gui/resources/logo.png")
+    cmd.append("--include-data-files=gui/resources/logo.png;.")
+    print("✅ Иконка добавлена")
+elif os.path.exists("gui/resources/logo.svg"):
+    cmd.append("--windows-icon-from-ico=gui/resources/logo.svg")
+    cmd.append("--include-data-files=gui/resources/logo.svg;.")
+    print("✅ Иконка добавлена")
+else:
+    print("⚠️ logo не найден")
 
 # Дополнительно явно включаем проблемный модуль
 cmd.append("--include-module=scipy._external.array_api_compat")

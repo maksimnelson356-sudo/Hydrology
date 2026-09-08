@@ -8,9 +8,9 @@ core/stats/sheet_reader.py
 """
 
 import re
+from collections.abc import Sequence
 
 import pandas as pd
-from typing import Optional, Sequence
 
 # Составные единицы измерения — убираем ЦЕЛИКОМ, до разбиения по разделителям,
 # иначе «Осадки, мм/год» распадётся на «мм» + «год», и «год» останется в имени,
@@ -39,7 +39,7 @@ def clean_column_name(name) -> str:
     return s
 
 
-def find_sheet(xls: pd.ExcelFile, keywords: Sequence[str]) -> Optional[str]:
+def find_sheet(xls: pd.ExcelFile, keywords: Sequence[str]) -> str | None:
     """Найти имя листа с самым длинным совпавшим ключевым словом.
 
     Пробелы игнорируются, чтобы «FDC + Регрессии» матчил и лист «FDC + Регрессии + Статистика».
@@ -101,6 +101,10 @@ def read_work_sheet(filepath_or_xls,
         return pd.DataFrame()
 
     raw = pd.read_excel(xls, sheet, header=None)
+    # Обработка объединённых ячеек (merged cells): openpyxl/pandas оставляет
+    # пустые ячейки в объединённых диапазонах, кроме первой. Прячем значения
+    # из строки заголовка вниз по объединённым колонкам.
+    raw = _fill_merged_headers(raw, xls, sheet)
     header_idx = find_header_row(raw, header_keywords)
     if header_idx < 0:
         return raw
@@ -113,8 +117,42 @@ def read_work_sheet(filepath_or_xls,
     return pd.read_excel(xls, sheet, skiprows=header_idx)
 
 
+def _fill_merged_headers(raw: pd.DataFrame, xls, sheet: str) -> pd.DataFrame:
+    """
+    Заполняет пустые ячейки в строке заголовка значениями из объединённых ячеек.
+    """
+    try:
+        import openpyxl
+        if not isinstance(xls, openpyxl.Workbook):
+            return raw
+        ws = xls[sheet]
+        # Найти первую строку, в которой есть хотя бы одно непустое значение
+        header_idx = None
+        for idx in range(min(5, len(raw))):
+            if raw.iloc[idx].notna().any():
+                header_idx = idx
+                break
+        if header_idx is None:
+            return raw
+
+        result = raw.copy()
+        for merged_range in ws.merged_cells.ranges:
+            min_row, min_col, max_row, max_col = merged_range.bounds
+            if min_row - 1 == header_idx and max_row - 1 == header_idx:
+                # Объединение только в строке заголовка
+                value = raw.iloc[header_idx, min_col - 1]
+                if pd.isna(value) or (isinstance(value, str) and not value.strip()):
+                    continue
+                for col_idx in range(min_col - 1, max_col):
+                    if col_idx < len(result.columns) and pd.isna(result.iloc[header_idx, col_idx]):
+                        result.iat[header_idx, col_idx] = value
+        return result
+    except (ImportError, AttributeError, KeyError):
+        return raw
+
+
 def numeric_column(df: pd.DataFrame,
-                   prefer_names: Sequence[str] = ("value", "q", "расход")) -> Optional[pd.Series]:
+                   prefer_names: Sequence[str] = ("value", "q", "расход")) -> pd.Series | None:
     """Вернуть числовой столбец, иначе None.
 
     Проход 1: колонки, чьё clean-имя содержит одно из предпочитаемых слов

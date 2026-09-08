@@ -5,16 +5,16 @@ core/hydrorash/intra_annual.py
 Перенесено из HydroRash с адаптацией под hydrolib.
 """
 
+
 import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional
+
 from .hydrological_periods import HydrologicalPeriods
 
 
 def calculate_water_year_sums(
     monthly_df: pd.DataFrame,
-    periods: Optional[HydrologicalPeriods] = None,
-    month_columns: Optional[List[str]] = None
+    periods: HydrologicalPeriods | None = None,
+    month_columns: list[str] | None = None
 ) -> pd.DataFrame:
     """Расчёт сумм стока по периодам водного года."""
     if periods is None:
@@ -73,8 +73,8 @@ def calculate_water_year_sums(
 
 def compute_intra_annual_stats(
     sums_df: pd.DataFrame,
-    columns: Optional[List[str]] = None
-) -> Dict[str, Dict[str, float]]:
+    columns: list[str] | None = None
+) -> dict[str, dict[str, float]]:
     from .utils import compute_basic_stats
 
     if columns is None:
@@ -106,7 +106,7 @@ def select_model_year(
     sums_df: pd.DataFrame,
     target_P: float = 90.0,
     by: str = "сумма_ЛП"
-) -> Dict:
+) -> dict:
     from .utils import kritsky_menkel_quantiles
 
     if by not in sums_df.columns:
@@ -136,7 +136,7 @@ def select_model_year(
 def distribute_discharge(
     annual_sum_P: float,
     model_year_row: pd.Series,
-    periods: Optional[HydrologicalPeriods] = None
+    periods: HydrologicalPeriods | None = None
 ) -> pd.DataFrame:
     """Распределение годового стока по месяцам по году-модели."""
     if periods is None:
@@ -162,13 +162,14 @@ def distribute_discharge(
 def generate_intra_annual_report(
     sums_df: pd.DataFrame,
     stats: dict,
-    model_year: Optional[dict] = None,
-    periods: Optional[HydrologicalPeriods] = None,
+    model_year: dict | None = None,
+    periods: HydrologicalPeriods | None = None,
     output_path: str = None
 ) -> str:
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Border, Side
     from pathlib import Path
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
 
     if periods is None:
         periods = HydrologicalPeriods()

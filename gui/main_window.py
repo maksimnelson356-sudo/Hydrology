@@ -1,40 +1,90 @@
 """
 gui/main_window.py
-ГидроСтатистика 2026 — полная версия с таблицами Крицкого-Менкеля
+HydroSphere — полная версия с таблицами Крицкого-Менкеля
+Примечание: sys.path модифицируется для совместимости с сборкой; предпочтительнее относительные импорты.
+Архитектура: DataController/PlotController вынесены в gui/controller/ для SRP.
 """
 
-import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import sys
 
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, 
-                             QVBoxLayout, QWidget, QLabel, QTableWidget, 
-                             QTableWidgetItem, QFileDialog, QMessageBox,
-                             QTabWidget, QStatusBar, QComboBox, QHBoxLayout,
-                             QTextEdit, QDialog, QRadioButton, QButtonGroup, QDialogButtonBox,
-                             QInputDialog, QGroupBox, QFormLayout, QLineEdit,
-                             QPlainTextEdit, QSplitter, QStackedWidget, QListWidget, QListWidgetItem, QAbstractItemView)
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QAction, QIcon, QFont
-import pandas as pd
+# sys.path expansion preserved for backward compatibility with frozen builds
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
-import matplotlib.pyplot as plt
+import pandas as pd
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from PyQt6.QtCore import QSize, Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtWidgets import (
+    QApplication,
+    QButtonGroup,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
+    QRadioButton,
+    QScrollArea,
+    QSplitter,
+    QStackedWidget,
+    QStatusBar,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 from scipy import stats
 
-from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_resize_table, AutoResizeTableFilter
-
-from core.stats.data_loader import load_hydrological_data, get_series_by_post, get_basic_stats
-from core.stats.frequency import calculate_frequency_curve, fit_pearson3, empirical_plotting_positions
-from core.stats.missing_data import fill_missing_interpolation, detect_missing
-from core.stats.trends import full_trend_analysis
-from core.stats.gts_integration import build_gts_frequency_curve, gts_summary_table
-from core.stats.composite_curves import compute_composite_curve, find_change_point
-from core.stats.series_extension import full_extension_workflow
-from core.stats.report_export import generate_txt_report, generate_excel_report
-from core.stats.sheet_reader import read_work_sheet
 from core.gts_reference import GTSClass, classify_gts_by_parameters
+from core.stats.composite_curves import compute_composite_curve, find_change_point
+
+# Core imports (statistical calculations)
+from core.stats.data_loader import get_basic_stats, get_series_by_post, load_hydrological_data
+from core.stats.frequency import (
+    calculate_frequency_curve,
+    empirical_plotting_positions,
+    fit_pearson3,
+)
+from core.stats.gts_integration import build_gts_frequency_curve, gts_summary_table
+from core.stats.missing_data import detect_missing, fill_missing_interpolation
+from core.stats.series_extension import full_extension_workflow
+from core.stats.sheet_reader import read_work_sheet
+from core.stats.trends import full_trend_analysis
+from gui.controller import DataController, PlotController
+from gui.plot_style import (
+    COLORS,
+    FONT_DEFAULT,
+    AutoResizeTableFilter,
+    auto_resize_table,
+    build_stylesheet,
+    setup_axes_style,
+)
+from gui.widget_short import ShortWidget
+from gui.widget_work1 import Work1Widget
+from gui.widget_work2 import Work2Widget
+from gui.widget_work3 import Work3Widget
+from gui.widget_work4 import Work4Widget
+from gui.widget_work5 import Work5Widget
+from gui.widget_work6 import Work6Widget
+from gui.widget_work7 import Work7Widget
+from gui.widget_work8 import Work8Widget
+from gui.widget_work9 import Work9Widget
+from gui.widget_work10 import Work10Widget
+from update_checker import get_updater
 
 
 class ManualInputDialog(QDialog):
@@ -200,41 +250,47 @@ class ManualInputDialog(QDialog):
 class CurveSelectionDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Выбор интерполяционной кривой")
+        self.setWindowTitle("Тип кривой и метод расчёта")
+        self.setModal(True)
         self.setFixedSize(340, 320)
-        
+        self._on_change = None
+
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Тип кривой:"))
-        
+
         self.curve_group = QButtonGroup(self)
         self.radio_pearson = QRadioButton("Кривая Пирсона III типа")
         self.radio_kritsky = QRadioButton("Кривая Крицкого-Менкеля")
         self.radio_normal = QRadioButton("Нормальное распределение")
         self.radio_empirical = QRadioButton("Интерпол. ломаной линией")
         self.radio_pearson.setChecked(True)
-        
+
         for radio in [self.radio_pearson, self.radio_kritsky, self.radio_normal, self.radio_empirical]:
             self.curve_group.addButton(radio)
             layout.addWidget(radio)
-        
+            radio.toggled.connect(self._on_curve_type_changed)
+
         layout.addSpacing(15)
         layout.addWidget(QLabel("Метод расчета Cv и Cs:"))
         self.method_group = QButtonGroup(self)
         self.radio_moments = QRadioButton("моментов")
         self.radio_mle = QRadioButton("наибольшего правдоподобия")
         self.radio_moments.setChecked(True)
-        
+
         self.method_group.addButton(self.radio_moments)
         self.method_group.addButton(self.radio_mle)
-        
+
         layout.addWidget(self.radio_moments)
         layout.addWidget(self.radio_mle)
-        
+        self.radio_moments.toggled.connect(self._on_curve_type_changed)
+        self.radio_mle.toggled.connect(self._on_curve_type_changed)
+
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.button_box = buttons
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
-    
+
     def get_selection(self):
         if self.radio_pearson.isChecked():
             curve_type = "pearson3"
@@ -247,13 +303,103 @@ class CurveSelectionDialog(QDialog):
         method = "moments" if self.radio_moments.isChecked() else "mle"
         return curve_type, method
 
+    def set_on_change(self, callback):
+        """Вызывается при каждом переключении радиокнопки.
+        Callback получает curve_type как аргумент."""
+        self._on_change = callback
+
+    def _on_curve_type_changed(self, checked):
+        if not checked or not self._on_change:
+            return
+        # Синхронизируем тип кривой в главном окне при каждом переключении
+        if self.radio_pearson.isChecked():
+            curve_type = "pearson3"
+        elif self.radio_kritsky.isChecked():
+            curve_type = "kritsky_menkel"
+        elif self.radio_normal.isChecked():
+            curve_type = "normal"
+        else:
+            curve_type = "empirical"
+        self._on_change(curve_type)
+
+
+class PostSelectionDialog(QDialog):
+    """Диалог выбора постов для корреляционного анализа."""
+
+    def __init__(self, posts, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Выбор постов для корреляции")
+        self.setModal(True)
+        self.setMinimumWidth(340)
+
+        self.checkboxes = []
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        title = QLabel("Выберите посты для корреляционного анализа:")
+        title.setStyleSheet("font-size: 12px; font-weight: bold; color: #1565C0;")
+        layout.addWidget(title)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMaximumHeight(300)
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(4, 4, 4, 4)
+        content_layout.setSpacing(4)
+
+        for post in posts:
+            cb = QCheckBox(post)
+            cb.setChecked(True)
+            self.checkboxes.append(cb)
+            content_layout.addWidget(cb)
+
+        content_layout.addStretch()
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+
+        hint = QLabel("Нужно выбрать минимум 2 поста.\nПоказывается попарная корреляция выбранных постов.")
+        hint.setStyleSheet("font-size: 10px; color: #757575;")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        buttons = QDialogButtonBox()
+        btn_ok = buttons.addButton("Построить", QDialogButtonBox.ButtonRole.AcceptRole)
+        btn_ok.setStyleSheet("background-color: #1565C0; color: white; border-radius: 6px; padding: 8px 18px; font-weight: bold;")
+        btn_cancel = buttons.addButton("Отмена", QDialogButtonBox.ButtonRole.RejectRole)
+        buttons.rejected.connect(self.reject)
+        buttons.accepted.connect(self._on_accept)
+        layout.addWidget(buttons)
+
+        self._selected = []
+
+    def _on_accept(self):
+        self._selected = [cb.text() for cb in self.checkboxes if cb.isChecked()]
+        if len(self._selected) < 2:
+            QMessageBox.warning(self, "Недостаточно постов",
+                                "Для корреляции нужно выбрать минимум 2 поста.")
+            return
+        self.accept()
+
+    def selected_posts(self):
+        return self._selected
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ГидроСтатистика 2026")
-        self.setGeometry(60, 30, 1600, 950)
-        
+        self.setWindowTitle("HydroSphere — Гидрологическая статистика")
+        self.setGeometry(100, 50, 1500, 900)
+
+        screen = QApplication.primaryScreen()
+        if screen:
+            geo = self.frameGeometry()
+            center = screen.availableGeometry().center()
+            geo.moveCenter(center)
+            self.move(geo.topLeft())
+
         if getattr(sys, 'frozen', False):
             base_path = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
         else:
@@ -261,14 +407,14 @@ class MainWindow(QMainWindow):
         icon_path = os.path.join(base_path, "icon.ico")
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
-        
+
         self._status_bar = QStatusBar()
         self.setStatusBar(self._status_bar)
         self._status_bar.showMessage("Готово")
 
         self._table_filter = AutoResizeTableFilter()
         self.installEventFilter(self._table_filter)
-        
+
         self.df_raw = None
         self.year_col = None
         self.available_posts = []
@@ -282,7 +428,7 @@ class MainWindow(QMainWindow):
         self.last_quantiles = None
         self._gts_class = None
         self._gts_params = None
-        
+
         menubar = self.menuBar()
         file_menu = menubar.addMenu("Файл данных")
         file_menu.addAction("Открыть данные...", self.load_data)
@@ -292,41 +438,52 @@ class MainWindow(QMainWindow):
         file_menu.addAction("Восстановить короткий ряд (Short)...",
                             self._open_short_module)
         file_menu.addAction("Выход", self.close)
-        
+
         self.tabs = QStackedWidget()
-        self.setCentralWidget(self.tabs)
-        
+
         self.tab_data = QWidget()
         self.setup_data_tab()
-        
+
         self.tab_graph = QWidget()
         self.setup_graph_tab()
-        
+
         self.tab_trend = QWidget()
         self.setup_trend_tab()
-        
+
         self.tab_viz = QWidget()
         self.setup_viz_tab()
-        
+
         self.tab_kritsky = QWidget()
         self.setup_kritsky_tab()
-        
+
         self.tab_params = QWidget()
         self.setup_params_tab()
 
-        # === Вкладки из объединённых проектов ===
-        from gui.widget_work1 import Work1Widget
-        from gui.widget_work2 import Work2Widget
-        from gui.widget_work3 import Work3Widget
-        from gui.widget_work4 import Work4Widget
-        from gui.widget_work5 import Work5Widget
-        from gui.widget_work6 import Work6Widget
-        from gui.widget_work7 import Work7Widget
-        from gui.widget_work8 import Work8Widget
-        from gui.widget_work9 import Work9Widget
-        from gui.widget_work10 import Work10Widget
-        from gui.widget_short import ShortWidget
+        # === Контроллеры (вынесены для SRP) ===
+        self.data_controller = DataController(parent=self)
+        # Bind controller signals (methods defined in class; fallback if missing)
+        def bind(data_loaded):
+            if hasattr(self, '_on_data_loaded'):
+                self.data_controller.data_loaded.connect(self._on_data_loaded)
+            else:
+                self.data_controller.data_loaded.connect(lambda d,p: self._on_data_loaded(d,p) if hasattr(self,'_on_data_loaded') else None)
+        bind(None)
+        def bind_post(post_changed):
+            if hasattr(self, '_on_post_changed_controller'):
+                self.data_controller.post_changed.connect(self._on_post_changed_controller)
+        bind_post(None)
+        def bind_err(error):
+            if hasattr(self, '_on_controller_error'):
+                self.data_controller.error.connect(self._on_controller_error)
+            else:
+                self.data_controller.error.connect(lambda msg: QMessageBox.critical(self, 'Ошибка', msg))
+        bind_err(None)
+        self.data_controller.status.connect(self._status_bar.showMessage)
 
+        self.plot_controller = PlotController(parent=self)
+        self.plot_controller.error.connect(lambda msg: self._on_controller_error(msg) if hasattr(self, '_on_controller_error') else QMessageBox.critical(self, 'Ошибка контроллера', msg))
+
+        # === Вкладки из объединённых проектов ===
         self.tab_work1 = Work1Widget()
         self.tab_work1.calculation_done.connect(self._on_work1_calculated)
         self.tab_work2 = Work2Widget()
@@ -541,7 +698,7 @@ class MainWindow(QMainWindow):
         data_splitter.setSizes([400, 600])
 
         layout.addWidget(data_splitter)
-    
+
     def _make_post_combo(self):
         """Создать синхронизированный комбобокс выбора поста."""
         combo = QComboBox()
@@ -569,7 +726,7 @@ class MainWindow(QMainWindow):
 
     def setup_graph_tab(self):
         layout = QVBoxLayout(self.tab_graph)
-        
+
         post_row = QHBoxLayout()
         lbl = QLabel("Пост:")
         lbl.setStyleSheet("font-weight: bold; font-size: 13px; color: #1565C0;")
@@ -588,7 +745,7 @@ class MainWindow(QMainWindow):
         self.btn_save_plot = QPushButton("Сохранить график как картинку")
         self.btn_save_plot.clicked.connect(self.save_plot_as_image)
         self.btn_save_plot.setEnabled(False)
-        
+
         btn_layout.addWidget(self.btn_select_curve)
         btn_layout.addWidget(self.btn_calc)
         btn_layout.addWidget(self.btn_save_plot)
@@ -678,7 +835,7 @@ class MainWindow(QMainWindow):
         graph_splitter.setSizes([200, 800])
 
         layout.addWidget(graph_splitter)
-    
+
     def setup_trend_tab(self):
         layout = QVBoxLayout(self.tab_trend)
 
@@ -701,15 +858,15 @@ class MainWindow(QMainWindow):
             "padding: 6px 12px; border-radius: 4px; font-weight: bold; }")
         self.btn_stationarity.setEnabled(False)
         self.btn_stationarity.clicked.connect(self._check_stationarity)
-        
+
         self.trend_table = QTableWidget()
         auto_resize_table(self.trend_table)
         self.trend_table.setColumnCount(2)
         self.trend_table.setHorizontalHeaderLabels(["Показатель", "Значение"])
-        
+
         self.trend_text = QTextEdit()
         self.trend_text.setReadOnly(True)
-        
+
         self.trend_figure = Figure(figsize=(10, 5))
         self.trend_canvas = FigureCanvas(self.trend_figure)
 
@@ -726,7 +883,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.trend_table)
         layout.addWidget(QLabel("Интерпретация + график:"))
         layout.addWidget(trend_splitter)
-    
+
     def setup_viz_tab(self):
         layout = QVBoxLayout(self.tab_viz)
 
@@ -748,71 +905,71 @@ class MainWindow(QMainWindow):
         self.btn_plot_box.clicked.connect(self.plot_boxplot)
         self.btn_plot_corr = QPushButton("Корреляция постов")
         self.btn_plot_corr.clicked.connect(self.plot_correlation)
-        
+
         btn_layout.addWidget(self.btn_plot_series)
         btn_layout.addWidget(self.btn_plot_hist)
         btn_layout.addWidget(self.btn_plot_box)
         btn_layout.addWidget(self.btn_plot_corr)
         btn_layout.addStretch()
-        
+
         self.viz_figure = Figure(figsize=(10, 6))
         self.viz_canvas = FigureCanvas(self.viz_figure)
-        
+
         layout.addLayout(btn_layout)
         layout.addWidget(self.viz_canvas)
-    
+
     def setup_kritsky_tab(self):
         layout = QVBoxLayout(self.tab_kritsky)
-        
+
         title = QLabel("Ординаты кривых трёхпараметрического гамма-распределения\nС.Н. Крицкого и М.Ф. Менкеля")
         title.setStyleSheet("font-size: 14px; font-weight: bold;")
         layout.addWidget(title)
-        
+
         form_group = QGroupBox("Параметры ряда")
         form = QFormLayout(form_group)
-        
+
         self.edit_cs_cv = QLineEdit("1.0")
         self.edit_cv = QLineEdit("0.5")
-        
+
         form.addRow("Cs/Cv — отношение коэффициентов асимметрии к вариации:", self.edit_cs_cv)
         form.addRow("Cv — коэффициент вариации:", self.edit_cv)
-        
+
         btn_calc_km = QPushButton("Показать результат")
         btn_calc_km.clicked.connect(self.calculate_kritsky_ordinates)
-        
+
         layout.addWidget(form_group)
         layout.addWidget(btn_calc_km)
-        
+
         self.km_table = QTableWidget()
         auto_resize_table(self.km_table)
         self.km_table.setColumnCount(2)
         self.km_table.setHorizontalHeaderLabels(["Обеспеченность, %", "Ординаты кривой распределения"])
         layout.addWidget(self.km_table)
-    
+
     def setup_params_tab(self):
         layout = QVBoxLayout(self.tab_params)
         group = QGroupBox("Применение связи при продлении данных")
         form = QFormLayout(group)
-        
+
         self.edit_ncr = QLineEdit("12")
         self.edit_ro = QLineEdit("0.70")
         self.edit_ro_sigma = QLineEdit("2.0")
         self.edit_ki_sigma = QLineEdit("2.0")
         self.edit_yi_sigma = QLineEdit("0.2")
-        
+
         form.addRow("Nср >", self.edit_ncr)
         form.addRow("Ro >", self.edit_ro)
         form.addRow("Ro / σRo >", self.edit_ro_sigma)
         form.addRow("ki / σki >", self.edit_ki_sigma)
         form.addRow("Yi / σ >", self.edit_yi_sigma)
-        
+
         btn_apply = QPushButton("Применить параметры")
         btn_apply.clicked.connect(self.apply_parameters)
-        
+
         layout.addWidget(group)
         layout.addWidget(btn_apply)
         layout.addStretch()
-    
+
     def plot_time_series(self):
         if self.df is None:
             QMessageBox.warning(self, "Нет данных", "Сначала загрузите данные")
@@ -828,12 +985,12 @@ class MainWindow(QMainWindow):
             ax.set_ylabel("Q")
             ax.grid(True, alpha=0.3)
             self.viz_canvas.draw()
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
     def plot_histogram(self):
         if self.df is None:
             QMessageBox.warning(self, "Нет данных", "Сначала загрузите данные")
@@ -848,12 +1005,12 @@ class MainWindow(QMainWindow):
             ax.set_ylabel("Частота")
             ax.grid(True, alpha=0.3)
             self.viz_canvas.draw()
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
     def plot_boxplot(self):
         if self.df is None:
             QMessageBox.warning(self, "Нет данных", "Сначала загрузите данные")
@@ -869,74 +1026,103 @@ class MainWindow(QMainWindow):
             ax.set_ylabel("Q")
             ax.grid(True, alpha=0.3)
             self.viz_canvas.draw()
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
     def plot_correlation(self):
-        if self.df_raw is None or len(self.available_posts) < 2:
+        if len(self.available_posts) < 2:
             QMessageBox.warning(self, "Недостаточно данных", "Нужно минимум 2 поста")
             return
         try:
+            # Собираем wide-таблицу из любого источника загрузки
+            if self.df_raw is not None and self.year_col in self.df_raw.columns:
+                wide = self.df_raw
+            elif hasattr(self, '_all_posts') and self._all_posts:
+                wide = pd.DataFrame({
+                    pname: sdf.set_index('year')['value']
+                    for pname, sdf in self._all_posts.items()
+                })
+            else:
+                QMessageBox.warning(self, "Недостаточно данных", "Нужно минимум 2 поста")
+                return
+
+            # Диалог выбора постов
+            dlg = PostSelectionDialog(self.available_posts, parent=self)
+            if dlg.exec() != QDialog.DialogCode.Accepted:
+                return
+            posts = dlg.selected_posts()
+            if len(posts) < 2:
+                QMessageBox.warning(self, "Недостаточно постов", "Нужно выбрать минимум 2 поста")
+                return
+
             self.viz_figure.clear()
             ax = self.viz_figure.add_subplot(111)
-            
-            corr = self.df_raw[self.available_posts].corr()
+
+            corr = wide[posts].corr()
             im = ax.imshow(corr, cmap='RdBu_r', vmin=-1, vmax=1, aspect='auto')
-            ax.set_xticks(range(len(self.available_posts)))
-            ax.set_yticks(range(len(self.available_posts)))
-            ax.set_xticklabels(self.available_posts, rotation=45, ha='right', fontsize=9)
-            ax.set_yticklabels(self.available_posts, fontsize=9)
-            
-            for i in range(len(self.available_posts)):
-                for j in range(len(self.available_posts)):
+            ax.set_xticks(range(len(posts)))
+            ax.set_yticks(range(len(posts)))
+            ax.set_xticklabels(posts, rotation=45, ha='right', fontsize=9)
+            ax.set_yticklabels(posts, fontsize=9)
+
+            for i in range(len(posts)):
+                for j in range(len(posts)):
                     color = 'white' if abs(corr.iloc[i, j]) > 0.6 else 'black'
                     ax.text(j, i, f"{corr.iloc[i, j]:.2f}", ha='center', va='center',
                             color=color, fontsize=9, fontweight='bold')
-            
+
             cb = self.viz_figure.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
             cb.ax.tick_params(labelsize=9)
-            setup_axes_style(ax, title="Корреляционная матрица постов")
+            setup_axes_style(ax, title=f"Корреляционная матрица постов ({len(posts)})")
             self.viz_figure.tight_layout()
             self.viz_canvas.draw()
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
     def calculate_kritsky_ordinates(self):
         try:
-            from core.stats.kritsky_tables import get_ordinates, PROBS
-            
+            from core.stats.kritsky_tables import PROBS, get_ordinates
+
             cs_cv = float(self.edit_cs_cv.text().replace(',', '.'))
             cv = float(self.edit_cv.text().replace(',', '.'))
-            
+
             if cv <= 0:
                 QMessageBox.warning(self, "Ошибка", "Cv должен быть > 0")
                 return
-            
+
             ordinates = get_ordinates(cs_cv, cv)
-            
+
             self.km_table.setRowCount(len(PROBS))
             for i, (p, k) in enumerate(zip(PROBS * 100, ordinates)):
                 self.km_table.setItem(i, 0, QTableWidgetItem(f"{p:.3f}"))
                 val = f"{k:.3f}" if not np.isnan(k) and k > 0 else "—"
                 self.km_table.setItem(i, 1, QTableWidgetItem(val))
-            
+
             self._status_bar.showMessage(f"Ординаты (табличные) рассчитаны (Cs/Cv={cs_cv:.2f}, Cv={cv:.2f})")
-            
-        except Exception as e:
+
+        except (ValueError, TypeError, RuntimeError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", f"Не удалось рассчитать:\n{str(e)}")
-    
+
     def open_curve_dialog(self):
         dialog = CurveSelectionDialog(self)
-        if dialog.exec():
+
+        def on_curve_changed(curve_type):
+            self.curve_type = curve_type
+            if self.df is not None and len(self.df) > 5:
+                self.calculate_and_plot()
+
+        dialog.set_on_change(on_curve_changed)
+
+        def on_accepted():
             self.curve_type, self.calc_method = dialog.get_selection()
             curve_names = {
                 "pearson3": "Пирсон III",
@@ -947,25 +1133,28 @@ class MainWindow(QMainWindow):
             self._status_bar.showMessage(f"Выбрана кривая: {curve_names.get(self.curve_type)}")
             if self.df is not None and len(self.df) > 5:
                 self.calculate_and_plot()
-    
+
+        dialog.button_box.accepted.connect(on_accepted)
+        dialog.exec()
+
     def set_composite_break(self):
         if self.df is None:
             return
-        year, ok = QInputDialog.getInt(self, "Составная кривая", 
+        year, ok = QInputDialog.getInt(self, "Составная кривая",
             "Введите год разрыва:", value=2000, min=1900, max=2100)
         if ok:
             self.break_year = year
             self.btn_clear_break.setEnabled(True)
             self._status_bar.showMessage(f"Год разрыва: {year}. Постройте кривую.")
             self.calculate_and_plot()
-    
+
     def clear_composite(self):
         self.break_year = None
         self.btn_clear_break.setEnabled(False)
         self._status_bar.showMessage("Составная кривая сброшена")
         if self.df is not None:
             self.calculate_and_plot()
-    
+
     def calculate_quantiles(self):
         if self.df is None or len(self.df) < 5:
             QMessageBox.warning(self, "Мало данных", "Нужно минимум 5 значений")
@@ -973,38 +1162,38 @@ class MainWindow(QMainWindow):
         try:
             values = self.df['value'].dropna().values
             curve = calculate_frequency_curve(values)
-            
+
             probs = [0.01, 0.03, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99]
             labels = ['1%', '3%', '5%', '10%', '25%', '50%', '75%', '90%', '95%', '99%']
-            
+
             quantiles = []
             for p, lab in zip(probs, labels):
                 idx = np.argmin(np.abs(curve['P_%'].values - p*100))
                 q_val = curve['Q'].values[idx]
                 quantiles.append((lab, round(q_val, 2)))
-            
+
             self.last_quantiles = quantiles
-            
+
             self.table.setRowCount(len(quantiles) + 1)
             self.table.setItem(0, 0, QTableWidgetItem("Обеспеченность"))
             self.table.setItem(0, 1, QTableWidgetItem("Q, м³/с"))
-            
+
             for i, (lab, q) in enumerate(quantiles):
                 self.table.setItem(i+1, 0, QTableWidgetItem(lab))
                 self.table.setItem(i+1, 1, QTableWidgetItem(str(q)))
-            
+
             msg = "Расчётные расходы:\n\n"
             for lab, q in quantiles:
                 msg += f"{lab:>5} → {q:.2f}\n"
-            
+
             QMessageBox.information(self, "Расчётные расходы", msg)
             self._status_bar.showMessage("Расчётные расходы рассчитаны")
-        except Exception as e:
+        except (OSError, FileNotFoundError, ValueError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
     def load_data(self):
         """Единый загрузчик данных из Excel.
 
@@ -1033,6 +1222,14 @@ class MainWindow(QMainWindow):
             # === 3. Плоский файл: раздача ежедневных данных в work4/6/8/10 ===
             if not is_template:
                 self._distribute_data_to_widgets()
+            elif hasattr(self, '_all_posts') and self._all_posts:
+                # Шаблон: виджет Short тоже должен получать посты
+                try:
+                    self.tab_short.set_data(
+                        all_posts=self._all_posts,
+                        available_posts=self.available_posts)
+                except (ValueError, TypeError, AttributeError) as e:
+                    print(f"[WARN] Ошибка передачи данных в Short: {e}")
 
             # === 4. Активация кнопок ===
             for btn in [self.btn_fill, self.btn_fill_corr, self.btn_calc, self.btn_trend,
@@ -1054,7 +1251,7 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.warning(self, "Внимание",
                                     "Не удалось загрузить данные ни из одного листа")
-        except Exception as e:
+        except (ValueError, KeyError, TypeError, FileNotFoundError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
@@ -1125,7 +1322,7 @@ class MainWindow(QMainWindow):
         """Запасной путь: плоский файл с годом и постами."""
         try:
             self.df_raw, self.year_col, self.available_posts = load_hydrological_data(filepath)
-        except Exception as e:
+        except (ValueError, TypeError, FileNotFoundError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
@@ -1220,7 +1417,7 @@ class MainWindow(QMainWindow):
                 btn.setEnabled(True)
 
             self._status_bar.showMessage(f"Введено вручную: {post_name} ({len(df)} значений)")
-    
+
     def add_additional_post(self):
         """Загрузить дополнительный пост и добавить к существующим."""
         filepath, _ = QFileDialog.getOpenFileName(
@@ -1267,12 +1464,12 @@ class MainWindow(QMainWindow):
             self._status_bar.showMessage(
                 f"Добавлено постов: {len(new_posts)} | Всего: {len(self.available_posts)}"
             )
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
     def on_post_changed(self, post_name):
         if not post_name:
             return
@@ -1295,7 +1492,7 @@ class MainWindow(QMainWindow):
             self.table.setItem(i, 1, QTableWidgetItem(str(value)))
 
         self._status_bar.showMessage(f"Пост {post_name} | Значений: {len(self.df)}")
-    
+
     def fill_missing_with_correlation(self):
         if self.df is None or len(getattr(self, 'available_posts', [])) < 2:
             QMessageBox.warning(self, "Недостаточно данных", "Нужно минимум 2 поста")
@@ -1346,9 +1543,9 @@ class MainWindow(QMainWindow):
             if len(common) < 5:
                 QMessageBox.warning(self, "Мало данных", "Мало пересечений")
                 return
-            
+
             slope, intercept, _, _, _ = stats.linregress(common[best_post], common[target_name])
-            
+
             if all_posts:
                 missing_idx = combined[missing_mask].index
                 predicted = slope * combined.loc[missing_idx, best_post] + intercept
@@ -1370,15 +1567,15 @@ class MainWindow(QMainWindow):
             for i, (key, value) in enumerate(stats_dict.items()):
                 self.table.setItem(i, 0, QTableWidgetItem(str(key)))
                 self.table.setItem(i, 1, QTableWidgetItem(str(value)))
-            
+
             self._status_bar.showMessage(f"Восстановлено с помощью {best_post} (r={best_corr:.3f})")
             QMessageBox.information(self, "Готово", f"Восстановлено с помощью поста {best_post}")
-        except Exception as e:
+        except (ValueError, KeyError, RuntimeError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
     def fill_missing_data(self):
         if self.df is None: return
         try:
@@ -1391,12 +1588,12 @@ class MainWindow(QMainWindow):
                 self.table.setItem(i, 0, QTableWidgetItem(str(key)))
                 self.table.setItem(i, 1, QTableWidgetItem(str(value)))
             QMessageBox.information(self, "Готово", f"Пропусков было: {missing_before} → стало: {missing_after}")
-        except Exception as e:
+        except (ValueError, KeyError, TypeError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
     def check_homogeneity(self):
         if self.df is None or len(self.df) < 20:
             QMessageBox.warning(self, "Мало данных", "Для проверки однородности нужно минимум 20 значений")
@@ -1407,23 +1604,27 @@ class MainWindow(QMainWindow):
             half = n // 2
             part1 = values[:half]
             part2 = values[half:]
-            
+
             t_stat, t_p = stats.ttest_ind(part1, part2)
+            dfn = len(part1) - 1
+            dfd = len(part2) - 1
             f_stat = np.var(part1, ddof=1) / np.var(part2, ddof=1)
-            f_p = 1 - stats.f.cdf(f_stat, len(part1)-1, len(part2)-1)
-            
+            # Двухсторонний p-value для F-теста
+            f_p_upper = 1 - stats.f.cdf(f_stat, dfn, dfd)
+            f_p = 2 * min(f_p_upper, 1 - f_p_upper)
+
             try:
                 w_stat, w_p = stats.ranksums(part1, part2)
             except (ValueError, TypeError):
                 w_stat, w_p = np.nan, np.nan
-            
+
             try:
                 ks_stat, ks_p = stats.ks_2samp(part1, part2)
             except (ValueError, TypeError):
                 ks_stat, ks_p = np.nan, np.nan
-            
+
             homogeneous = (t_p > 0.05) and (f_p > 0.05) and (w_p > 0.05 or np.isnan(w_p))
-            
+
             result_text = (
                 f"Проверка однородности ряда (разделение на две половины)\n\n"
                 f"1. t-критерий Стьюдента (средние):\n"
@@ -1435,19 +1636,19 @@ class MainWindow(QMainWindow):
                 f"4. Критерий Колмогорова-Смирнова:\n"
                 f"   KS = {ks_stat:.3f}, p = {ks_p if np.isnan(ks_p) else f'{ks_p:.4f}'}  → {'однородны' if ks_p > 0.05 else 'различаются' if not np.isnan(ks_p) else 'не определено'}\n\n"
             )
-            
+
             if homogeneous:
                 result_text += "✅ ОБЩИЙ ВЫВОД: ряд статистически ОДНОРОДЕН"
             else:
                 result_text += "⚠️ ОБЩИЙ ВЫВОД: ряд может быть НЕОДНОРОДНЫМ\nРекомендуется проверить причины и рассмотреть составную кривую"
-            
+
             QMessageBox.information(self, "Результат проверки однородности", result_text)
-        except Exception as e:
+        except (ValueError, KeyError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
     def detect_outliers(self):
         if self.df is None or len(self.df) < 10:
             QMessageBox.warning(self, "Мало данных", "Нужно минимум 10 значений")
@@ -1455,40 +1656,40 @@ class MainWindow(QMainWindow):
         try:
             values = self.df['value'].values
             years = self.df['year'].values if 'year' in self.df.columns else np.arange(len(values))
-            
+
             z_scores = np.abs(stats.zscore(values))
             z_outliers = np.where(z_scores > 3)[0]
-            
+
             q1, q3 = np.percentile(values, [25, 75])
             iqr = q3 - q1
             lower = q1 - 1.5 * iqr
             upper = q3 + 1.5 * iqr
             iqr_outliers = np.where((values < lower) | (values > upper))[0]
-            
+
             outlier_idx = np.unique(np.concatenate([z_outliers, iqr_outliers]))
-            
+
             if len(outlier_idx) == 0:
                 QMessageBox.information(self, "Результат", "Выдающихся значений не обнаружено")
                 return
-            
+
             self.table.setRowCount(len(outlier_idx) + 1)
             self.table.setItem(0, 0, QTableWidgetItem("Год / Индекс"))
             self.table.setItem(0, 1, QTableWidgetItem("Значение | Z-score"))
-            
+
             for i, idx in enumerate(outlier_idx):
                 year_str = str(int(years[idx])) if not np.isnan(years[idx]) else str(idx)
                 z_val = z_scores[idx]
                 self.table.setItem(i+1, 0, QTableWidgetItem(year_str))
                 self.table.setItem(i+1, 1, QTableWidgetItem(f"{values[idx]:.2f} | Z={z_val:.2f}"))
-            
-            QMessageBox.information(self, "Выдающиеся значения", 
+
+            QMessageBox.information(self, "Выдающиеся значения",
                 f"Обнаружено {len(outlier_idx)} выдающихся значений.\n\nРекомендуется проверить их.")
-        except Exception as e:
+        except (ValueError, KeyError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
     def calculate_and_plot(self):
         if self.df is None:
             return
@@ -1500,50 +1701,50 @@ class MainWindow(QMainWindow):
             if len(values) < 5:
                 QMessageBox.warning(self, "Мало данных", "Нужно минимум 5 значений")
                 return
-            
+
             pearson = fit_pearson3(values)
             mean_q = pearson['mean']
-            
+
             self.figure.clear()
             ax = self.figure.add_subplot(111)
-            
+
             n = len(values)
             q_desc, p_emp = empirical_plotting_positions(values)
             x_emp = stats.norm.ppf(p_emp)
             modular_emp = q_desc / mean_q
-            
+
             ax.plot(x_emp, modular_emp, 'o', color=COLORS["primary"], markersize=5,
                     label='Эмпирические точки', markeredgecolor='white', markeredgewidth=0.5)
-            
+
             p_theor = np.array([0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5,
                                 0.6, 0.7, 0.8, 0.9, 0.95, 0.98, 0.99, 0.995, 0.999])
             x_theor = stats.norm.ppf(p_theor)
-            
+
             is_composite = self.break_year is not None and years is not None
-            
+
             if is_composite:
                 mask1 = years < self.break_year
                 mask2 = years >= self.break_year
-                
+
                 if mask1.sum() > 5 and mask2.sum() > 5:
                     values1 = values[mask1]
                     values2 = values[mask2]
-                    
+
                     p1 = fit_pearson3(values1)
                     p2 = fit_pearson3(values2)
-                    
+
                     curve1 = calculate_frequency_curve(values1, probabilities=p_theor)
                     curve2 = calculate_frequency_curve(values2, probabilities=p_theor)
-                    
+
                     modular_theor1 = curve1['Q'].values / p1['mean']
                     modular_theor2 = curve2['Q'].values / p2['mean']
-                    
-                    ax.plot(x_theor, modular_theor1, 
+
+                    ax.plot(x_theor, modular_theor1,
                             color=COLORS["secondary"], linewidth=2.5, label=f'До {self.break_year}')
-                    ax.plot(x_theor, modular_theor2, 
+                    ax.plot(x_theor, modular_theor2,
                             color=COLORS["accent"], linewidth=2.5, label=f'После {self.break_year}')
                     title = f"Составная кривая (разрыв {self.break_year})"
-                    
+
                     textstr = (f"До {self.break_year}:\n"
                                f"Qср={p1['mean']:.2f}  Cv={p1['cv']:.3f}  Cs={p1['skew']:.3f}\n\n"
                                f"После {self.break_year}:\n"
@@ -1555,7 +1756,7 @@ class MainWindow(QMainWindow):
                 if self.curve_type == "pearson3":
                     curve = calculate_frequency_curve(values, probabilities=p_theor)
                     modular_theor = curve['Q'].values / mean_q
-                    ax.plot(x_theor, modular_theor, 
+                    ax.plot(x_theor, modular_theor,
                             color=COLORS["secondary"], linewidth=2.5, label='Пирсон III')
                     title = "Кривая Пирсона III типа"
                 elif self.curve_type == "kritsky_menkel":
@@ -1574,21 +1775,21 @@ class MainWindow(QMainWindow):
                 else:
                     ax.plot(x_emp, modular_emp, '-', color=COLORS["secondary"], linewidth=2, label='Интерполяция')
                     title = "Интерполяция ломаной линией"
-                
+
                 textstr = f"Qср = {mean_q:.2f}\nCv = {pearson['cv']:.3f}\nCs = {pearson['skew']:.3f}"
-            
+
             setup_axes_style(ax, title=f'{title} — Пост {self.current_post}',
                            xlabel='Обеспеченность, %', ylabel='Модульный коэффициент K = Q / Qср')
             ax.legend(loc='upper right', framealpha=0.9)
-            
+
             prob_ticks = [0.01, 0.05, 0.1, 0.2, 0.5, 0.8, 0.9, 0.95, 0.99]
             prob_labels = ['1%', '5%', '10%', '20%', '50%', '80%', '90%', '95%', '99%']
             ax.set_xticks(stats.norm.ppf(prob_ticks))
             ax.set_xticklabels(prob_labels)
-            
+
             props = dict(boxstyle='round,pad=0.5', facecolor='#E3F2FD', alpha=0.9, edgecolor='#90CAF9')
             ax.text(0.02, -0.07, textstr, transform=ax.transAxes, fontsize=9, verticalalignment='bottom', bbox=props, family='monospace')
-            
+
             self.canvas.draw()
 
             # Включаем кнопки вариантов
@@ -1596,7 +1797,7 @@ class MainWindow(QMainWindow):
             self.btn_show_all.setEnabled(True)
             self.btn_clear_variants.setEnabled(True)
 
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
@@ -1630,7 +1831,7 @@ class MainWindow(QMainWindow):
             self.variant_table.setItem(i, 4, QTableWidgetItem(str(v['cs'])))
         auto_resize_table(self.variant_table)
 
-        self._status_bar().showMessage(
+        self._status_bar.showMessage(
             f"Вариант сохранён: {self.curve_type}, Cs/Cv={variant['cs_cv']}")
 
     def _show_all_variants(self):
@@ -1705,7 +1906,7 @@ class MainWindow(QMainWindow):
         self._saved_variants.clear()
         self.variant_table.setRowCount(0)
         self.variant_table.setVisible(False)
-        self._status_bar().showMessage("Варианты очищены")
+        self._status_bar.showMessage("Варианты очищены")
 
     def _auto_select_cs_cv(self):
         """Автоматический подбор Cs/Cv."""
@@ -1742,7 +1943,7 @@ class MainWindow(QMainWindow):
                 text += f"  P={row['P_%']:6.2f}%  Q_теор={row['Q_theory']:8.2f}  Q_эмп={row['Q_empirical']:8.2f}\n"
 
         self.cs_cv_text.setText(text)
-        self._status_bar().showMessage(
+        self._status_bar.showMessage(
             f"Cs/Cv подобран: {result['cs_cv_optimal']} (SS={result['ss_min']:.2f})")
 
     def _add_historical_extreme(self):
@@ -1796,7 +1997,7 @@ class MainWindow(QMainWindow):
         )
 
         self.cs_cv_text.setText(text)
-        self._status_bar().showMessage(
+        self._status_bar.showMessage(
             f"Добавлен экстремум: Q={value} (T={period} лет)")
 
     def _check_stationarity(self):
@@ -1836,11 +2037,11 @@ class MainWindow(QMainWindow):
         )
 
         self.trend_text.setText(text)
-        self._status_bar().showMessage(
+        self._status_bar.showMessage(
             f"Стационарность: {'ДА' if result['is_stationary'] else 'НЕТ'}")
 
     def save_plot_as_image(self):
-        filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить график", "", 
+        filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить график", "",
             "Изображения PNG (*.png);;Изображения JPEG (*.jpg);;Документы PDF (*.pdf)")
         if not filepath:
             return
@@ -1848,12 +2049,12 @@ class MainWindow(QMainWindow):
             self.figure.savefig(filepath, dpi=300, bbox_inches='tight')
             self._status_bar.showMessage(f"График сохранён: {filepath}")
             QMessageBox.information(self, "Готово", "График успешно сохранён")
-        except Exception as e:
+        except (OSError, ValueError, TypeError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
     def save_report(self):
         if self.df is None:
             QMessageBox.warning(self, "Внимание", "Сначала загрузите данные")
@@ -1878,18 +2079,18 @@ class MainWindow(QMainWindow):
                     ]
                 }
                 pd.DataFrame(info).to_excel(writer, sheet_name='Информация', index=False)
-                
+
                 stats = get_basic_stats(self.df)
                 pd.DataFrame(list(stats.items()), columns=['Показатель', 'Значение']).to_excel(
                     writer, sheet_name='Статистика', index=False)
-                
+
                 values = self.df['value'].dropna().values
                 curve = calculate_frequency_curve(values)
                 pd.DataFrame({
                     'Обеспеченность_%': curve['P_%'].round(2),
                     'Q_теоретическое': curve['Q'].round(2)
                 }).to_excel(writer, sheet_name='Кривая_обеспеченности', index=False)
-                
+
                 if self.last_quantiles:
                     pd.DataFrame(self.last_quantiles, columns=['Обеспеченность', 'Q_м3_с']).to_excel(
                         writer, sheet_name='Расчётные_расходы', index=False)
@@ -1902,17 +2103,17 @@ class MainWindow(QMainWindow):
                         quantiles.append((lab, round(curve['Q'].values[idx], 2)))
                     pd.DataFrame(quantiles, columns=['Обеспеченность', 'Q_м3_с']).to_excel(
                         writer, sheet_name='Расчётные_расходы', index=False)
-                
+
                 self.df.to_excel(writer, sheet_name='Исходные_данные', index=False)
-            
+
             self._status_bar.showMessage(f"Отчёт сохранён: {filepath}")
             QMessageBox.information(self, "Готово", "Отчёт успешно сохранён")
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
     def run_trend_analysis(self):
         if self.df is None or len(self.df) < 10:
             QMessageBox.warning(self, "Мало данных", "Для анализа тренда нужно минимум 10 значений")
@@ -1923,7 +2124,7 @@ class MainWindow(QMainWindow):
             mk = result['mann_kendall']
             sen = result['sen_slope']
             pettitt = result['pettitt']
-            
+
             data = [
                 ("Показатель", "Значение"),
                 ("Линейный наклон", f"{linear['slope']:.5f}"),
@@ -1938,41 +2139,41 @@ class MainWindow(QMainWindow):
             ]
             if pettitt:
                 data.append(("Pettitt: точка изменения", f"~{pettitt['change_year']} г."))
-            
+
             self.trend_table.setRowCount(len(data))
             for i, (key, value) in enumerate(data):
                 self.trend_table.setItem(i, 0, QTableWidgetItem(key))
                 self.trend_table.setItem(i, 1, QTableWidgetItem(str(value)))
-            
+
             self.trend_text.setPlainText(result['interpretation'])
-            
+
             self.trend_figure.clear()
             ax = self.trend_figure.add_subplot(111)
             years = result['years']
             values = result['values']
             ax.plot(years, values, 'o', color='#1f77b4', markersize=4, label='Наблюдения')
-            
+
             slope = linear['slope']
             intercept = linear['intercept']
-            ax.plot(years, slope * years + intercept, color='#d62728', linewidth=2.5, label=f'Тренд')
-            
+            ax.plot(years, slope * years + intercept, color='#d62728', linewidth=2.5, label='Тренд')
+
             ci_lower = linear['slope_ci_lower'] * years + intercept
             ci_upper = linear['slope_ci_upper'] * years + intercept
             ax.fill_between(years, ci_lower, ci_upper, color='#d62728', alpha=0.15, label='95% ДИ')
-            
+
             if pettitt and pettitt['significant']:
                 ax.axvline(x=pettitt['change_year'], color='green', linestyle='--', linewidth=2, label='Точка изменения')
-            
+
             ax.set_title(f'Анализ тренда — Пост {self.current_post}')
             ax.legend()
             ax.grid(True, alpha=0.3)
             self.trend_canvas.draw()
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка", str(e))
-    
+
     def apply_parameters(self):
         QMessageBox.information(self, "Параметры", "Параметры применены")
 
@@ -2074,7 +2275,7 @@ class MainWindow(QMainWindow):
                 msg += f"{pt['label']}: P={pt['P_%']:.2f}%, Q={pt['Q']:.2f} м³/с\n"
             QMessageBox.information(self, "ГТС: расчётные точки", msg)
 
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
@@ -2082,12 +2283,18 @@ class MainWindow(QMainWindow):
 
     def build_composite_curve(self):
         """Построение составной кривой с автоматическим определением границы."""
-        if self.df is None or len(self.df) < 20:
-            QMessageBox.warning(self, "Мало данных", "Нужно минимум 20 значений")
+        if self.df is None:
+            QMessageBox.warning(self, "Нет данных", "Сначала загрузите данные")
             return
         try:
-            values = self.df['value'].dropna().values
-            years = self.df['year'].values if 'year' in self.df.columns else np.arange(len(values))
+            df_valid = self.df.dropna(subset=['value'])
+            if len(df_valid) < 20:
+                QMessageBox.warning(self, "Мало данных",
+                                    f"Нужно минимум 20 полных наблюдений, у вас {len(df_valid)}")
+                return
+
+            values = df_valid['value'].dropna().values
+            years = df_valid['year'].values if 'year' in df_valid.columns else np.arange(len(values))
 
             cp = find_change_point(values, years)
             suggested_year = cp.get('change_year') or (int(np.median(years)) if len(years) > 0 else 2000)
@@ -2175,7 +2382,7 @@ class MainWindow(QMainWindow):
 
             QMessageBox.information(self, "Составная кривая", msg)
 
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
@@ -2193,23 +2400,64 @@ class MainWindow(QMainWindow):
     def extend_series(self):
         """Удлинение ряда по аналогу."""
         if self.df is None:
+            QMessageBox.warning(self, "Нет данных", "Сначала загрузите данные")
             return
-        from PyQt6.QtWidgets import QInputDialog
         filepath, _ = QFileDialog.getOpenFileName(self, "Загрузить ряд-аналог", "", "Excel (*.xlsx)")
         if not filepath:
             return
         try:
-            df_analog = pd.read_excel(filepath)
-            if 'value' in df_analog.columns and 'year' in df_analog.columns:
-                Q_analog = df_analog.set_index('year')['value']
-            elif len(df_analog.columns) >= 2:
-                Q_analog = df_analog.iloc[:, 1]
-                Q_analog.index = df_analog.iloc[:, 0].astype(int)
-            else:
-                QMessageBox.warning(self, "Ошибка", "Файл должен содержать колонки year и value")
-                return
+            df_analog = pd.read_excel(filepath, header=None).astype(str).values
+            year_row_idx = None
+            year_col_idx = 0
+            for r in range(min(50, len(df_analog))):
+                for c in range(min(20, df_analog.shape[1])):
+                    if str(df_analog[r, c]).strip().lower() in ('год', 'year', 'years', 'годы'):
+                        year_row_idx = r
+                        year_col_idx = c
+                        break
+                if year_row_idx is not None:
+                    break
 
-            Q_calc = self.df.set_index('year')['value']
+            if year_row_idx is None:
+                df_analog = pd.read_excel(filepath)
+                year_col = None
+                for col in df_analog.columns:
+                    if str(col).strip().lower() in ('год', 'year', 'years', 'годы'):
+                        year_col = col
+                        break
+                if year_col is None:
+                    year_col = df_analog.columns[0]
+                for col in df_analog.columns:
+                    if col == year_col:
+                        continue
+                    try:
+                        values = pd.to_numeric(df_analog[col], errors='coerce')
+                        if values.notna().sum() >= 1:
+                            Q_analog = df_analog.set_index(year_col)[col]
+                            Q_analog.index = pd.to_numeric(Q_analog.index, errors='coerce')
+                            break
+                    except (ValueError, TypeError):
+                        continue
+            else:
+                df_sheet = pd.read_excel(filepath, skiprows=year_row_idx)
+                year_col_name = df_sheet.columns[year_col_idx]
+                Q_analog = None
+                for col in df_sheet.columns:
+                    if col == year_col_name:
+                        continue
+                    try:
+                        values = pd.to_numeric(df_sheet[col], errors='coerce')
+                        if values.notna().sum() >= 1:
+                            Q_analog = df_sheet.set_index(year_col_name)[col]
+                            Q_analog.index = pd.to_numeric(Q_analog.index, errors='coerce')
+                            break
+                    except (ValueError, TypeError):
+                        continue
+                if Q_analog is None:
+                    QMessageBox.warning(self, "Ошибка", "В файле-аналоге не найдены числовые данные")
+                    return
+
+            Q_calc = self.df.dropna(subset=['value']).set_index('year')['value']
             result = full_extension_workflow(Q_calc, Q_analog)
 
             val = result['validation']
@@ -2264,7 +2512,7 @@ class MainWindow(QMainWindow):
 
             QMessageBox.information(self, "Результат удлинения", msg)
 
-        except Exception as e:
+        except (OSError, ValueError, TypeError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
@@ -2284,7 +2532,7 @@ class MainWindow(QMainWindow):
             from create_unified_template import create_unified_template
             path = create_unified_template(path)
             QMessageBox.information(self, "Готово", f"Шаблон создан:\n{path}")
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
@@ -2649,105 +2897,27 @@ class MainWindow(QMainWindow):
         return found
 
 
-APP_STYLESHEET = """
-    QGroupBox {
-            border: 1px solid #BDBDBD;
-            border-radius: 6px;
-            margin-top: 12px;
-            padding-top: 16px;
-            font-weight: bold;
-            color: #333;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            left: 12px;
-            padding: 0 6px;
-        }
-        QLineEdit, QDoubleSpinBox, QSpinBox {
-            background-color: #FAFAFA;
-            border: 1px solid #BDBDBD;
-            border-radius: 4px;
-            padding: 4px 8px;
-            color: #212121;
-            selection-background-color: #1565C0;
-        }
-        QLineEdit:focus, QDoubleSpinBox:focus, QSpinBox:focus {
-            border: 1px solid #1565C0;
-            background-color: #FFFFFF;
-        }
-        QTextEdit {
-            background-color: #FAFAFA;
-            border: 1px solid #BDBDBD;
-            border-radius: 4px;
-            color: #212121;
-        }
-        QTableWidget {
-            gridline-color: #E0E0E0;
-            background-color: #FAFAFA;
-            border: 1px solid #BDBDBD;
-            border-radius: 4px;
-            selection-background-color: #BBDEFB;
-        }
-        QTableWidget::item {
-            padding: 4px;
-        }
-        QHeaderView::section {
-            background-color: #E3F2FD;
-            border: 1px solid #BDBDBD;
-            padding: 4px;
-            font-weight: bold;
-            color: #1565C0;
-        }
-        QComboBox {
-            background-color: #FAFAFA;
-            border: 1px solid #1565C0;
-            border-radius: 4px;
-            padding: 4px 28px 4px 8px;
-            color: #212121;
-            font-weight: bold;
-        }
-        QComboBox:focus {
-            border: 1px solid #0D47A1;
-        }
-        QComboBox::drop-down {
-            border: none;
-            width: 24px;
-        }
-        QComboBox::down-arrow {
-            image: url(_ARROW_DOWN_);
-            width: 16px;
-            height: 16px;
-        }
-        QPushButton {
-            background-color: #37474F;
-            color: white;
-            border: 1px solid #263238;
-            border-radius: 4px;
-            padding: 6px 14px;
-            font-weight: bold;
-            font-size: 11px;
-        }
-        QPushButton:hover {
-            background-color: #455A64;
-            border: 1px solid #37474F;
-        }
-        QPushButton:pressed {
-            background-color: #263238;
-        }
-        QTabWidget::pane {
-            border: 1px solid #BDBDBD;
-            border-radius: 4px;
-        }
-    """
+class _StartupUpdateWorker(QThread):
+    """Фоновая проверка обновлений при запуске — не блокирует UI."""
+    update_found = pyqtSignal(object)
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
-_ARROW_DOWN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "arrow_down.svg")
-APP_STYLESHEET = APP_STYLESHEET.replace("_ARROW_DOWN_", _ARROW_DOWN.replace("\\", "/"))
+    def run(self):
+        try:
+            updater = get_updater()
+            result = updater.check_once()
+            self.update_found.emit(result)
+        except Exception:
+            self.update_found.emit(None)
 
 
 if __name__ == "__main__":
-    import traceback as _tb
     import datetime as _dt
+    import traceback as _tb
+
+    from PyQt6.QtCore import QTimer
     _LOG_PATH = os.path.join(os.path.dirname(__file__), "gui_error.log")
 
     def _log_exception(exc_type, exc_value, exc_tb):
@@ -2761,7 +2931,44 @@ if __name__ == "__main__":
     sys.excepthook = _log_exception
 
     app = QApplication(sys.argv)
-    app.setStyleSheet(APP_STYLESHEET)
+    app.setStyleSheet(build_stylesheet())
+    app.setFont(FONT_DEFAULT)
     window = MainWindow()
+    window.setMinimumSize(1200, 700)
     window.show()
+
+    _startup_worker = _StartupUpdateWorker(window)
+
+    def _on_startup_update(info):
+        if info is not None and not getattr(window, '_update_dialog_open', False):
+            window._update_dialog_open = True
+            from gui.update_dialog import UpdateDialog
+            dialog = UpdateDialog(parent=window, checker=get_updater().get_checker(), update_info=info)
+            dialog.finished.connect(lambda: setattr(window, '_update_dialog_open', False))
+            dialog.show()
+
+    _startup_worker.update_found.connect(_on_startup_update)
+    QTimer.singleShot(1500, _startup_worker.start)
+    def _on_data_loaded(self, df_raw, available_posts):
+        self.df_raw = df_raw
+        self.available_posts = available_posts
+        self._populate_post_combos()
+        self._status_bar.showMessage(f"Загружено постов: {len(available_posts)}")
+
+    def _on_post_changed_controller(self, post_name, df):
+        self.current_post = post_name
+        self.df = df.copy()
+        self.df.attrs['post'] = post_name
+        self._sync_post_combos(post_name)
+        stats = get_basic_stats(self.df)
+        self.table.setRowCount(len(stats))
+        for i, (k, v) in enumerate(stats.items()):
+            self.table.setItem(i, 0, QTableWidgetItem(str(k)))
+            self.table.setItem(i, 1, QTableWidgetItem(str(v)))
+        self._status_bar.showMessage(f"Пост {post_name} | Значений: {len(self.df)}")
+
+    def _on_work1_calculated(self, result):
+        self.result_box.clear() if hasattr(self, 'result_box') else None
+
+if __name__ == "__main__":
     sys.exit(app.exec())

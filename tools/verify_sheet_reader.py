@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """
 tools/verify_sheet_reader.py
 Без-GUI проверка извлечения данных из unified_template.xlsx.
@@ -12,7 +11,6 @@ Exit code 0 — все проверки OK, ненулевой — есть FAIL
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Принудительно перенаправляем stdout в UTF-8 для Windows-консоли.
@@ -24,11 +22,15 @@ _root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_root))
 
 import pandas as pd
-from core.stats.sheet_reader import (
-    find_sheet, find_header_row, read_work_sheet,
-    numeric_column, clean_column_name
-)
+
 from core.gts_reference import GTSClass, classify_gts_by_parameters
+from core.stats.sheet_reader import (
+    clean_column_name,
+    find_header_row,
+    find_sheet,
+    numeric_column,
+    read_work_sheet,
+)
 
 
 def main():

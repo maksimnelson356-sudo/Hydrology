@@ -12,24 +12,34 @@ gui/widget_short.py
 
 import numpy as np
 import pandas as pd
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-    QPushButton, QTableWidget, QTableWidgetItem, QTextEdit,
-    QLabel, QCheckBox, QSpinBox, QMessageBox, QFileDialog,
-    QGroupBox, QFormLayout, QHeaderView, QAbstractItemView,
-)
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont
-
-from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtWidgets import (
+    QAbstractItemView,
+    QCheckBox,
+    QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from core.short_series import (
+    build_protocol,
     fit_analog_relationship,
     restore_short_series,
-    build_protocol,
 )
-from gui.plot_style import apply_global_style, setup_axes_style, COLORS, auto_resize_table
+from gui.plot_style import COLORS, auto_resize_table, setup_axes_style
 
 
 class ShortWidget(QWidget):
@@ -242,7 +252,7 @@ class ShortWidget(QWidget):
         auto_resize_table(self.table_data)
 
     def _load_data(self):
-        """Загрузка данных из Excel файла."""
+        """Загрузка данных из Excel файла (шаблон или плоский файл)."""
         path, _ = QFileDialog.getOpenFileName(
             self, 'Загрузить данные', '',
             'Excel (*.xlsx);;Все файлы (*)')
@@ -252,32 +262,63 @@ class ShortWidget(QWidget):
         try:
             xls = pd.ExcelFile(path)
             all_posts = {}
+
+            # Находим главный лист: первая строка с «Год» или первый лист
+            main_sheet = None
             for sheet_name in xls.sheet_names:
-                df = pd.read_excel(xls, sheet_name)
-                # Ищем колонку года
+                raw = pd.read_excel(xls, sheet_name, header=None,
+                                    nrows=50).astype(str).values
+                if any(
+                    str(raw[r, c]).strip().lower()
+                    in ('год', 'year', 'years', 'годы')
+                    for r in range(len(raw))
+                    for c in range(raw.shape[1])
+                ):
+                    main_sheet = sheet_name
+                    break
+            if main_sheet is None and xls.sheet_names:
+                main_sheet = xls.sheet_names[0]
+
+            raw = pd.read_excel(xls, main_sheet, header=None).astype(str).values
+            header_row = None
+            year_col_idx = 0
+            for r in range(min(50, len(raw))):
+                for c in range(min(30, raw.shape[1])):
+                    if str(raw[r, c]).strip().lower() in ('год', 'year', 'years', 'годы'):
+                        header_row = r
+                        year_col_idx = c
+                        break
+                if header_row is not None:
+                    break
+
+            if header_row is None:
+                df = pd.read_excel(xls, main_sheet)
                 year_col = None
                 for col in df.columns:
-                    if str(col).lower() in ('год', 'year', 'years', 'годы'):
+                    if str(col).strip().lower() in ('год', 'year', 'years', 'годы'):
                         year_col = col
                         break
                 if year_col is None:
                     year_col = df.columns[0]
+            else:
+                df = pd.read_excel(xls, main_sheet, skiprows=header_row)
+                year_col = df.columns[year_col_idx]
 
-                for col in df.columns:
-                    if col == year_col:
-                        continue
-                    try:
-                        values = pd.to_numeric(df[col], errors='raise')
-                        if values.notna().sum() >= 1:
-                            post_df = pd.DataFrame({
-                                'year': pd.to_numeric(
-                                    df[year_col], errors='coerce'),
-                                'value': values,
-                            }).dropna(subset=['value'])
-                            if not post_df.empty:
-                                all_posts[str(col)] = post_df
-                    except (ValueError, TypeError):
-                        continue
+            for col in df.columns:
+                if col == year_col:
+                    continue
+                try:
+                    values = pd.to_numeric(df[col], errors='coerce')
+                    years = pd.to_numeric(df[year_col], errors='coerce')
+                    if values.notna().sum() >= 1:
+                        post_df = pd.DataFrame({
+                            'year': years,
+                            'value': values,
+                        }).dropna(subset=['value'])
+                        if not post_df.empty:
+                            all_posts[str(col)] = post_df
+                except (ValueError, TypeError):
+                    continue
 
             if all_posts:
                 self._all_posts = all_posts
@@ -294,7 +335,7 @@ class ShortWidget(QWidget):
             QMessageBox.critical(self, 'Ошибка', str(e))
 
     def _select_analogs(self):
-        """Выбор расчётного поста и аналогов через диалог."""
+        """Выбор расчётного поста и аналогов через диалог с галочками."""
         if not self._all_posts:
             return
 
@@ -307,35 +348,59 @@ class ShortWidget(QWidget):
                 'Нужно минимум 2 поста (расчётный + 1 аналог)')
             return
 
-        # Простой диалог: показываем список постов
-        # с чекбоксами для выбора расчётного и аналогов
-        from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QListWidget
+        from PyQt6.QtWidgets import (
+            QAbstractItemView,
+            QComboBox,
+            QDialog,
+            QDialogButtonBox,
+            QTableWidget,
+            QTableWidgetItem,
+        )
 
         dialog = QDialog(self)
-        dialog.setWindowTitle('Выбор постов')
-        dialog.setMinimumSize(400, 500)
+        dialog.setWindowTitle('Выбор постов для восстановления')
+        dialog.setMinimumSize(460, 520)
         dlg_layout = QVBoxLayout(dialog)
 
         lbl_calc = QLabel('Расчётный пост (короткий ряд):')
         lbl_calc.setFont(QFont('Segoe UI', 10, QFont.Weight.Bold))
         dlg_layout.addWidget(lbl_calc)
 
-        list_calc = QListWidget()
-        list_calc.addItems(post_names)
-        list_calc.setCurrentRow(0)
-        dlg_layout.addWidget(list_calc)
+        combo_calc = QComboBox()
+        combo_calc.addItems(post_names)
+        dlg_layout.addWidget(combo_calc)
 
-        lbl_analogs = QLabel('Аналоги (отметьте галочками):')
+        lbl_analogs = QLabel('Аналоги (отметьте галочками в колонке «Выбрать»):')
         lbl_analogs.setFont(QFont('Segoe UI', 10, QFont.Weight.Bold))
         dlg_layout.addWidget(lbl_analogs)
 
-        list_analogs = QListWidget()
-        list_analogs.setSelectionMode(
-            QAbstractItemView.SelectionMode.MultiSelection)
+        table = QTableWidget()
+        table.setColumnCount(2)
+        table.setHorizontalHeaderLabels(['Пост', 'Выбрать'])
+        table.setRowCount(len(post_names))
+        table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Stretch)
+        table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.ResizeToContents)
+        table.verticalHeader().setVisible(False)
+        table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+
         for i, name in enumerate(post_names):
-            item = QListWidget.ItemText.__class__  # dummy
-            list_analogs.addItem(name)
-        dlg_layout.addWidget(list_analogs)
+            name_item = QTableWidgetItem(name)
+            name_item.setFlags(
+                name_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            table.setItem(i, 0, name_item)
+
+            check_item = QTableWidgetItem()
+            check_item.setFlags(
+                Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+            check_item.setCheckState(
+                Qt.CheckState.Checked if i != 0 else Qt.CheckState.Unchecked)
+            check_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            table.setItem(i, 1, check_item)
+
+        dlg_layout.addWidget(table)
 
         btn_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok |
@@ -345,11 +410,14 @@ class ShortWidget(QWidget):
         dlg_layout.addWidget(btn_box)
 
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            calc_row = list_calc.currentRow()
-            calc_name = post_names[calc_row]
-            selected = [
-                item.text() for item in list_analogs.selectedItems()
-                if item.text() != calc_name]
+            calc_name = combo_calc.currentText()
+            selected = []
+            for i, name in enumerate(post_names):
+                item = table.item(i, 1)
+                if (item is not None
+                        and item.checkState() == Qt.CheckState.Checked
+                        and name != calc_name):
+                    selected.append(name)
 
             if not selected:
                 QMessageBox.warning(
@@ -413,7 +481,7 @@ class ShortWidget(QWidget):
             x = Q_analog.loc[common].values
             y = self._calc_series.loc[common].values
 
-            ax.scatter(x, y, c=COLORS[0] if COLORS else '#1565C0',
+            ax.scatter(x, y, c=COLORS.get('primary', '#1565C0'),
                        s=30, alpha=0.7, zorder=3)
 
             # Линия связи

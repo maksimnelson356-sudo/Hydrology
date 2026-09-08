@@ -21,11 +21,10 @@ core/hydrorash/ice_phenomena.py
 - estimate_ice_thickness_by_formula — расчёт толщины льда по формуле Кондратьева
 """
 
+from enum import Enum
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
-from enum import Enum
 
 
 class ClimateZone(Enum):
@@ -43,7 +42,7 @@ class ClimateZone(Enum):
 # ─────────────────────────────────────────────────────────────────────
 
 # Таблица 7.1 СП 58.13330.2019: типичные параметры ледового режима
-ICE_PARAMS_BY_ZONE: Dict[ClimateZone, Dict] = {
+ICE_PARAMS_BY_ZONE: dict[ClimateZone, dict] = {
     ClimateZone.ARCTIC: {
         "max_thickness_range_m": (1.5, 3.0),
         "freeze_period_days": (200, 260),
@@ -114,7 +113,7 @@ ICE_PARAMS_BY_ZONE: Dict[ClimateZone, Dict] = {
 
 # Коэффициенты A для формулы d_max = A * sqrt(|T_jan|) по зонам
 # РД 52-26-2008, таблица приложения
-THICKNESS_COEFF_A: Dict[ClimateZone, float] = {
+THICKNESS_COEFF_A: dict[ClimateZone, float] = {
     ClimateZone.ARCTIC: 0.45,
     ClimateZone.SUBARCTIC: 0.40,
     ClimateZone.COLD_HUMID: 0.36,
@@ -124,7 +123,7 @@ THICKNESS_COEFF_A: Dict[ClimateZone, float] = {
 }
 
 # Условия возникновения заторов (СП 33-101-2003, п. 8.5.3)
-JAM_PROBABILITY_TABLE: Dict[float, float] = {
+JAM_PROBABILITY_TABLE: dict[float, float] = {
     # channel_width_m -> relative probability of jam formation (0..1)
     20: 0.85,
     50: 0.65,
@@ -137,7 +136,7 @@ JAM_PROBABILITY_TABLE: Dict[float, float] = {
 
 
 def _interpolate_table(
-    table: Dict[float, float],
+    table: dict[float, float],
     x: float
 ) -> float:
     """Линейная интерполяция по таблице значений."""
@@ -160,7 +159,7 @@ def _interpolate_table(
 def compute_ice_cover_stats(
     ice_start_dates: pd.Series,
     ice_end_dates: pd.Series
-) -> Dict:
+) -> dict:
     """
     Статистика ледостава и ледохода.
 
@@ -248,7 +247,7 @@ def estimate_max_ice_thickness(
     latitude: float,
     mean_jan_temp: float,
     zone: ClimateZone = ClimateZone.MODERATE
-) -> Dict:
+) -> dict:
     """
     Оценка максимальной толщины льда на реках.
 
@@ -373,7 +372,7 @@ def ice_jam_rise(
     channel_width: float,
     ice_thickness: float,
     flow_velocity: float = 1.0
-) -> Dict:
+) -> dict:
     """
     Расчёт повышения уровня воды при ледоходном заторе.
 
@@ -468,7 +467,7 @@ def ice_jam_flood_level(
     ice_thickness: float,
     flow_velocity: float = 1.0,
     return_period_years: int = 100
-) -> Dict:
+) -> dict:
     """
     Расчётный уровень воды при заторном паводке.
 
@@ -590,7 +589,7 @@ def ice_cover_duration(
 def freeze_up_date_analysis(
     dates: pd.Series,
     period: str = "year"
-) -> Dict:
+) -> dict:
     """
     Анализ дат ледостава (средняя, ранняя, поздняя).
 
@@ -656,7 +655,7 @@ def freeze_up_date_analysis(
 
 def ice_breakup_date_analysis(
     dates: pd.Series
-) -> Dict:
+) -> dict:
     """
     Анализ дат ледохода (средняя, ранняя, поздняя).
 
@@ -729,7 +728,7 @@ def ice_breakup_date_analysis(
 
 def get_ice_parameters_by_zone(
     zone: ClimateZone
-) -> Dict:
+) -> dict:
     """
     Справочные параметры ледового режима по климатической зоне.
 

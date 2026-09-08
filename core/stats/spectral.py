@@ -9,14 +9,14 @@ core/stats/spectral.py
 - find_periodicity — поиск периодичности в ряде
 """
 
+
 import numpy as np
-from typing import Dict, List, Optional
 
 
 def fft_analysis(
     Q: np.ndarray,
     dt: float = 1.0,
-) -> Dict:
+) -> dict:
     """
     Быстрое преобразование Фурье для временного ряда.
 
@@ -59,7 +59,7 @@ def power_spectrum(
     Q: np.ndarray,
     dt: float = 1.0,
     window: str = 'hanning',
-) -> Dict:
+) -> dict:
     """
     Энергетический спектр с оконной функцией.
 
@@ -114,8 +114,8 @@ def power_spectrum(
 
 def hurst_exponent(
     Q: np.ndarray,
-    max_window: Optional[int] = None,
-) -> Dict:
+    max_window: int | None = None,
+) -> dict:
     """
     Экспонента Хёрста (метод R/S).
 
@@ -197,7 +197,7 @@ def find_periodicity(
     Q: np.ndarray,
     dt: float = 1.0,
     significance_level: float = 0.05,
-) -> Dict:
+) -> dict:
     """
     Поиск значимых периодичностей в ряде.
 

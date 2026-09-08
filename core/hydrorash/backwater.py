@@ -9,8 +9,8 @@ core/hydrorash/backwater.py
 - backwater_from_reservoir — линия подпора от водохранилища
 """
 
+
 import numpy as np
-from typing import Dict, List, Optional, Tuple
 
 
 def normal_depth(
@@ -114,7 +114,7 @@ def backwater_curve_step(
     L_total: float,
     dx: float = 100.0,
     H_downstream: float = 0,
-) -> Dict:
+) -> dict:
     """
     Расчёт кривой подпора методом последовательных сечений (direct step).
 
@@ -171,6 +171,7 @@ def backwater_curve_step(
             if abs(dx_calc - dx) < 0.1:
                 break
             h_next += (dx - dx_calc) * 0.01
+            h_next = max(h_next, 0.01)
 
         h_next = max(h_next, 0.01)
         h = h_next
@@ -195,7 +196,7 @@ def backwater_from_reservoir(
     H_reservoir: float,
     L_max: float = 10000,
     dx: float = 200,
-) -> Dict:
+) -> dict:
     """
     Линия подпора от водохранилища (СП 33 п.8.4).
 

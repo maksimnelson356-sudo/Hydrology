@@ -7,12 +7,11 @@ core/stats/frequency.py
 - Эмпирическая кривая
 """
 
-import math
+from typing import Literal
+
 import numpy as np
 import pandas as pd
 from scipy import stats
-from typing import Dict, Optional, Literal
-
 
 CurveType = Literal[
     "pearson3",
@@ -24,7 +23,7 @@ CurveType = Literal[
 ]
 
 
-def fit_pearson3(data: np.ndarray) -> Dict:
+def fit_pearson3(data: np.ndarray) -> dict:
     from core.stats.parameters import calculate_statistical_parameters
     result = calculate_statistical_parameters(data)
     return {
@@ -39,10 +38,12 @@ def fit_pearson3(data: np.ndarray) -> Dict:
 
 def empirical_plotting_positions(data: np.ndarray) -> tuple:
     """
-    Эмпирические точки кривой обеспеченности (формула Каннана).
+    Эмпирические точки кривой обеспеченности (формула Крицкого-Менкеля).
 
     Ряд сортируется по убыванию (m=1 — максимальный член),
     обеспеченность каждого члена: P_m = (m - 0.3)/(n + 0.4) [0..1].
+    Используется в кривых обеспеченности Крицкого-Менкеля (СП 33-101-2003).
+    Альтернативы: Вейбулл: m/(n+1), Хейзен: (m-0.5)/n, Грингортен: (m-0.44)/(n+0.12).
 
     Returns:
         (q_desc, p_exceed): отсортированный по убыванию ряд и его
@@ -70,8 +71,14 @@ def pearson3_ppf(probabilities: np.ndarray, mean: float, cv: float, cs: float) -
     обрезаются до нуля, как это делает эталонная программа.
     """
     probabilities = np.asarray(probabilities, dtype=float)
-    cv = max(abs(cv), 0.001)
     cs = float(cs)
+
+    if mean <= 0:
+        return np.full_like(probabilities, np.nan)
+    cv = float(cv)
+    if cv <= 0:
+        # Все значения идентичны → квантиль = mean
+        return np.full_like(probabilities, mean, dtype=float)
 
     quantiles = stats.pearson3.ppf(
         1 - probabilities, skew=cs, loc=mean, scale=mean * cv
@@ -92,20 +99,25 @@ def kritsky_menkel_ppf(probabilities: np.ndarray, mean: float, cv: float, cs: fl
     в пределах погрешности таблиц. Отрицательные квантили обрезаются до нуля.
     """
     probabilities = np.asarray(probabilities, dtype=float)
-    cv = max(abs(cv), 0.001)
     cs = float(cs)
     if abs(cs) < 0.001:
         cs = 0.001
 
-    # --- Трёхпараметрическое гамма-распределение ---
+    if mean <= 0:
+        return np.full_like(probabilities, np.nan, dtype=float)
+    cv = float(cv)
+    if cv <= 0:
+        return np.full_like(probabilities, mean, dtype=float)
+
+    # --- Трёхпараметрическое гамма-распределение (Крицкий-Менкель) ---
     alpha = 4.0 / (cs ** 2)                          # параметр формы
-    beta = mean * cv * cs / 2.0                  # параметр масштаба
-    A0 = mean * (1.0 - 2.0 * cv / cs)               # начальная точка (сдвиг)
+    beta = mean * cv * cs / 2.0                      # параметр масштаба
+    A0 = mean * (1.0 - 2.0 * cv / cs)              # начальная точка (сдвиг)
 
     try:
         quantiles = A0 + stats.gamma.ppf(1 - probabilities, a=alpha, scale=beta)
-    except (ValueError, TypeError, RuntimeError) as e:
-        # Fallback на формулу Корниша-Фишера
+    except (ValueError, TypeError, RuntimeError):
+        # Fallback на scipy pearson3
         quantiles = pearson3_ppf(probabilities, mean, cv, cs)
 
     return np.maximum(quantiles, 0.0)
@@ -129,7 +141,7 @@ def fit_theoretical_distributions(Q: np.ndarray, p_prob: np.ndarray) -> dict:
         params = stats.pearson3.fit(Q)
         p3 = stats.pearson3.ppf(1 - probabilities, *params)
     except (ValueError, TypeError) as e:
-        print(f"Error fitting {dist_name}: {e}")
+        print(f"Error fitting pearson3: {e}")
         p3 = None
 
     # Gamma
@@ -137,7 +149,7 @@ def fit_theoretical_distributions(Q: np.ndarray, p_prob: np.ndarray) -> dict:
         params = stats.gamma.fit(Q, floc=0)
         g = stats.gamma.ppf(1 - probabilities, *params)
     except (ValueError, TypeError) as e:
-        print(f"Error fitting {dist_name}: {e}")
+        print(f"Error fitting gamma: {e}")
         g = None
 
     # Lognormal
@@ -145,7 +157,7 @@ def fit_theoretical_distributions(Q: np.ndarray, p_prob: np.ndarray) -> dict:
         params = stats.lognorm.fit(Q, floc=0)
         ln = stats.lognorm.ppf(1 - probabilities, *params)
     except (ValueError, TypeError) as e:
-        print(f"Error fitting {dist_name}: {e}")
+        print(f"Error fitting lognormal: {e}")
         ln = None
 
     # Normal
@@ -153,7 +165,7 @@ def fit_theoretical_distributions(Q: np.ndarray, p_prob: np.ndarray) -> dict:
         params = stats.norm.fit(Q)
         n = stats.norm.ppf(1 - probabilities, *params)
     except (ValueError, TypeError) as e:
-        print(f"Error fitting {dist_name}: {e}")
+        print(f"Error fitting normal: {e}")
         n = None
 
     return {
@@ -166,7 +178,7 @@ def fit_theoretical_distributions(Q: np.ndarray, p_prob: np.ndarray) -> dict:
 
 def calculate_frequency_curve(
     data: np.ndarray,
-    probabilities: Optional[np.ndarray] = None,
+    probabilities: np.ndarray | None = None,
     curve_type: CurveType = "pearson3",
     use_corrected: bool = True
 ) -> pd.DataFrame:
@@ -188,7 +200,8 @@ def calculate_frequency_curve(
         quantiles = stats.norm.ppf(1 - probabilities, loc=mean, scale=std)
 
     elif curve_type == "pearson3":
-        # Распределение Пирсона III типа — формула Корниша-Фишера
+        # Распределение Пирсона III типа — scipy.stats.pearson3 (точное)
+        # Cornish-Fisher — приближённый метод, здесь НЕ используется
         quantiles = pearson3_ppf(probabilities, mean, cv, cs)
 
     elif curve_type == "kritsky_menkel":
@@ -240,11 +253,11 @@ def calculate_frequency_curve(
 def auto_select_cs_cv(
     data: np.ndarray,
     curve_type: str = 'pearson3',
-    p_range: Optional[tuple] = None,
+    p_range: tuple | None = None,
     precision: float = 0.05,
     cs_cv_min: float = -2.0,
     cs_cv_max: float = 6.0,
-) -> Dict:
+) -> dict:
     """
     Автоматический подбор отношения Cs/Cv для кривой обеспеченности.
 
@@ -420,7 +433,7 @@ def compute_params_with_extremes(
     data: np.ndarray,
     extremes: list,
     is_max: bool = True,
-) -> Dict:
+) -> dict:
     """
     Расчёт параметров распределения с учётом исторических экстремумов.
 

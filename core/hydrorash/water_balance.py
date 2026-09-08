@@ -6,9 +6,8 @@ core/hydrorash/water_balance.py
 Ссылки: СП 33-101-2003, СП 529.1325800.2023, СП 32.13330.2018.
 """
 
-import numpy as np
+
 import pandas as pd
-from typing import Dict, List, Optional
 
 
 def water_balance(
@@ -17,7 +16,7 @@ def water_balance(
     runoff_mm: float,
     groundwater_change_mm: float = 0.0,
     storage_change_mm: float = 0.0
-) -> Dict:
+) -> dict:
     """
     Водный баланс бассейна: W = P - E - R ± ΔS ± G.
 
@@ -68,7 +67,7 @@ def annual_water_balance_series(
     P: pd.Series,
     E: pd.Series,
     Q: pd.Series,
-    years: Optional[pd.Series] = None
+    years: pd.Series | None = None
 ) -> pd.DataFrame:
     """
     Годовой водный баланс для ряда лет.
@@ -249,7 +248,7 @@ def infiltration_rate(
     precipitation_intensity: float,
     soil_permeability: float,
     antecedent_moisture: float = 0.5
-) -> Dict:
+) -> dict:
     """
     Определение инфильтрации и поверхностного стока.
 

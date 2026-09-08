@@ -11,22 +11,22 @@ core/stats/gts_integration.py
 - build_gts_frequency_curve — кривая с расчётными точками ГТС
 """
 
+import os
+import sys
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
-from scipy import stats
 
-import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from core.gts_reference import GTSClass, GTS_PROBABILITIES, get_probabilities_for_class, get_standard_probabilities
+from core.gts_reference import GTSClass, get_probabilities_for_class, get_standard_probabilities
 from core.stats.frequency import pearson3_ppf
 
 
 def get_gts_points(
     gts_class: GTSClass,
     case_type: str = 'osnovnoy'
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Извлечение расчётных обеспеченностей для класса ГТС.
 
@@ -77,7 +77,7 @@ def build_gts_frequency_curve(
     data: np.ndarray,
     gts_class: GTSClass,
     use_corrected: bool = True
-) -> Dict:
+) -> dict:
     """
     Построение кривой обеспечённости с автоматической подстановкой
     расчётных точек по классу ГТС.

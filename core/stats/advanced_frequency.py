@@ -15,11 +15,11 @@ core/stats/advanced_frequency.py
 - weibull_plotting_position — площадка Вейбулла m/(n+1)
 """
 
+
 import numpy as np
 import pandas as pd
 from scipy import stats
 from scipy.optimize import minimize
-from typing import Dict, List, Optional, Tuple
 
 
 def weibull_plotting_position(n: int) -> np.ndarray:
@@ -51,30 +51,14 @@ def gringorten_plotting_position(n: int) -> np.ndarray:
 def mle_pearson3(
     data: np.ndarray,
     max_iter: int = 500,
-) -> Dict:
+) -> dict:
     """
     Оценка параметров Пирсона III методом максимального правдоподобия (MLE).
-
     Параметры: mean, cv, cs
-
-    Parameters:
-        data: массив наблюдений
-        max_iter: максимальное число итераций оптимизации
-
-    Returns:
-        Dict: mean, cv, cs, loglik, aic, bic, success
     """
-    if not isinstance(data, np.ndarray):
-        try:
-            data = np.array(data, dtype=object)
-            data = np.array([
-                float(x) for x in data
-                if isinstance(x, (int, float, np.number)) and not np.isnan(float(x))
-            ], dtype=float)
-        except (ValueError, TypeError):
-            return {'mean': 0, 'cv': 0, 'cs': 0,
-                    'loglik': -np.inf, 'aic': np.inf, 'bic': np.inf, 'success': False}
+    data = np.asarray(data, dtype=float)
     data = data[~np.isnan(data)]
+    data = data[np.isfinite(data)]
     n = len(data)
 
     if n < 5:
@@ -151,7 +135,7 @@ def mle_pearson3(
 
 def lmom_pearson3(
     data: np.ndarray,
-) -> Dict:
+) -> dict:
     """
     Оценка параметров Пирсона III L-моментами (probability weighted moments).
 
@@ -207,7 +191,7 @@ def lmom_pearson3(
 
 def fit_logpearson3(
     data: np.ndarray,
-) -> Dict:
+) -> dict:
     """
     Логнормальное распределение Пирсона III (Log-Pearson III).
 
@@ -238,7 +222,7 @@ def fit_logpearson3(
 
 def fit_gev(
     data: np.ndarray,
-) -> Dict:
+) -> dict:
     """
     Обобщённое предельное распределение (GEV) — GenExtremum.
 
@@ -281,7 +265,7 @@ def fit_gev(
 
 def fit_weibull3(
     data: np.ndarray,
-) -> Dict:
+) -> dict:
     """
     Распределение Вейбулла 3-параметра.
 
@@ -322,7 +306,7 @@ def peaks_over_threshold(
     data: np.ndarray,
     threshold_percentile: float = 95.0,
     min_separation_days: int = 5,
-) -> Dict:
+) -> dict:
     """
     Пороговые пиковые series (PDS / Peaks Over Threshold).
 
@@ -378,8 +362,8 @@ def peaks_over_threshold(
 def goodness_of_fit(
     data: np.ndarray,
     distribution: str = 'pearson3',
-    params: Optional[Dict] = None,
-) -> Dict:
+    params: dict | None = None,
+) -> dict:
     """
     Критерии согласия распределения с данными.
 
@@ -401,8 +385,23 @@ def goodness_of_fit(
     results = {}
 
     try:
-        ks_stat, ks_p = stats.kstest(data, distribution, args=()) if params is None else \
-            stats.kstest(data, distribution)
+        if params is not None:
+            shape = params.get('shape', 0)
+            loc = params.get('loc', 0)
+            scale = params.get('scale', 1)
+            ks_stat, ks_p = stats.kstest(data, distribution, args=(shape, loc, scale))
+        else:
+            if distribution == 'normal':
+                mu, sigma = stats.norm.fit(data)
+                ks_stat, ks_p = stats.kstest(data, 'norm', args=(mu, sigma))
+            elif distribution == 'lognormal':
+                s, loc, scale = stats.lognorm.fit(data, floc=0)
+                ks_stat, ks_p = stats.kstest(data, 'lognorm', args=(s, loc, scale))
+            elif distribution == 'gamma':
+                a, loc, scale = stats.gamma.fit(data, floc=0)
+                ks_stat, ks_p = stats.kstest(data, 'gamma', args=(a, loc, scale))
+            else:
+                ks_stat, ks_p = stats.kstest(data, distribution)
         results['ks_stat'] = round(float(ks_stat), 4)
         results['ks_p'] = round(float(ks_p), 6)
     except (ValueError, TypeError):
@@ -457,7 +456,7 @@ def goodness_of_fit(
 def qq_plot_data(
     data: np.ndarray,
     distribution: str = 'norm',
-) -> Dict:
+) -> dict:
     """
     Данные для Q-Q графика (квантиль-квантиль).
 
@@ -500,7 +499,7 @@ def qq_plot_data(
 def pp_plot_data(
     data: np.ndarray,
     distribution: str = 'norm',
-) -> Dict:
+) -> dict:
     """
     Данные для P-P графика (вероятность-вероятность).
 
