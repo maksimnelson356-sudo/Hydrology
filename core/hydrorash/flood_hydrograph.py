@@ -148,7 +148,13 @@ def unit_hydrograph(
     Returns:
         Dict: t_hours, Q_m3_s (расход при слое 1 мм), volume_m3
     """
-    Q_peak_unit = F_km2 / (3.6 * T_peak) if T_peak > 0 else 0
+    # Пик единичного гидрографа из условия сохранения объёма:
+    #   V = ∫ Q dt = Q_peak * T_peak * 3600 * coeff = 1000 * F_km2  (слой 1 мм)
+    # где coeff = (2*alpha + 1) / (alpha * (alpha + 1)) — нормировочный
+    # интеграл гамма-гидрографа (фрагмент роста + экспоненциальный спад).
+    alpha_shape = float(shape)
+    coeff = (2.0 * alpha_shape + 1.0) / (alpha_shape * (alpha_shape + 1.0))
+    Q_peak_unit = F_km2 / (3.6 * T_peak * coeff) if T_peak > 0 else 0
 
     gamma = gamma_hydrograph(Q_peak_unit, T_peak, T_base, shape, dt)
 

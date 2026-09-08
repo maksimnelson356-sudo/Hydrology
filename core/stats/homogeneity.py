@@ -414,8 +414,14 @@ def stationarity_test(
     t_stat, t_pvalue = stats.ttest_ind(part1, part2, equal_var=False)[:2]
     t_stat = abs(t_stat)
 
-    # Критическое значение t (двусторонний, Welch's t-test)
-    df = n1 + n2 - 2
+    # Критическое значение t (двусторонний, Welch's t-test).
+    # scipy.stats.ttest_ind(equal_var=False) использует Welch-Satterthwaite df —
+    # критическое значение должно быть согласовано с той же методикой.
+    s1_n = var1 / n1
+    s2_n = var2 / n2
+    df_num_w = (s1_n + s2_n) ** 2
+    df_den_w = (s1_n ** 2) / (n1 - 1) + (s2_n ** 2) / (n2 - 1)
+    df = df_num_w / df_den_w if df_den_w > 0 else float(n1 + n2 - 2)
     t_critical = stats.t.ppf(1 - alpha / 2, df)
 
     # F-тест Фишера (равенство дисперсий)
@@ -424,7 +430,9 @@ def stationarity_test(
         df_num, df_den = n1 - 1, n2 - 1
     else:
         df_num, df_den = n2 - 1, n1 - 1
-    f_pvalue = 1 - stats.f.cdf(f_stat, df_num, df_den)
+    # Двусторонний F-тест (H0: равенство дисперсий). f_stat >= 1 по построению,
+    # поэтому p = 2 * (1 - F(f_stat)); ограничиваем сверху 1.0.
+    f_pvalue = min(1.0, 2.0 * stats.f.sf(f_stat, df_num, df_den))
     f_critical = stats.f.ppf(1 - alpha / 2, df_num, df_den)
 
     return {

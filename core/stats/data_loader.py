@@ -118,7 +118,6 @@ def parse_hydro_data(xlsx_path: str) -> dict:
                 data[key]['df'] = pd.concat([data[key]['df'],
                                              pd.DataFrame(rows_data)], ignore_index=True)
     else:
-        import pandas as pd
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
             river = str(ws['B1'].value).strip() if ws['B1'].value else None

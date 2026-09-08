@@ -37,9 +37,11 @@ def mann_kendall_test(values):
         return {'statistic': 0, 'z': 0, 'p_value': 1.0,
                 'trend': 'Тренд отсутствует', 'significant': False}
 
-    # Векторизованный расчёт S
-    diff = values[None, :] - values[:, None]
-    s = float(np.sum(np.sign(diff)))
+    # Векторизованный расчёт S: только пары i < j.
+    # (Полная матрица all-pairs взаимно уничтожает знаки: sign(x_j-x_i) = -sign(x_i-x_j))
+    i_idx, j_idx = np.triu_indices(n, k=1)
+    diffs = values[j_idx] - values[i_idx]
+    s = float(np.sum(np.sign(diffs)))
 
     unique, counts = np.unique(values, return_counts=True)
     ties = np.sum(counts * (counts - 1) * (2 * counts + 5))

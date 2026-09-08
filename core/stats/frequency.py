@@ -115,7 +115,18 @@ def kritsky_menkel_ppf(probabilities: np.ndarray, mean: float, cv: float, cs: fl
     A0 = mean * (1.0 - 2.0 * cv / cs)              # начальная точка (сдвиг)
 
     try:
-        quantiles = A0 + stats.gamma.ppf(1 - probabilities, a=alpha, scale=beta)
+        if cs >= 0:
+            # Положительная асимметрия: X_p = A0 + beta * Gamma(1-p), beta > 0
+            quantiles = A0 + stats.gamma.ppf(1 - probabilities, a=alpha, scale=beta)
+        else:
+            # Отрицательная асимметрия: распределение с асимметрией Cs является
+            # зеркальным отражением распределения с |Cs| относительно среднего:
+            #   X_p(Cs) = 2*mean - X_{1-p}(|Cs|)
+            # В параметризации трёхпараметрического гамма это эквивалентно
+            #   X_p = A0 + beta * Gamma(p) = A0 - |beta| * Gamma(p),
+            # т.е. используется квантиль q = p (а не q = 1-p) и scale = |beta|.
+            # Проверено по таблицам Крицкого-Менкеля: Kp(-1, p) ≈ 2 - Kp(+1, 1-p).
+            quantiles = A0 - stats.gamma.ppf(probabilities, a=alpha, scale=-beta)
     except (ValueError, TypeError, RuntimeError):
         # Fallback на scipy pearson3
         quantiles = pearson3_ppf(probabilities, mean, cv, cs)
