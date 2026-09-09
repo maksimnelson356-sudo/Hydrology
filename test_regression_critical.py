@@ -358,3 +358,65 @@ def test_cr6_welch_equal_variances_matches_pooled():
     )
     t_crit_expected = stats.t.ppf(1 - 0.05 / 2, welch_df)
     assert abs(result['t_test']['t_critical'] - round(t_crit_expected, 4)) < 1e-6
+
+
+# ============================================================
+# CR-7: gui/main_window.py extend_series — Q_analog NameError
+# ============================================================
+#
+# Сценарий: файл-аналог без строки-заголовка, в котором ни один
+# столбец не содержит числовых значений расходов. В ветке
+# `year_row_idx is None` переменная `Q_analog` могла быть use-before-assign,
+# что приводило к NameError. После исправления должен срабатывать
+# существующий обработчик ошибки (предупреждение + return), без краха.
+
+def _make_bad_analog_xlsx(path):
+    """Аналог без строки-заголовка и без числового столбца расходов."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    # Ни в одной ячейке нет 'год'/'year'/'годы' -> строка-заголовок не найдётся.
+    ws['A1'] = 'NotYear'
+    ws['B1'] = 'text_column'
+    ws['A2'] = 2000
+    ws['B2'] = 'abc'
+    ws['A3'] = 2001
+    ws['B3'] = 'def'
+    wb.save(path)
+    return path
+
+
+def test_cr7_extend_series_no_numeric_analog_no_nameerror(tmp_path):
+    """Файл-аналог без заголовка и без числовых данных не должен падать с NameError."""
+    import os
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+
+    from unittest import mock
+
+    import pandas as pd
+    from PyQt6.QtWidgets import QApplication
+
+    _app = QApplication.instance()
+    if _app is None:
+        _app = QApplication([])
+
+    from gui.main_window import MainWindow
+
+    w = MainWindow()
+    w.df = pd.DataFrame({
+        'year': [2000, 2001, 2002],
+        'value': [12.0, 14.0, 13.0],
+    })
+
+    path = _make_bad_analog_xlsx(str(tmp_path / 'bad_analog.xlsx'))
+
+    warnings_shown = []
+    with mock.patch('gui.main_window.QFileDialog.getOpenFileName',
+                    return_value=(path, 'Excel (*.xlsx)')), \
+         mock.patch('gui.main_window.QMessageBox.warning',
+                    side_effect=lambda *a, **k: warnings_shown.append(a[2]) or None):
+        # До исправления здесь возникал NameError; теперь должен быть чистый return.
+        w.extend_series()
+
+    # Существующая логика обработки ошибки: показать предупреждение и не продолжать.
+    assert warnings_shown == ['В файле-аналоге не найдены числовые данные']

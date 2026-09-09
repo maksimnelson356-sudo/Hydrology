@@ -2427,6 +2427,7 @@ class MainWindow(QMainWindow):
                         break
                 if year_col is None:
                     year_col = df_analog.columns[0]
+                Q_analog = None
                 for col in df_analog.columns:
                     if col == year_col:
                         continue
@@ -2438,6 +2439,9 @@ class MainWindow(QMainWindow):
                             break
                     except (ValueError, TypeError):
                         continue
+                if Q_analog is None:
+                    QMessageBox.warning(self, "Ошибка", "В файле-аналоге не найдены числовые данные")
+                    return
             else:
                 df_sheet = pd.read_excel(filepath, skiprows=year_row_idx)
                 year_col_name = df_sheet.columns[year_col_idx]
