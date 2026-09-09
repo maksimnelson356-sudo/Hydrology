@@ -7,7 +7,7 @@ core/stats/missing_data.py
 
 def fill_missing_interpolation(df, target_col='value', params=None):
     """
-    Восстановление пропусков линейной интерполяцией.
+    Восстановление пропусков методом линейной интерполяции.
 
     Стратегия:
     1. Если данных мало (< ncr) — заполнение медианой
@@ -18,7 +18,6 @@ def fill_missing_interpolation(df, target_col='value', params=None):
         params = {}
 
     min_ncr = params.get('ncr', 10)
-    min_ro = params.get('ro', 0.6)
 
     df = df.copy()
     missing_mask = df[target_col].isna()

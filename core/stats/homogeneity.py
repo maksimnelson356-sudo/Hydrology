@@ -412,7 +412,6 @@ def stationarity_test(
 
     # t-тест Стьюдента (независимые выборки, без предположения о равных дисперсиях)
     t_stat, t_pvalue = stats.ttest_ind(part1, part2, equal_var=False)[:2]
-    t_stat = abs(t_stat)
 
     # Критическое значение t (двусторонний, Welch's t-test).
     # scipy.stats.ttest_ind(equal_var=False) использует Welch-Satterthwaite df —

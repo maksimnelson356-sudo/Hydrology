@@ -333,10 +333,6 @@ def _get(cs_cv, p, cv):
 
     # Бинарный поиск индекса
     idx = bisect.bisect_right(cvs, cv) - 1
-    if idx < 0:
-        return float(cv_dict[cvs[0]].get(p, np.nan))
-    if idx >= len(cvs) - 1:
-        return float(cv_dict[cvs[-1]].get(p, np.nan))
 
     c1, c2 = cvs[idx], cvs[idx + 1]
     y1_raw = cv_dict.get(c1, [])
