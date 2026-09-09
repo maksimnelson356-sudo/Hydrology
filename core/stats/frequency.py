@@ -341,7 +341,26 @@ def auto_select_cs_cv(
     # Перебор Cs/Cv
     if precision <= 0:
         precision = 0.05
-    cs_cv_values = np.arange(cs_cv_min, cs_cv_max + precision, precision)
+    
+    # Для трёхпараметрической гаммы (Kritsky-Menkel / Pearson III с Cs > 0)
+    # физически допустима область Cs >= 2*Cv, т.е. Cs/Cv >= 2.
+    # Исключаем нефизическую область 0 < Cs/Cv < 2, где A0 = mean*(1 - 2*Cv/Cs) < 0
+    # и происходит обрезка нижнего хвоста к нулю (плато нулей).
+    # Отрицательные Cs/Cv и Cs ≈ 0 (нормальное распределение) остаются допустимыми.
+    cs_cv_values = []
+    # Отрицательная часть
+    neg_end = min(0, cs_cv_max)
+    if cs_cv_min < neg_end:
+        cs_cv_values.extend(np.arange(cs_cv_min, neg_end + precision, precision))
+    # Cs ≈ 0 (нормальное распределение) — добавляем ноль, если он в диапазоне
+    if cs_cv_min <= 0 <= cs_cv_max:
+        cs_cv_values.append(0.0)
+    # Положительная часть: начинаем с 2.0 (физическая граница Cs >= 2*Cv)
+    pos_start = max(2.0, cs_cv_min)
+    if pos_start <= cs_cv_max:
+        cs_cv_values.extend(np.arange(pos_start, cs_cv_max + precision, precision))
+    
+    cs_cv_values = np.array(cs_cv_values)
     results = []
 
     best_cs_cv = None
