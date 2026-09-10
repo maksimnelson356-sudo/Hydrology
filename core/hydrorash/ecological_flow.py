@@ -140,7 +140,7 @@ def ecoregime_classes(
     ratio = Q / Q_mean
 
     for cls_id, cls_data in ECO_CLASSES.items():
-        if ratio <= cls_data['Q_ratio'] * 2:
+        if ratio <= cls_data['Q_ratio']:
             return {
                 'class_id': cls_id,
                 'class_name': cls_data['name'],

@@ -157,14 +157,18 @@ def snowmelt_balance(
     """
     M = A * max(T_air, 0) * days
     M = min(M, W_initial)
-    runoff = M - precipitation_mm * 0.3  # часть осадков уходит в сток
+    # Коэффициент 0.3 — доля осадков, формирующая прямой сток (коэффициент стока осадков).
+    # Остальные 0.7 попадают в запас/испарение (СП 33-101-2003 п.8.1, РД 52-26-2008).
+    P_runoff = precipitation_mm * 0.3
+    P_storage = precipitation_mm * 0.7
+    runoff = M + P_runoff
     runoff = max(runoff, 0)
 
     return {
         'melt_total_mm': round(float(M), 1),
         'runoff_total_mm': round(float(runoff), 1),
         'precipitation_mm': precipitation_mm,
-        'W_final_mm': round(float(max(W_initial - M + precipitation_mm, 0)), 1),
+        'W_final_mm': round(float(max(W_initial - M + P_storage, 0)), 1),
         'days': days,
     }
 

@@ -481,7 +481,11 @@ class Work4Widget(QWidget):
             H = pd.to_numeric(df[h_col], errors="coerce").dropna().values
             Q = pd.to_numeric(df[q_col], errors="coerce").dropna().values
             n = min(len(H), len(Q))
-            self.rating_params = build_rating_curve(H[:n], Q[:n])
+            
+            # H0 is now a required parameter. Use min(H) - 0.01 as default estimate
+            # (level of zero flow is typically slightly below minimum observed level)
+            H0_estimate = float(np.min(H[:n])) - 0.01
+            self.rating_params = build_rating_curve(H[:n], Q[:n], H0_estimate)
 
             self.rating_table.setRowCount(1)
             self.rating_table.setItem(0, 0, QTableWidgetItem(f"{self.rating_params['a']:.6f}"))

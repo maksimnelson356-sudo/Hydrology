@@ -215,17 +215,18 @@ def index_year_method(
 def build_rating_curve(
     H: np.ndarray,
     Q: np.ndarray,
-    H0: float | None = None
+    H0: float
 ) -> dict:
     """
     Построение кривой функционирования Q = a × (H - H0)^b.
 
-    Если H0 не задан, определяется как минимальный уровень воды на посту.
+    H0 — уровень нуля поста (уровень, при котором Q = 0).
+    Этот параметр обязателен и должен задаваться явно пользователем.
 
     Parameters:
         H: массив уровней воды (м)
         Q: массив расходов (м³/с)
-        H0: уровень нуля поста (если None — берётся min(H))
+        H0: уровень нуля поста, м (обязательный)
 
     Returns:
         Dict: a, b, H0, R2, formula
@@ -239,13 +240,9 @@ def build_rating_curve(
     if len(H) < 3:
         raise ValueError("Нужно минимум 3 точки с Q > 0")
 
-    if H0 is None:
-        H0 = float(np.min(H)) - 0.01
-
     dH = H - H0
     if np.any(dH <= 0):
-        H0 = float(np.min(H)) - 0.01
-        dH = H - H0
+        raise ValueError("Все значения H должны быть строго больше H0")
 
     log_dH = np.log(dH)
     log_Q = np.log(Q)

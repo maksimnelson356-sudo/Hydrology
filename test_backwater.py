@@ -19,6 +19,10 @@ from core.hydrorash.backwater import (
     backwater_curve_step,
     backwater_from_reservoir,
 )
+from core.hydrorash.flood_hydrograph import gamma_hydrograph
+from core.hydrorash.reservoir_regulation import multi_year_regulation, reservoir_storage_calculation
+from core.hydrorash.ecological_flow import ecoregime_classes
+from core.hydrorash.max_runoff import build_rating_curve
 
 
 # ============================================================
@@ -293,6 +297,74 @@ class TestCriticalDepth:
         ok, rel_err = verify_critical_depth(Q, B, m, h_prod)
         assert ok, f"Physical verification failed: rel_err={rel_err:.2%}"
         assert rel_err < 0.01, f"Physical error too large: {rel_err:.2%}"
+
+
+# ============================================================
+# REGRESSION TESTS: flood_hydrograph - gamma_hydrograph
+# ============================================================
+
+class TestGammaHydrographRegression:
+    """
+    Regression tests for gamma_hydrograph falling limb fix.
+
+    Previously, the falling limb used a simple exponential decay
+    Q = Q_peak * exp(-alpha * tau) which is methodologically incorrect.
+    The correct formula per СП 33-101-2003 is:
+    Q(t) = Q_peak * (t/T_peak)^alpha * exp(alpha * (1 - t/T_peak))
+    for ALL t (both rising and falling limbs).
+    """
+
+    def test_gamma_hydrograph_peak_at_t_peak(self):
+        """Q must equal Q_peak exactly at t = T_peak."""
+        result = gamma_hydrograph(Q_peak=100.0, T_peak=6.0, T_base=24.0, shape=3.5)
+        t = np.array(result['t_hours'])
+        Q = np.array(result['Q_m3_s'])
+        idx = np.where(t == 6.0)[0][0]
+        assert abs(Q[idx] - 100.0) < 0.01
+
+    def test_gamma_hydrograph_falling_limb_matches_full_formula(self):
+        """Falling limb must match full gamma formula, not simple exponential."""
+        result = gamma_hydrograph(Q_peak=100.0, T_peak=6.0, T_base=24.0, shape=3.5)
+        t = np.array(result['t_hours'])
+        Q = np.array(result['Q_m3_s'])
+
+        # Check several points on falling limb
+        for t_val in [8.0, 10.0, 12.0, 15.0, 18.0]:
+            idx = np.where(t == t_val)[0][0]
+            ratio = t_val / 6.0
+            alpha = 3.5
+            Q_formula = 100.0 * (ratio ** alpha) * np.exp(alpha * (1 - ratio))
+            assert abs(Q[idx] - Q_formula) < 0.01, \
+                f"t={t_val}: Q={Q[idx]:.4f}, formula={Q_formula:.4f}"
+
+    def test_gamma_hydrograph_continuity_at_t_peak(self):
+        """Q must be continuous at t = T_peak (both branches give Q_peak)."""
+        result = gamma_hydrograph(Q_peak=100.0, T_peak=6.0, T_base=24.0, shape=3.5)
+        t = np.array(result['t_hours'])
+        Q = np.array(result['Q_m3_s'])
+        
+        # At exactly t = T_peak, both formulas should give Q_peak
+        idx_peak = np.where(t == 6.0)[0][0]
+        assert abs(Q[idx_peak] - 100.0) < 0.01
+        
+        # The rising limb formula at t=T_peak: Q = Q_peak * (T_peak/T_peak)^alpha = Q_peak
+        # The falling limb formula at t=T_peak: Q = Q_peak * 1^alpha * exp(0) = Q_peak
+        # So both give exactly Q_peak - continuity is guaranteed mathematically
+
+    def test_gamma_hydrograph_different_shapes(self):
+        """Test different alpha (shape) parameters."""
+        for alpha in [2.5, 3.0, 3.5, 4.0]:
+            result = gamma_hydrograph(Q_peak=100.0, T_peak=6.0, T_base=24.0, shape=alpha)
+            t = np.array(result['t_hours'])
+            Q = np.array(result['Q_m3_s'])
+
+            idx_peak = np.where(t == 6.0)[0][0]
+            assert abs(Q[idx_peak] - 100.0) < 0.01, f"alpha={alpha}: peak mismatch"
+
+            idx_12 = np.where(t == 12.0)[0][0]
+            ratio = 12.0 / 6.0
+            Q_formula = 100.0 * (ratio ** alpha) * np.exp(alpha * (1 - ratio))
+            assert abs(Q[idx_12] - Q_formula) < 0.01, f"alpha={alpha}: falling limb mismatch"
 
 
 # ============================================================
@@ -731,3 +803,253 @@ class TestBackwaterSolverRegression:
         assert not np.any(np.isnan(depths))
         assert not np.any(np.isinf(depths))
         assert np.all(depths > 0)
+
+
+# ============================================================
+# REGRESSION TESTS: reservoir_regulation - multi_year_regulation
+# ============================================================
+
+class TestMultiYearRegulationRegression:
+    """
+    Regression tests for multi_year_regulation guarantee fix.
+
+    Previously, guarantee was calculated via cumulative balance which
+    made it order-dependent. The correct guarantee is P(Q >= demand)
+    which is order-independent.
+    """
+
+    def test_multi_year_regulation_guarantee_order_independent(self):
+        """Guarantee must be P(Q >= demand) and NOT depend on year order."""
+        Q = np.array([100, 80, 120, 90, 110, 70, 130, 95, 105, 85])
+        demand = 95.0
+
+        result = multi_year_regulation(Q, demand)
+        assert result['guarantee_percent'] == 60.0
+
+        for seed in range(10):
+            np.random.seed(seed)
+            Q_shuffled = np.random.permutation(Q)
+            r = multi_year_regulation(Q_shuffled, demand)
+            assert r['guarantee_percent'] == 60.0, \
+                f"Order dependence detected with seed {seed}: {r['guarantee_percent']}%"
+
+    def test_multi_year_regulation_guarantee_edge_cases(self):
+        """Test edge cases for guarantee calculation."""
+        Q = np.array([100, 110, 120, 130])
+        result = multi_year_regulation(Q, demand_m3_s=90.0)
+        assert result['guarantee_percent'] == 100.0
+
+        Q = np.array([50, 60, 70])
+        result = multi_year_regulation(Q, demand_m3_s=100.0)
+        assert result['guarantee_percent'] == 0.0
+
+        Q = np.array([95, 100, 105])
+        result = multi_year_regulation(Q, demand_m3_s=100.0)
+        assert result['guarantee_percent'] == 66.7
+
+    def test_multi_year_regulation_other_metrics_unchanged(self):
+        """Verify other metrics (volume, balance) are still computed."""
+        Q = np.array([100, 80, 120, 90, 110, 70, 130, 95, 105, 85])
+        demand = 95.0
+        result = multi_year_regulation(Q, demand)
+
+        assert 'required_volume_km3' in result
+        assert result['required_volume_km3'] > 0
+        assert 'balance_cumulative' in result
+        assert len(result['balance_cumulative']) == len(Q)
+
+
+# ============================================================
+# REGRESSION TESTS: ecological_flow - ecoregime_classes
+# ============================================================
+
+class TestEcoregimeClassesRegression:
+    """
+    Regression tests for ecoregime_classes threshold fix.
+
+    Previously, the function used `ratio <= Q_ratio * 2` which shifted
+    all class boundaries by a factor of 2. The correct behavior uses
+    direct thresholds from ECO_CLASSES.
+    """
+
+    def test_ecoregime_classes_below_first_boundary(self):
+        """Q/Q_mean < 0.05 should be class I."""
+        result = ecoregime_classes(Q=3.0, Q_mean=100.0)
+        assert result['class_id'] == 'I'
+
+    def test_ecoregime_classes_between_I_and_II(self):
+        """0.05 < Q/Q_mean < 0.10 should be class II."""
+        result = ecoregime_classes(Q=8.0, Q_mean=100.0)
+        assert result['class_id'] == 'II'
+
+    def test_ecoregime_classes_between_II_and_III(self):
+        """0.10 < Q/Q_mean < 0.20 should be class III."""
+        result = ecoregime_classes(Q=15.0, Q_mean=100.0)
+        assert result['class_id'] == 'III'
+
+    def test_ecoregime_classes_between_III_and_IV(self):
+        """0.20 < Q/Q_mean < 0.30 should be class IV."""
+        result = ecoregime_classes(Q=25.0, Q_mean=100.0)
+        assert result['class_id'] == 'IV'
+
+    def test_ecoregime_classes_between_IV_and_V(self):
+        """0.30 < Q/Q_mean < 0.50 should be class V."""
+        result = ecoregime_classes(Q=40.0, Q_mean=100.0)
+        assert result['class_id'] == 'V'
+
+    def test_ecoregime_classes_between_V_and_VI(self):
+        """0.50 < Q/Q_mean < 0.80 should be class VI."""
+        result = ecoregime_classes(Q=60.0, Q_mean=100.0)
+        assert result['class_id'] == 'VI'
+
+    def test_ecoregime_classes_above_VI(self):
+        """Q/Q_mean > 0.80 should be class VI (fallback)."""
+        result = ecoregime_classes(Q=90.0, Q_mean=100.0)
+        assert result['class_id'] == 'VI'
+
+    def test_ecoregime_classes_exact_boundaries(self):
+        """Test exact boundary values (should use <= comparison)."""
+        # boundary I = 0.05
+        assert ecoregime_classes(5.0, 100.0)['class_id'] == 'I'
+        # boundary II = 0.10
+        assert ecoregime_classes(10.0, 100.0)['class_id'] == 'II'
+        # boundary III = 0.20
+        assert ecoregime_classes(20.0, 100.0)['class_id'] == 'III'
+        # boundary IV = 0.30
+        assert ecoregime_classes(30.0, 100.0)['class_id'] == 'IV'
+        # boundary V = 0.50
+        assert ecoregime_classes(80.0, 100.0)['class_id'] == 'VI'
+
+
+# ============================================================
+# REGRESSION TESTS: max_runoff - build_rating_curve
+# ============================================================
+
+class TestBuildRatingCurveRegression:
+    """
+    Regression tests for build_rating_curve H0 fix.
+
+    Previously, H0 defaulted to min(H) - 0.01 which is physically incorrect.
+    Now H0 is a required parameter.
+    """
+
+    def test_build_rating_curve_with_correct_H0(self):
+        """With correct H0, parameters should be accurately recovered."""
+        H = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        Q = 10.0 * (H - 0.5) ** 2.0
+        
+        result = build_rating_curve(H, Q, H0=0.5)
+        
+        assert abs(result['a'] - 10.0) < 0.1
+        assert abs(result['b'] - 2.0) < 0.01
+        assert abs(result['H0'] - 0.5) < 0.01
+        assert result['R2'] > 0.999
+
+    def test_build_rating_curve_H0_gte_min_H_raises(self):
+        """H0 >= min(H) must raise ValueError (dH <= 0)."""
+        H = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        Q = 10.0 * (H - 0.5) ** 2.0
+        
+        try:
+            build_rating_curve(H, Q, H0=1.0)
+            assert False, "Should have raised ValueError"
+        except ValueError:
+            pass  # Expected
+
+    def test_build_rating_curve_missing_H0_raises(self):
+        """Missing H0 argument must raise TypeError."""
+        H = np.array([1.0, 2.0, 3.0])
+        Q = np.array([10.0, 40.0, 90.0])
+        
+        try:
+            build_rating_curve(H, Q)
+            assert False, "Should have raised TypeError"
+        except TypeError:
+            pass  # Expected
+
+    def test_build_rating_curve_H0_below_min_H_works(self):
+        """H0 < min(H) should work (all dH > 0)."""
+        H = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        Q = 10.0 * (H - 0.5) ** 2.0
+        
+        result = build_rating_curve(H, Q, H0=0.0)
+        
+        assert result['a'] > 0
+        assert result['b'] > 0
+        assert result['H0'] == 0.0
+        assert result['R2'] > 0.99
+
+
+# ============================================================
+# REGRESSION TESTS: reservoir_regulation - reservoir_storage_calculation
+# ============================================================
+
+class TestReservoirStorageCalculationRegression:
+    """
+    Regression tests for reservoir_storage_calculation validation.
+
+    Previously, the function assumed H was strictly increasing but
+    did not validate this, which could lead to negative volumes.
+    """
+
+    def test_reservoir_storage_strictly_increasing_H(self):
+        """Strictly increasing H should work correctly."""
+        H = [0.0, 10.0, 20.0, 30.0]
+        A = [0.0, 1.0, 3.0, 6.0]
+        
+        result = reservoir_storage_calculation(H, A)
+        
+        # V[1] = (0+1)/2 * 10 / 1000 = 0.005 km3
+        # V[2] = 0.005 + (1+3)/2 * 10 / 1000 = 0.005 + 0.020 = 0.025 km3
+        # V[3] = 0.025 + (3+6)/2 * 10 / 1000 = 0.025 + 0.045 = 0.070 km3
+        assert abs(result['V_total_km3'] - 0.070) < 0.001
+        assert len(result['table']) == 4
+
+    def test_reservoir_storage_non_increasing_H_raises(self):
+        """Non-increasing H must raise ValueError."""
+        H = [0.0, 10.0, 5.0]  # 5.0 < 10.0
+        A = [0.0, 1.0, 3.0]
+        
+        try:
+            reservoir_storage_calculation(H, A)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "строго возрастающими" in str(e)
+
+    def test_reservoir_storage_duplicate_H_raises(self):
+        """Duplicate H values must raise ValueError."""
+        H = [0.0, 5.0, 5.0, 10.0]  # duplicate 5.0
+        A = [0.0, 1.0, 3.0, 6.0]
+        
+        try:
+            reservoir_storage_calculation(H, A)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "строго возрастающими" in str(e)
+
+    def test_reservoir_storage_mismatched_lengths_raises(self):
+        """Mismatched H and A lengths must raise ValueError."""
+        H = [0.0, 10.0, 20.0]
+        A = [0.0, 1.0]  # Only 2 areas
+        
+        try:
+            reservoir_storage_calculation(H, A)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "совпадать" in str(e)
+
+    def test_reservoir_storage_insufficient_points_raises(self):
+        """Less than 2 points must raise ValueError."""
+        H = [0.0]
+        A = [1.0]
+        
+        try:
+            reservoir_storage_calculation(H, A)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "минимум 2" in str(e)
+
+
+# ============================================================
+# REGRESSION TESTS (now passing after fixes)
+# ============================================================

@@ -12,6 +12,7 @@ core/hydrorash/flood_hydrograph.py
 
 
 import numpy as np
+from scipy.special import gamma as gamma_func, gammainc
 
 if not hasattr(np, 'trapezoid'):
     np.trapezoid = np.trapz
@@ -104,10 +105,13 @@ def gamma_hydrograph(
         if ti <= 0:
             Q[i] = 0
         elif ti <= T_peak:
+            # Нарастающая ветвь
             Q[i] = Q_peak * (ti / T_peak) ** alpha
         else:
-            tau = (ti - T_peak) / T_peak
-            Q[i] = Q_peak * np.exp(-alpha * tau)
+            # Спадающая ветвь — полная формула СП 33
+            # Q(t) = Q_peak * (t/T_peak)^α * exp(α * (1 - t/T_peak))
+            ratio = ti / T_peak
+            Q[i] = Q_peak * (ratio ** alpha) * np.exp(alpha * (1 - ratio))
 
     Q = np.maximum(Q, 0)
 
@@ -150,11 +154,28 @@ def unit_hydrograph(
     """
     # Пик единичного гидрографа из условия сохранения объёма:
     #   V = ∫ Q dt = Q_peak * T_peak * 3600 * coeff = 1000 * F_km2  (слой 1 мм)
-    # где coeff = (2*alpha + 1) / (alpha * (alpha + 1)) — нормировочный
-    # интеграл гамма-гидрографа (фрагмент роста + экспоненциальный спад).
+    # где coeff = ∫_0^{T_base/T_peak} u^α * exp(α*(1-u)) du
+    # Коэффициент вычисляется через численное интегрирование на очень мелкой сетке
+    # для соответствия непрерывной формуле СП 33.
     alpha_shape = float(shape)
-    coeff = (2.0 * alpha_shape + 1.0) / (alpha_shape * (alpha_shape + 1.0))
-    Q_peak_unit = F_km2 / (3.6 * T_peak * coeff) if T_peak > 0 else 0
+    
+    # Вычисляем нормировочный коэффициент на очень мелкой сетке (dt=0.01)
+    # для получения значения, близкого к аналитическому интегралу
+    dt_fine = 0.01
+    ratio = T_base / T_peak if T_peak > 0 else 1.0
+    t_fine = np.arange(0, ratio + dt_fine, dt_fine)
+    integrand_fine = np.zeros_like(t_fine)
+    for i, u in enumerate(t_fine):
+        if u <= 0:
+            integrand_fine[i] = 0
+        elif u <= 1.0:
+            integrand_fine[i] = u ** alpha_shape
+        else:
+            integrand_fine[i] = (u ** alpha_shape) * np.exp(alpha_shape * (1 - u))
+    
+    coeff = np.trapezoid(integrand_fine, t_fine)
+    
+    Q_peak_unit = F_km2 / (3.6 * T_peak * coeff) if T_peak > 0 and coeff > 0 else 0
 
     gamma = gamma_hydrograph(Q_peak_unit, T_peak, T_base, shape, dt)
 
