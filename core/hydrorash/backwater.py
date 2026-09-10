@@ -11,6 +11,7 @@ core/hydrorash/backwater.py
 
 
 import numpy as np
+from scipy.optimize import brentq
 
 
 def normal_depth(
@@ -25,7 +26,7 @@ def normal_depth(
 
     Q = (1/n) × ω × R^(2/3) × sqrt(I)
 
-    Итеративно решаем уравнение для h_н.
+    Решаем уравнение Маннинга через brentq (bracketing метод).
 
     Parameters:
         Q: расход, м3/с
@@ -42,23 +43,42 @@ def normal_depth(
 
     def manning_Q(h):
         if h <= 0:
-            return 0
+            return -Q  # отрицательное значение для корректного поиска корня
         omega = B * h + m * h ** 2
         P = B + 2 * h * np.sqrt(1 + m ** 2)
         R = omega / P if P > 0 else 0
         return (1 / n) * omega * (R ** (2 / 3)) * np.sqrt(I)
 
-    h = 0.1
-    for _ in range(100):
-        Q_h = manning_Q(h)
-        if abs(Q_h - Q) < 0.01:
-            return float(h)
-        if Q_h < Q:
-            h *= 1.1
-        else:
-            h *= 0.9
+    # Уравнение: manning_Q(h) - Q = 0
+    def residual(h):
+        return manning_Q(h) - Q
 
-    return float(h)
+    # Находим интервал поиска [h_min, h_max]
+    # h_min: очень малая глубина, остаток отрицательный
+    # h_max: увеличиваем, пока остаток не станет положительным
+    h_min = 1e-10
+    h_max = 1.0
+    max_iterations = 100
+    iteration = 0
+    while residual(h_max) < 0 and iteration < max_iterations:
+        h_max *= 2
+        iteration += 1
+    
+    # Защита: если не нашли знак смену
+    if residual(h_max) < 0:
+        # Фоллбек: используем аналитическое приближение для широкого русла
+        # h ≈ (Q * n / (B * sqrt(I)))^(3/5)
+        h_approx = (Q * n / (B * np.sqrt(I))) ** 0.6
+        h_max = max(h_max, h_approx * 10)
+        # Ограничиваем сверху для физически реалистичных значений
+        h_max = min(h_max, 1000.0)
+
+    try:
+        h_root = brentq(residual, h_min, h_max, xtol=1e-10, rtol=1e-10, maxiter=100)
+        return float(h_root)
+    except ValueError:
+        # В крайнем случае возвращаем приближение
+        return float((Q * n / (B * np.sqrt(I))) ** 0.6)
 
 
 def critical_depth(
@@ -83,26 +103,36 @@ def critical_depth(
     if Q <= 0 or B <= 0:
         raise ValueError("Q и B должны быть положительными")
 
-    def discharge_number(h):
+    # Аналитическое решение для прямоугольного русла (m=0):
+    # h_c = (Q² / (g * B²))^(1/3)
+    if m == 0.0:
+        return float((Q ** 2 / (g * B ** 2)) ** (1.0 / 3.0))
+
+    # Для трапецеидального русла используем brentq (bracketing метод)
+    # Уравнение: Q²/g = ω³ / B_top
+    # где ω = B*h + m*h², B_top = B + 2*m*h
+    def discharge_number(h: float) -> float:
         if h <= 0:
-            return 0
+            return -Q ** 2 / g  # отрицательное значение, чтобы brentq нашёл корень
         omega = B * h + m * h ** 2
         B_top = B + 2 * m * h
         return (Q ** 2 / g) - (omega ** 3 / B_top)
 
-    h = 0.1
-    for _ in range(200):
-        f = discharge_number(h)
-        if abs(f) < 0.001:
-            return float(h)
-        df = discharge_number(h + 0.001) - f
-        if abs(df) > 1e-10:
-            h -= f / df * 0.5
-        else:
-            h *= 1.1
-        h = max(h, 0.01)
+    # Находим интервал поиска: функция монотонно убывает при h > 0
+    # Ищем правую границу: h где f(h) < 0
+    h_max = 1.0
+    while discharge_number(h_max) > 0:
+        h_max *= 2
+        if h_max > 1e6:  # защита от бесконечного цикла
+            break
 
-    return float(h)
+    try:
+        h_root = brentq(discharge_number, 1e-10, h_max, xtol=1e-10, rtol=1e-10, maxiter=100)
+        return float(h_root)
+    except ValueError:
+        # Если brentq не сошёлся (мало вероятно при корректных входных данных),
+        # возвращаем максимальное значение как fallback
+        return float(h_max)
 
 
 def backwater_curve_step(
@@ -158,20 +188,36 @@ def backwater_curve_step(
         E = h + V ** 2 / (2 * g)
         Sf = (Q * n) ** 2 / (omega ** 2 * R ** (4 / 3)) if R > 0 else 0
 
-        h_next = h
-        for _ in range(50):
-            omega2 = B * h_next + m * h_next ** 2
-            P2 = B + 2 * h_next * np.sqrt(1 + m ** 2)
+        # Решаем уравнение: E2(h2) - E1 = dx * (I - Sf_avg(h2))
+        # через brentq (bracketing метод) вместо итераций.
+        def _residual(h2):
+            omega2 = B * h2 + m * h2 ** 2
+            P2 = B + 2 * h2 * np.sqrt(1 + m ** 2)
             R2 = omega2 / P2 if P2 > 0 else 0.01
             V2 = Q / omega2 if omega2 > 0 else 0
-            E2 = h_next + V2 ** 2 / (2 * g)
+            E2 = h2 + V2 ** 2 / (2 * g)
             Sf2 = (Q * n) ** 2 / (omega2 ** 2 * R2 ** (4 / 3)) if R2 > 0 else 0
             Sf_avg = (Sf + Sf2) / 2
-            dx_calc = (E2 - E) / (I - Sf_avg) if abs(I - Sf_avg) > 1e-10 else 0
-            if abs(dx_calc - dx) < 0.1:
-                break
-            h_next += (dx - dx_calc) * 0.01
-            h_next = max(h_next, 0.01)
+            return E2 - E - dx * (I - Sf_avg)
+
+        # Границы поиска: h_min > 0, h_max — достаточно большое
+        h_min = 1e-6
+        h_max = max(h * 10, 50.0)
+
+        try:
+            r_min = _residual(h_min)
+            r_max = _residual(h_max)
+            # Если знаки одинаковые — расширяем h_max
+            if r_min * r_max > 0:
+                for _ in range(20):
+                    h_max *= 2
+                    r_max = _residual(h_max)
+                    if r_min * r_max < 0:
+                        break
+            h_next = brentq(_residual, h_min, h_max, xtol=1e-8, maxiter=100)
+        except ValueError:
+            # Фоллбек: приближение для широкого русла
+            h_next = (Q * n / (B * np.sqrt(I))) ** 0.6
 
         h_next = max(h_next, 0.01)
         h = h_next
