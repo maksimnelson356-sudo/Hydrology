@@ -19,3 +19,9 @@ venv/
 .venv/
 installer_output/
 *.spec
+
+# --- OpenCode / local artifacts ---
+.omo/
+*.bak
+_independent_validation.py
+TOOL_TEST.md
