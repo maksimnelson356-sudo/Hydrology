@@ -13,8 +13,9 @@ Services contain no mathematics: formulas stay in the calculation core
 (`core.stats`, `core.hydrorash`).
 """
 
+from .bootstrap import ServiceContainer, build_container
 from .calculation_service import CalculationContext, CalculationError, CalculationService
-from .data_quality_service import DataQualityService, RECOMMENDATIONS
+from .data_quality_service import RECOMMENDATIONS, DataQualityService
 from .methodology_registry import (
     DEFAULT_METHODOLOGIES,
     MethodologyDescriptor,
@@ -34,17 +35,21 @@ from .validation_service import ValidationService
 __all__ = [
     "DEFAULT_METHODOLOGIES",
     "PROJECT_EXTENSION",
+    "RECOMMENDATIONS",
     "SCHEMA_VERSION",
     "SUPPORTED_SCHEMA_VERSIONS",
     "CalculationContext",
     "CalculationError",
     "CalculationService",
+    "DataQualityService",
     "MethodologyDescriptor",
     "MethodologyRegistry",
     "ProjectService",
     "ProjectServiceError",
     "ScenarioNotFoundError",
     "ScenarioService",
+    "ServiceContainer",
     "ValidationService",
+    "build_container",
     "build_default_registry",
 ]
