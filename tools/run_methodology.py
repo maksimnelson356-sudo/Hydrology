@@ -27,8 +27,8 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-from core.domain.models import Dataset, DatasetType
-from core.services.bootstrap import build_container
+from core.domain.models import Dataset, DatasetType  # noqa: E402
+from core.services.bootstrap import build_container  # noqa: E402
 
 
 def load_dataset(path: str | None, post: str | None) -> Dataset:
