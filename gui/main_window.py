@@ -49,7 +49,9 @@ from PyQt6.QtWidgets import (
 )
 from scipy import stats
 
+from core.domain.models import Dataset
 from core.gts_reference import GTSClass, classify_gts_by_parameters
+from core.services.project_service import ProjectService
 from core.stats.composite_curves import compute_composite_curve, find_change_point
 
 # Core imports (statistical calculations)
@@ -73,6 +75,7 @@ from gui.plot_style import (
     build_stylesheet,
     setup_axes_style,
 )
+from gui.tabs.tab_project import ProjectTab
 from gui.widget_short import ShortWidget
 from gui.widget_work1 import Work1Widget
 from gui.widget_work2 import Work2Widget
@@ -429,11 +432,24 @@ class MainWindow(QMainWindow):
         self._gts_class = None
         self._gts_params = None
 
+        # === Проект (P0): сохраняемый контейнер инженерной работы ===
+        self.project_service = ProjectService()
+        self.tab_project = ProjectTab(service=self.project_service)
+        self.tab_project.set_capture_hook(self._capture_project_state)
+        self.tab_project.set_restore_hook(self._restore_project_data)
+        self.tab_project.status_message.connect(self._status_bar.showMessage)
+        self.tab_project.error.connect(lambda msg: QMessageBox.critical(self, "Проект", msg))
+        self.tab_project.project_changed.connect(self._on_project_changed)
+
         menubar = self.menuBar()
         file_menu = menubar.addMenu("Файл данных")
         file_menu.addAction("Открыть данные...", self.load_data)
         file_menu.addAction("Создать шаблон", self.create_unified_template)
         file_menu.addAction("Сохранить отчёт в Excel...", self.save_report)
+        file_menu.addAction("Создать проект...", self.tab_project.create_project)
+        file_menu.addAction("Открыть проект...", self.tab_project.open_project)
+        file_menu.addAction("Сохранить проект", self.tab_project.save_project)
+        file_menu.addAction("Сохранить проект как...", self.tab_project.save_project_as)
         file_menu.addSeparator()
         file_menu.addAction("Восстановить короткий ряд (Short)...",
                             self._open_short_module)
@@ -498,6 +514,7 @@ class MainWindow(QMainWindow):
         self.tab_short = ShortWidget()
 
         self._nav_names = [
+            "Проект",
             "Данные и статистика",
             "Кривая обеспеченности",
             "Анализ трендов",
@@ -517,6 +534,7 @@ class MainWindow(QMainWindow):
             "Параметры",
         ]
         self._nav_pages = [
+            self.tab_project,
             self.tab_data, self.tab_graph, self.tab_trend, self.tab_viz,
             self.tab_kritsky,
             self.tab_work1, self.tab_work2, self.tab_work3, self.tab_work4,
@@ -526,6 +544,7 @@ class MainWindow(QMainWindow):
             self.tab_params,
         ]
         self._nav_colors = [
+            "#0D47A1",
             "#1565C0", "#1565C0", "#1565C0", "#1565C0", "#1565C0",
             "#2E7D32", "#00695C", "#E65100", "#C62828",
             "#4527A0", "#00838F", "#6A1B9A", "#2E7D32",
@@ -580,6 +599,98 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([260, 1300])
         self.setCentralWidget(splitter)
+
+    # === Проект (P0) ===
+    def _on_project_changed(self, path):
+        """Обновить заголовок окна и строку состояния после работы с проектом."""
+        self._update_window_title()
+        if path:
+            self._status_bar.showMessage(f"Проект: {path}")
+        else:
+            self._status_bar.showMessage("Проект не сохранён")
+
+    def _update_window_title(self):
+        """Показать в заголовке окна название проекта и файл проекта."""
+        title = "HydroSphere — Гидрологическая статистика"
+        name = self.project_service.project.name
+        if name and name != "Новый проект":
+            path = self.project_service.path
+            title = f"{title} — {name}" + (f" [{path}]" if path else "")
+        self.setWindowTitle(title)
+
+    def _capture_project_state(self, service):
+        """Записать в проект текущее состояние интерфейса (данные, пост, файл)."""
+        datasets = self._collect_project_datasets()
+        for dataset in datasets:
+            service.add_dataset(dataset)
+        if self.current_post:
+            service.set_selected_post(self.current_post)
+        data_file = getattr(self, "_data_file_path", None)
+        if data_file:
+            service.set_data_file(data_file)
+        return [f"Записано наборов данных: {len(datasets)}"]
+
+    def _collect_project_datasets(self):
+        """Собрать загруженные ряды в датасеты проекта (пост -> Dataset)."""
+        datasets = []
+        all_posts = getattr(self, "_all_posts", None) or {}
+        if all_posts:
+            for post_name, post_df in all_posts.items():
+                dataset = self._dataset_from_dataframe(post_name, post_df)
+                if dataset is not None:
+                    datasets.append(dataset)
+            return datasets
+        if self.df_raw is not None and self.available_posts:
+            for post_name in self.available_posts:
+                try:
+                    series = get_series_by_post(self.df_raw, self.year_col, post_name)
+                except (ValueError, KeyError, TypeError):
+                    continue
+                dataset = self._dataset_from_dataframe(post_name, series)
+                if dataset is not None:
+                    datasets.append(dataset)
+        return datasets
+
+    def _dataset_from_dataframe(self, name, frame):
+        """Преобразовать DataFrame (year, value) в датасет проекта."""
+        if frame is None:
+            return None
+        try:
+            years = frame["year"].tolist()
+            values = frame["value"].tolist()
+        except (KeyError, TypeError, AttributeError):
+            return None
+        data = {}
+        for year, value in zip(years, values, strict=False):
+            try:
+                if value is None or pd.isna(value):
+                    continue
+                data[int(year)] = float(value)
+            except (ValueError, TypeError):
+                continue
+        if not data:
+            return None
+        return Dataset(name=str(name), data=data)
+
+    def _restore_project_data(self, service):
+        """Восстановить данные проекта: перезагрузить файл-источник и выбрать пост."""
+        notes = []
+        data_path = service.data_path
+        if data_path and os.path.exists(data_path):
+            if self.load_data_from_path(data_path):
+                notes.append(f"Данные перезагружены из {os.path.basename(data_path)}")
+            else:
+                notes.append(f"Не удалось загрузить данные из {data_path}")
+        elif data_path:
+            notes.append(f"Файл данных не найден: {data_path}")
+        post = service.selected_post
+        available = getattr(self, "available_posts", []) or []
+        if post and post in available:
+            self.combo_post.setCurrentText(post)
+            notes.append(f"Выбран пост «{post}»")
+        elif post:
+            notes.append(f"Пост «{post}» отсутствует в загруженных данных")
+        return notes
 
     def _switch_page(self, index):
         if 0 <= index < self.tabs.count():
@@ -1207,6 +1318,10 @@ class MainWindow(QMainWindow):
         )
         if not filepath:
             return
+        self.load_data_from_path(filepath)
+
+    def load_data_from_path(self, filepath):
+        """Загрузить данные из указанного файла (без диалога). Возвращает True при успехе."""
         try:
             loaded = []
             xls = pd.ExcelFile(filepath)
@@ -1251,11 +1366,14 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.warning(self, "Внимание",
                                     "Не удалось загрузить данные ни из одного листа")
+            self._data_file_path = filepath
+            return bool(loaded)
         except (ValueError, KeyError, TypeError, FileNotFoundError) as e:
             import traceback
             traceback.print_exc()
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка загрузки", str(e))
+            return False
 
     def _parse_main_posts(self, xls, loaded):
         """Распарсить основной лист с постами (шаблон или плоский файл)."""
