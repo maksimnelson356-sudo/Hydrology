@@ -1,5 +1,28 @@
 # Changelog — HydroSphere
 
+## v2026.09.21 — P0, этап 0: рабочий каркас домена и сервисов
+
+### ✨ Добавлено
+- **`DOCS/ROADMAP.md`** — ТЗ и roadmap P0→P3: концепция продукта (источник — `DOCS/Привет.docx`), gap-анализ кода, этапы с критериями приёмки, открытые решения.
+- **`core/services/methodology_registry.py`** — реестр методик: `MethodologyDescriptor` (нормативный документ и пункт, область применения, требования к данным, ограничения, признак «нормативно предписано / инженерная реализация»), `MethodologyRegistry` (`register`/`get`/`list`/`by_standard`/`check_applicability`) и каталог `DEFAULT_METHODOLOGIES` из 12 методик со ссылками, дословно взятыми из docstring'ов ядра.
+- **`core/services/scenario_service.py`** — сервис сценариев: CRUD, клонирование с сохранением происхождения (`parent_scenario_id`), переопределение датасета, `run()` через `CalculationService`, сравнение параметров и результатов.
+- **`tests/`** — `conftest.py` + `test_domain_services.py`: 28 тестов домена и сервисов, запускаются без GUI.
+
+### 🐛 Исправлено
+- **`core/domain/models.py`** — `import core.domain` падал с `TypeError: 'NoneType' object is not callable`: атрибут `ValidationIssue.field` затенял `dataclasses.field`; теперь используется `dataclasses.field(...)`.
+- **`core/services/__init__.py`** — пакет не импортировался: ссылался на отсутствовавшие `scenario_service` и `methodology_registry`.
+- **`core/domain/__init__.py`** — экспортированы enum'ы (`ProjectStatus`, `DatasetType`, `CalculationStatus`, `ValidationSeverity`, `ScenarioStatus`) и `ValidationIssue`.
+- **Линт:** `ruff check core/domain core/services` — 0 замечаний (было 32), в `validation_service.py` убран вложенный `if` и неиспользуемый импорт.
+
+### 🧪 Проверки
+- `python -m pytest tests -q` → 28 passed.
+- Регрессия: `test_all_functions.py` — 24/24 PASS, `test_edge_cases.py` — NO ISSUES, `test_sp_compliance.py` — OK, `import gui.main_window` — OK.
+
+### 📌 Известные ограничения
+- Каркас ещё не подключён к GUI: далее этапы 1–6 (проект `.hsp`, качество данных, методики в UI, результаты/provenance, сценарии, инженерный отчёт).
+
+---
+
 ## v2026.08.30 — Audit & fixes: statistics corrections, build fixes, threading
 
 ### ✨ Исправления (audit-driven)
