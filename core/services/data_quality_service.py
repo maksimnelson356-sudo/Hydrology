@@ -24,7 +24,6 @@ from core.domain.models import (
     ValidationSeverity,
 )
 from core.services.methodology_registry import (
-    MethodologyDescriptor,
     MethodologyRegistry,
     build_default_registry,
 )
