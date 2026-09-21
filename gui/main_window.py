@@ -51,6 +51,7 @@ from scipy import stats
 
 from core.domain.models import Dataset
 from core.gts_reference import GTSClass, classify_gts_by_parameters
+from core.services.bootstrap import build_container
 from core.services.data_quality_service import DataQualityService
 from core.services.project_service import ProjectService
 from core.stats.composite_curves import compute_composite_curve, find_change_point
@@ -77,6 +78,7 @@ from gui.plot_style import (
     build_stylesheet,
     setup_axes_style,
 )
+from gui.tabs.tab_methodology import MethodologyTab
 from gui.tabs.tab_project import ProjectTab
 from gui.widget_short import ShortWidget
 from gui.widget_work1 import Work1Widget
@@ -443,6 +445,19 @@ class MainWindow(QMainWindow):
         self.tab_project.error.connect(lambda msg: QMessageBox.critical(self, "Проект", msg))
         self.tab_project.project_changed.connect(self._on_project_changed)
 
+        # === Методики (P0, Этап 3): реестр и расчёт через сервисный слой ===
+        self.service_container = build_container()
+        self.tab_methodology = MethodologyTab(container=self.service_container)
+        self.tab_methodology.status_message.connect(self._status_bar.showMessage)
+        self.tab_methodology.error.connect(
+            lambda msg: QMessageBox.critical(self, "Методики", msg)
+        )
+        self.tab_methodology.calculation_finished.connect(
+            lambda mid, result: self._status_bar.showMessage(
+                f"Расчёт {mid}: {result.metadata.status.value}"
+            )
+        )
+
         menubar = self.menuBar()
         file_menu = menubar.addMenu("Файл данных")
         file_menu.addAction("Открыть данные...", self.load_data)
@@ -517,6 +532,7 @@ class MainWindow(QMainWindow):
 
         self._nav_names = [
             "Проект",
+            "Методики",
             "Данные и статистика",
             "Кривая обеспеченности",
             "Анализ трендов",
@@ -537,6 +553,7 @@ class MainWindow(QMainWindow):
         ]
         self._nav_pages = [
             self.tab_project,
+            self.tab_methodology,
             self.tab_data, self.tab_graph, self.tab_trend, self.tab_viz,
             self.tab_kritsky,
             self.tab_work1, self.tab_work2, self.tab_work3, self.tab_work4,
@@ -547,6 +564,7 @@ class MainWindow(QMainWindow):
         ]
         self._nav_colors = [
             "#0D47A1",
+            "#4A148C",
             "#1565C0", "#1565C0", "#1565C0", "#1565C0", "#1565C0",
             "#2E7D32", "#00695C", "#E65100", "#C62828",
             "#4527A0", "#00838F", "#6A1B9A", "#2E7D32",
@@ -698,6 +716,8 @@ class MainWindow(QMainWindow):
         if 0 <= index < self.tabs.count():
             self.tabs.setCurrentIndex(index)
             self._nav_list.setCurrentRow(index)
+            if self._nav_pages[index] is self.tab_methodology:
+                self._sync_methodology_dataset()
 
     def setup_data_tab(self):
         layout = QVBoxLayout(self.tab_data)
@@ -1460,6 +1480,31 @@ class MainWindow(QMainWindow):
         loaded.append("Данные (%d постов)" % len(self.available_posts))
 
     # ============================================================
+    # Методики (Этап 3, DOCS/ROADMAP.md)
+    # ============================================================
+    def _sync_methodology_dataset(self):
+        """Передать текущий ряд вкладке «Методики» (при переключении раздела)."""
+        if not hasattr(self, "tab_methodology") or self.df is None or self.df.empty:
+            return
+        try:
+            data_map = {
+                int(row["year"]): float(row["value"])
+                for _, row in self.df.iterrows()
+                if pd.notna(row["year"]) and pd.notna(row["value"])
+            }
+        except (ValueError, TypeError, KeyError):
+            return
+        if data_map:
+            self.tab_methodology.set_dataset(
+                Dataset(
+                    name=self.current_post or "Ряд",
+                    data=data_map,
+                    unit="m³/s",
+                    metadata={"post": self.current_post or "", "source": "gui"},
+                )
+            )
+
+    # ============================================================
     # Качество данных (Этап 2, DOCS/ROADMAP.md)
     # ============================================================
     def show_data_quality(self):
@@ -1696,6 +1741,26 @@ class MainWindow(QMainWindow):
         self.df = self.df.copy()
         self.df.attrs['post'] = post_name
         self._sync_post_combos(post_name)
+
+        # Методики (Этап 3): держим вкладку в актуальном состоянии ряда.
+        if hasattr(self, "tab_methodology"):
+            try:
+                data_map = {
+                    int(row["year"]): float(row["value"])
+                    for _, row in self.df.iterrows()
+                    if pd.notna(row["year"]) and pd.notna(row["value"])
+                }
+                if data_map:
+                    self.tab_methodology.set_dataset(
+                        Dataset(
+                            name=post_name,
+                            data=data_map,
+                            unit="m³/s",
+                            metadata={"post": post_name, "source": "gui"},
+                        )
+                    )
+            except (ValueError, TypeError, KeyError):
+                pass
 
         stats = get_basic_stats(self.df)
         self.table.setRowCount(len(stats))
