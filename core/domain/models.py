@@ -333,14 +333,19 @@ class ValidationResult:
         return [i for i in self.issues if i.severity == ValidationSeverity.CRITICAL]
 
     def add_issue(self, code: str, message: str, severity: ValidationSeverity,
-                  field: str | None = None, **details: Any) -> None:
-        """Add a validation issue."""
+                  field: str | None = None, details: dict[str, Any] | None = None,
+                  **extra: Any) -> None:
+        """Add a validation issue.
+
+        Accepts either an explicit ``details`` dict or arbitrary keyword
+        arguments; both are merged into ``ValidationIssue.details``.
+        """
         self.issues.append(ValidationIssue(
             code=code,
             message=message,
             severity=severity,
             field=field,
-            details=details,
+            details={**(details or {}), **extra},
         ))
         if severity in (ValidationSeverity.ERROR, ValidationSeverity.CRITICAL):
             self.is_valid = False
