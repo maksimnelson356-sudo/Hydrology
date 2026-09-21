@@ -1,5 +1,20 @@
 # Changelog — HydroSphere
 
+## v2026.09.21 — P0, этап 1: проект и персистентность .hsp
+
+### Добавлено
+- **`core/domain/serialization.py`** — конвертеры `to_dict`/`from_dict` для всех сущностей домена (Project, Dataset, Methodology, CalculationMetadata, CalculationResult, Scenario, ValidationIssue/Result, DataQualityReport); tolerant-разбор.
+- **`core/services/project_service.py`** — сервис проекта: create/open/save, tolerant-парсер `.hsp` (схема 1.0), атомарное сохранение, датасеты/параметры/пост/файл данных/сценарии/расчёты/отчёты, `summary()`.
+- **`gui/tabs/tab_project.py`** — раздел «Проект»: создать/открыть/сохранить/сохранить как, таблицы наборов данных и параметров, панель предупреждений. Первый пункт боковой навигации (18 разделов).
+- **`tests/test_project_service.py`** — 17 тестов персистентности (round-trip, атомарность JSON, tolerant-разбор, CRUD датасетов/параметров/сценариев, чтение `sample_project.hsp`).
+
+### Изменено
+- **`gui/main_window.py`** — меню «Файл данных» (Создать/Открыть/Сохранить/Сохранить как проект); `load_data()` разделён на `load_data()` + `load_data_from_path()`; заголовок окна показывает название проекта.
+- **`DOCS/hsp_schema.md`** — схема расширена: `description`, `status`, `project_id`, `metadata`, `datasets`, `calculations`, `scenarios`.
+- **`INSTRUCTION.md`** — список разделов: 18, «Проект» первым.
+
+---
+
 ## v2026.09.21 — P0, этап 0: рабочий каркас домена и сервисов
 
 ### ✨ Добавлено
