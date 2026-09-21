@@ -237,3 +237,33 @@ class ConfidenceBandsWorker(CalculationWorker):
             self.values, self.P_values, self.confidence, self.n_bootstrap
         )
         return {'confidence_bands': result, 'status': 'ok'}
+
+
+class DataQualityWorker(CalculationWorker):
+    """Оценка качества данных в фоне (Этап 2, DOCS/ROADMAP.md)."""
+
+    def __init__(self, dataset, methodology_id: str | None = None,
+                 parameters: dict | None = None, parent=None):
+        super().__init__(parent)
+        self.dataset = dataset
+        self.methodology_id = methodology_id
+        self.parameters = parameters
+
+    def _do_work(self) -> dict:
+        from core.services.data_quality_service import DataQualityService
+
+        self.progress.emit(20, "Проверка полноты и пропусков...")
+        service = DataQualityService()
+        self.progress.emit(50, "Статистические критерии (однородность, стационарность)...")
+        report = service.analyze(
+            self.dataset,
+            methodology_id=self.methodology_id,
+            parameters=self.parameters,
+        )
+        self.progress.emit(90, "Формирование рекомендаций...")
+        return {
+            'report': report,                    # объект DataQualityReport
+            'report_dict': service.to_json(report),  # сериализованный вид
+            'recommendations': service.recommendations(report),
+            'status': 'ok',
+        }

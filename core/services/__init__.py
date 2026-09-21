@@ -14,6 +14,7 @@ Services contain no mathematics: formulas stay in the calculation core
 """
 
 from .calculation_service import CalculationContext, CalculationError, CalculationService
+from .data_quality_service import DataQualityService, RECOMMENDATIONS
 from .methodology_registry import (
     DEFAULT_METHODOLOGIES,
     MethodologyDescriptor,

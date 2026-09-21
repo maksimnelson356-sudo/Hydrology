@@ -8,6 +8,7 @@ from .calculation_workers import (
     CalculationWorker,
     CompositeCurveWorker,
     ConfidenceBandsWorker,
+    DataQualityWorker,
     ExtensionWorker,
     FrequencyCurveWorker,
     GTSIntegrationWorker,
@@ -29,4 +30,5 @@ __all__ = [
     'HistoricalExtremesWorker',
     'GTSIntegrationWorker',
     'ConfidenceBandsWorker',
+    'DataQualityWorker',
 ]

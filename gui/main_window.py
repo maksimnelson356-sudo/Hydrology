@@ -51,6 +51,7 @@ from scipy import stats
 
 from core.domain.models import Dataset
 from core.gts_reference import GTSClass, classify_gts_by_parameters
+from core.services.data_quality_service import DataQualityService
 from core.services.project_service import ProjectService
 from core.stats.composite_curves import compute_composite_curve, find_change_point
 
@@ -67,6 +68,7 @@ from core.stats.series_extension import full_extension_workflow
 from core.stats.sheet_reader import read_work_sheet
 from core.stats.trends import full_trend_analysis
 from gui.controller import DataController, PlotController
+from gui.dialogs.data_quality_dialog import DataQualityDialog
 from gui.plot_style import (
     COLORS,
     FONT_DEFAULT,
@@ -753,6 +755,10 @@ class MainWindow(QMainWindow):
         self.btn_outliers.clicked.connect(self.detect_outliers)
         self.btn_outliers.setEnabled(False)
 
+        self.btn_quality = QPushButton("Качество данных и рекомендации")
+        self.btn_quality.clicked.connect(self.show_data_quality)
+        self.btn_quality.setEnabled(False)
+
         self.btn_composite = QPushButton("Составная кривая (указать год разрыва)")
         self.btn_composite.clicked.connect(self.set_composite_break)
         self.btn_composite.setEnabled(False)
@@ -1354,7 +1360,7 @@ class MainWindow(QMainWindow):
                         self.btn_plot_series, self.btn_plot_hist,
                         self.btn_plot_box, self.btn_plot_corr,
                         self.btn_auto_cs_cv, self.btn_add_extreme,
-                        self.btn_stationarity]:
+                        self.btn_stationarity, self.btn_quality]:
                 btn.setEnabled(True)
 
             # === 5. Итог ===
@@ -1453,6 +1459,92 @@ class MainWindow(QMainWindow):
         self.on_post_changed(self.available_posts[0])
         loaded.append("Данные (%d постов)" % len(self.available_posts))
 
+    # ============================================================
+    # Качество данных (Этап 2, DOCS/ROADMAP.md)
+    # ============================================================
+    def show_data_quality(self):
+        """Диалог качества данных: отчёт и рекомендации, без изменения данных."""
+        if self.df is None or self.df.empty:
+            QMessageBox.warning(self, "Нет данных", "Сначала загрузите или введите данные.")
+            return
+        try:
+            df = self.df
+            years = pd.to_numeric(df["year"], errors="coerce").dropna().astype(int)
+            values = pd.to_numeric(df["value"], errors="coerce")
+            data_map = {
+                int(year): float(value)
+                for year, value in zip(years, values)
+                if pd.notna(value)
+            }
+            if not data_map:
+                QMessageBox.warning(self, "Нет данных", "В ряду нет числовых значений.")
+                return
+            dataset = Dataset(
+                name=self.current_post or "Ряд",
+                data=data_map,
+                unit="m³/s",
+                metadata={"post": self.current_post or "", "source": "gui"},
+            )
+        except (ValueError, TypeError, KeyError) as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
+            QMessageBox.critical(self, "Ошибка", f"Не удалось подготовить данные: {e}")
+            return
+
+        service = DataQualityService()
+        self._quality_service = service
+        self._quality_dataset_id = dataset.id
+
+        dialog = DataQualityDialog(dataset, self.current_post or "Ряд", parent=self)
+        dialog.action_requested = self._execute_quality_action
+        dialog.report_finished = self._on_quality_report_ready
+        dialog.exec()
+
+    def _on_quality_report_ready(self, report, payload):
+        """Зарегистрировать отчёт о качестве в проекте (если проект открыт)."""
+        try:
+            if getattr(self.project_service, "path", None) is not None:
+                self.project_service.register_report(payload)
+                self._status_bar.showMessage(
+                    "Отчёт о качестве зарегистрирован в проекте"
+                )
+        except (ValueError, TypeError, AttributeError) as e:
+            print(f"[WARN] register_report(data_quality): {e}")
+
+    def _execute_quality_action(self, code, context):
+        """Выполнить действие из диалога качества (только явные действия)."""
+        title = (context or {}).get("title", code)
+        try:
+            if code == "fill_interpolation":
+                self.fill_missing_data()
+            elif code == "fill_correlation":
+                self.fill_missing_with_correlation()
+            elif code == "homogeneity_report":
+                self.check_homogeneity()
+            elif code == "outliers_review":
+                self.detect_outliers()
+            elif code == "trend_report":
+                self.run_trend_analysis()
+            elif code == "series_extension":
+                self.extend_series()
+            elif code == "composite_curve":
+                self.build_composite_curve()
+            elif code == "save_report":
+                self.save_report()
+            else:
+                QMessageBox.information(
+                    self, "Действие",
+                    f"Действие «{title}» выполняется в соответствующем разделе."
+                )
+                return
+            self._status_bar.showMessage(f"Выполнено: {title}")
+        except (ValueError, KeyError, TypeError, RuntimeError, OSError) as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error in {self.__class__.__name__}: {e}")
+            QMessageBox.critical(self, "Ошибка", str(e))
+
     def _distribute_data_to_widgets(self):
         """Распределение загруженных данных по рабочим виджетам."""
         if self.df_raw is not None:
@@ -1531,7 +1623,8 @@ class MainWindow(QMainWindow):
             for btn in [self.btn_fill, self.btn_fill_corr, self.btn_calc, self.btn_trend,
                         self.btn_save_plot, self.btn_homogeneity, self.btn_outliers,
                         self.btn_composite, self.btn_quantiles, self.btn_gts_curve,
-                        self.btn_composite_auto, self.btn_extend]:
+                        self.btn_composite_auto, self.btn_extend,
+                        self.btn_quality]:
                 btn.setEnabled(True)
 
             self._status_bar.showMessage(f"Введено вручную: {post_name} ({len(df)} значений)")
@@ -1575,7 +1668,8 @@ class MainWindow(QMainWindow):
             for btn in [self.btn_fill, self.btn_fill_corr, self.btn_calc, self.btn_trend,
                         self.btn_save_plot, self.btn_homogeneity, self.btn_outliers,
                         self.btn_composite, self.btn_quantiles, self.btn_gts_curve,
-                        self.btn_composite_auto, self.btn_extend]:
+                        self.btn_composite_auto, self.btn_extend,
+                        self.btn_quality]:
                 btn.setEnabled(True)
 
             self._distribute_data_to_widgets()
