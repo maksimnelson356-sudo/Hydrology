@@ -18,7 +18,26 @@
 - `python -m pytest tests -q` → 60 passed (28 домен/сервисы + 17 проект + 15 качество данных).
 
 ### 📌 Известные ограничения
-- Ручной прогон диалога в GUI на реальном ряде остаётся за пользователем (критерий приёмки этапа); офлайн-логика покрыта тестами.
+- Ручной прогон диалога в GUI на реальном ряде остаётся за пользователем (критерии приёмки Этапов 2 и 3); офлайн-логика и эквивалентность результатов покрыты тестами.
+
+---
+
+## v2026.09.21 — P0, этап 3: реестр методик и расчёт через сервис
+
+### Добавлено
+- **`core/services/handlers/`** — 9 адаптеров методик P0 (`stats_parameters`, `frequency_pearson3`, `frequency_kritsky_menkel`, `homogeneity_full`, `trends_full`, `max_runoff`, `min_runoff`, `flow_duration`, `reservoir_regulation`): делегируют в существующие функции ядра (`core.stats.*`, `core.hydrorash.*`), не содержат математики и сериализуют результаты в plain-Python dict / схему `{"columns": [...], "rows": [...]}` для хранения в `.hsp`.
+- **`core/services/bootstrap.py`** — `build_container()`: единая точка сборки сервисного слоя; регистрирует дескрипторы, хендлеры и валидаторы применимости; возвращает `ServiceContainer` (`registry` + `calculation` + `quality`); есть `registered_methodology_ids()`.
+- **`gui/tabs/tab_methodology.py`** — раздел «Методики»: список P0-методик с нормативной базой, требованиями к данным и статусом применимости к текущему ряду; кнопка «Выполнить расчёт» → `CalculationService.execute()`; вывод результата (плоское представление + исходный JSON); запросы параметров при запуске (например, `demand_m3_s` для `reservoir_regulation`).
+- **`gui/main_window.py`** — вкладка «Методики» добавлена в навигацию на вторую позицию (теперь 19 разделов вместо 18); `service_container = build_container()`, соединение сигналов, синхронизация ряда из «Данные и статистика» при переключении раздела.
+- **`tools/run_methodology.py`** — консольный прогон без GUI: `--list`, `--method`, `--file`, `--demo`, `--demand`.
+- **`tests/test_methodology_service.py`** — 19 тестов: регистрация всех P0-методик, `COMPLETED` через сервис, эквивалентность результата сервису и прямому вызову ядра (ноль расхождений), отказ неприменимой методики с нормативной ссылкой, проверка каталога дескрипторов.
+
+### 🧪 Проверки
+- `python -m pytest tests -q` → 79 passed (28 домен/сервисы + 17 проект + 15 качество данных + 19 методики).
+- `python tools/run_methodology.py --list` → 9 методик.
+- `python tools/run_methodology.py --method stats_parameters --demo` → `COMPLETED`, детерминированный ряд.
+- `python -m ruff check --quiet` для `gui/tabs/tab_methodology.py`, `core/services/bootstrap.py`, `core/services/handlers/__init__.py`, `tools/run_methodology.py` — без предупреждений по коду Этапа 3.
+- Offscreen smoke: `main_window` загружается, вкладка «Методики» на позиции 2, в списке 9 записей.
 
 ---
 
