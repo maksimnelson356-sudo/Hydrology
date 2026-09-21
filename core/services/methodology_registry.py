@@ -347,9 +347,34 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         category="reservoir",
         standard="СП 58.13330.2019",
         scope="Полезный объём, гарантированная отдача, кривая «объём — отдача»",
-        required_parameters=("demand",),
+        required_parameters=("demand_m3_s",),
         limitations=("Расчёт зависит от выбранного правила регулирования и ряда притока",),
         notes="СП 33-101-2003 / СП 33.13330.2016; core/hydrorash/reservoir_regulation.py",
+    ),
+    MethodologyDescriptor(
+        id="trends_full",
+        name="Анализ тренда (линейный, Манн-Кендалл, Сен, Pettitt)",
+        category="statistics",
+        standard="СП 33-101-2003",
+        clause="раздел 5.6",
+        scope="Выявление направленных изменений многолетнего ряда (тренд, точка смены режима)",
+        min_points=10,
+        limitations=(
+            "Манн-Кендалл/Сен предполагают отсутствие сильной автокорреляции ряда",
+        ),
+        notes="Реализация: core/stats/trends.py",
+    ),
+    MethodologyDescriptor(
+        id="min_runoff",
+        name="Минимальный сток (30-суточные зимние минимумы)",
+        category="runoff",
+        standard="СП 33-101-2003",
+        clause="раздел 9",
+        scope=(
+            "Расчёт минимальных расходов воды: 7/10/30-суточные минимумы, "
+            "экосистемный минимум (СП 32.13330.2018)"
+        ),
+        notes="Реализация: core/hydrorash/min_runoff_extended.py",
     ),
     MethodologyDescriptor(
         id="backwater",
