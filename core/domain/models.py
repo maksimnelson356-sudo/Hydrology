@@ -247,6 +247,11 @@ class Scenario:
     """
     Calculation scenario with parameters.
     Allows creating variations of calculations without modifying originals.
+
+    scenario_type:
+        - "generic" (default): any methodology run through ScenarioService.run
+        - "reservoir": multi-year regulation scenario (P1.7); parameters hold
+          demand_m3_s / V_max_km3 / S_0_km3 / target_guarantee / mode / year
     """
     name: str
     project_id: UUID
@@ -254,6 +259,7 @@ class Scenario:
     parameters: dict[str, Any] = dataclasses.field(default_factory=dict)
     description: str = ""
     status: ScenarioStatus = ScenarioStatus.DRAFT
+    scenario_type: str = "generic"
     id: UUID = dataclasses.field(default_factory=uuid4)
     created_at: datetime = dataclasses.field(default_factory=datetime.now)
     updated_at: datetime = dataclasses.field(default_factory=datetime.now)
@@ -262,6 +268,8 @@ class Scenario:
     def __post_init__(self):
         if not self.name or not self.name.strip():
             raise ValueError("Scenario name cannot be empty")
+        if not self.scenario_type or not self.scenario_type.strip():
+            raise ValueError("Scenario type cannot be empty")
 
     def touch(self) -> None:
         """Update the updated_at timestamp."""
@@ -280,6 +288,7 @@ class Scenario:
             base_dataset_id=self.base_dataset_id,
             parameters=new_params,
             description=self.description,
+            scenario_type=self.scenario_type,
             parent_scenario_id=self.id,
         )
 
@@ -292,6 +301,7 @@ class Scenario:
             parameters=self.parameters.copy(),
             description=self.description,
             status=ScenarioStatus.DRAFT,
+            scenario_type=self.scenario_type,
         )
 
 

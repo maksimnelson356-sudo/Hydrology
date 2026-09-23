@@ -361,6 +361,7 @@ def scenario_to_dict(scenario: Scenario) -> dict[str, Any]:
         "parameters": to_json_safe(scenario.parameters),
         "description": scenario.description,
         "status": scenario.status.value,
+        "scenario_type": scenario.scenario_type,
         "created_at": datetime_to_iso(scenario.created_at),
         "updated_at": datetime_to_iso(scenario.updated_at),
     }
@@ -385,6 +386,7 @@ def scenario_from_dict(raw: Any, project_id: UUID | None = None) -> Scenario:
         parameters=dict(data.get("parameters") or {}),
         description=str(data.get("description") or ""),
         status=parse_enum(ScenarioStatus, data.get("status"), ScenarioStatus.DRAFT),
+        scenario_type=str(data.get("scenario_type") or "generic"),
         parent_scenario_id=parse_uuid(data.get("parent_scenario_id")),
     )
     parsed_id = parse_uuid(data.get("id"))
