@@ -1,6 +1,6 @@
 # Состояние работы
 
-## Текущий этап: P0 закрыт; P1.1 + P1.3 + P1.2 + P1.4 запушены; открыт P1.5+
+## Текущий этап: P0 закрыт; P1.1 + P1.3 + P1.2 + P1.4 + P1.5 готовы (коммит P1.5 ожидает); открыт P1.7 / мёрдж
 
 ### Выполненные этапы ROADMAP
 
@@ -11,9 +11,30 @@
 | P1.3 QualityPipeline | **готово, запушен** (`ed68de5`) | `test_quality_pipeline` (10) |
 | P1.2 импорт через API | **готово, запушен** (`5383206`) | `test_api_source` (18) |
 | P1.4 расширенная статистика N=10 | **готово, запушен** (`9247389`) | `test_extended_methodologies` (24) |
-| P1.5+ (калибровка, GIS, …) | открыто | — |
+| P1.5 калибровка MSE/NSE | **готово, не закоммичено** | `test_calibration_service` (18) |
+| P1.7 reservoir simulator / мёрдж main | открыто | — |
 
-Итого: **184 passed** (`tests/`), корневые `test_*.py` → **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav 23/23/23, GUI offscreen smoke OK (23 pages).
+Итого: **202 passed** (`tests/`), корневые `test_*.py` → **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav 23/23/23, GUI offscreen smoke OK (23 pages, menu калибровки на месте).
+
+### P1.5 — что сделано (решение 9.5: MSE и NSE, default NSE)
+
+1. **`core/stats/metrics.py`** — `mse` / `nse`, `AVAILABLE_METRICS = ("mse", "nse")`.
+2. **`core/services/calibration_service.py`** — `CalibrationRequest` (initial/limits/metric/method), `calibrate` → `CalculationResult` + provenance (метрика, итерации, «до/после»), `apply_to_scenario` через `ScenarioService.update`.
+3. **`tests/test_calibration_service.py`** — 18: сходимость на синтетике (ближе к истинному, чем дефолт), provenance, отказ при невалидных limits / пустом / неизвестной метрике / shape mismatch, apply+rollback.
+4. **GUI** — `gui/dialogs/calibration_dialog.py` (модели, метрика, limits, `CalibrationWorker` QThread, apply к сценарию); меню «Калибровка параметров…» → `open_calibration`; результат в `ResultStore`.
+5. **build/i18n/exports** — hidden imports; ключи `menu_calibrate`/`calibration_*` (ru/en); экспорт из `core.services` / `gui.dialogs`.
+6. **ROADMAP** (DOCS + .planning) — решение 9.5 зафиксировано.
+
+### Верификация DoD P1.5 (2026-09-23)
+
+- `python -m pytest tests -q` → **202 passed** (было 184, +18).
+- Корневые `test_*` → **135 passed**.
+- ruff: новые файлы = 0; `main_window.py` 36/36 delta=0; `build.py` 7/7 delta=0.
+- nav: 23/23/23; offscreen `GUI_SMOKE_OK` (23 pages, `menu_has_calibrate=True`).
+- Export: `from core.services import CalibrationService` → `('mse', 'nse')`.
+- Push до P1.5: HEAD = origin = `4186812`.
+
+### Остатки (не блокируют; P0+P1.1–P1.5 закрыты)
 
 ### P1.4 — что сделано (решение 9.4: N=10)
 
@@ -52,8 +73,9 @@
 
 - 2 предсуществующих `except Exception` в `main_window` — по мере рефакторинга.
 - Ручной GUI / приёмка P1 — за пользователем.
-- Следующий этап по порядку ROADMAP: **P1.5** (калибровка) — по команде; альтернатива P1.7 (порядок уточняется).
-- `main` локально `d3967c7` [origin/main: ahead 2] — мёрдж `global-implementation` → `main` (решение 8.2) ждёт команды.
+- Коммит+push P1.5 — ждёт (DoD п.7: коммит в `global-implementation`).
+- Следующий по команде: **P1.7** (reservoir scenario simulator), затем **мёрдж `global-implementation` → `main`** (решение 8.2).
+- `main` локально `d3967c7` [origin/main: ahead 2] — мёрдж ждёт команды.
 
 ### Примечания
 
@@ -61,4 +83,4 @@
 - `core/stats/*` N803/N806 — предсуществующая нотация, не трогать.
 - `i18n/__init__.py` — предсуществующие ruff, файл не трогали.
 
-Обновлено: 2026-09-23 (P1.4 запушен `9247389`)
+Обновлено: 2026-09-23 (P1.5 реализован, коммит ожидает)
