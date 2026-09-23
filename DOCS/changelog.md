@@ -1,5 +1,30 @@
 # Changelog — HydroSphere
 
+## v2026.09.23 — P1.6: GIS/DEM / морфометрия (решение 9.3 = (б) GeoJSON)
+
+### Добавлено
+- **`core/stats/geometry.py`** — planar/spherical polygon metrics: `polygon_area` (shoelace для projected-координат, spherical trapezoid для lon/lat), `polygon_perimeter` (haversine для degrees), `polygon_centroid` (vertex-average); `EARTH_RADIUS_M = 6371008.8`; pure `math`, без новых зависимостей.
+- **`core/services/geo_service.py`** — `GeoService.load/loads/from_document`: Feature / FeatureCollection / bare Polygon|MultiPolygon → `BasinMorphometry` (area_m2/km2, perimeter, centroid, vertex_count, geometry_type, `to_metadata()` JSON-safe для `Dataset.metadata`); `GeoServiceError` на missing file / wrong suffix / invalid JSON / unsupported geometry / empty FC.
+- **`tests/test_geo_service.py`** — 18 тестов: analytical square area/perimeter/centroid, open vs closed ring, spherical 1°×1° order-of-magnitude, Feature/FC/MultiPolygon happy paths, metadata JSON round-trip, error cases, AST-guard against rasterio/shapely/geopandas/fiona/osgeo/pyproj imports.
+- **GUI `gui/tabs/tab_geo.py`** — вкладка «Морфометрия»: QFileDialog GeoJSON → сводка (площадь/периметр/центроид/вершины/тип), таблица `to_metadata`, matplotlib-превью контура; сигналы `status_message`/`error`/`contour_loaded`; `load_contour_path` для программного smoke.
+- **меню** «Загрузить контур бассейна (GeoJSON)…» → `open_geo_contour` (переключает на вкладку + диалог); nav **24** раздела («Морфометрия» после «Отчёта»).
+
+### Изменено
+- **решение 9.3** зафиксировано в `DOCS/ROADMAP.md` + `.planning/ROADMAP.md`: **(б) только GeoJSON-контуры** (stdlib + `core.stats.geometry`, без rasterio/QtGIS; DEM-растры — вне P1.6).
+- **`core/services/__init__.py`** — экспорт `GeoService` / `BasinMorphometry` / `GeoServiceError`.
+- **`core/stats/__init__.py`** — `geometry` в `__all__` / docstring.
+- **`build.py`** — hidden imports: `core.services.geo_service`, `core.stats.geometry`, `gui.tabs.tab_geo`.
+- **i18n** `menu_load_contour`, `sidebar_geo` (ru/en).
+
+### Проверки (DoD P1.6)
+- `python -m pytest tests -q` → **235 passed** (было 217, +18).
+- Корневые `test_*.py` → **135 passed**.
+- nav **24/24/24**; GUI offscreen smoke OK (`pages=24`, `has_open_geo=True`, `menu_has_contour=True`).
+- ruff: новые файлы = 0; `build.py` 7/7 delta=0; `main_window.py` 36/36 delta=0.
+- Площадь тестового квадрата 1 км² — аналитически точная (rel 1e-9); без новых runtime-зависимостей.
+
+---
+
 ## v2026.09.23 — P1.7: Reservoir Scenario Simulator
 
 ### Добавлено

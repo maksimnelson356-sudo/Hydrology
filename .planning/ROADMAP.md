@@ -7,7 +7,7 @@
 >
 > **Статус:** ТЗ, версия 1.9 · **Дата:** 23.09.2026 · **Ветка:** `global-implementation`
 > **P0 (этапы 0–7) выполнен и запушен** (`origin/global-implementation`, HEAD `6244444`).
-> Дальше — **P1 / HydroSphere 1.5**: этапы P1.1–P1.7 ниже; **P1.1–P1.5 и P1.7 выполнены и запушены** (feat до `6860165`), мёрдж в `main` выполнен (origin/main == origin/global-implementation); открыт P1.6.
+> Дальше — **P1 / HydroSphere 1.5**: этапы P1.1–P1.7 ниже; **P1.1–P1.7 выполнены** (решение 9.3=(б) закрыто 23.09.2026), мёрдж в `main` выполнен (origin/main == origin/global-implementation); открыт P2.
 
 ---
 
@@ -629,9 +629,9 @@ smoke-тестами; каркас закоммичен.
 
 **Задачи:**
 
-1. **Открытое решение 9.3:** стек (варианты: rasterio+numpy для DEM; GeoJSON контура
-   вручную; отказ от растров в пользу ручного ввода морфометрии в P1.6-min).
-2. `core/services/geo_service.py` — импорт контура (GeoJSON) / подсчёт статистик DEM;
+1. **Решение 9.3 принято: (б)** — только GeoJSON-контуры (stdlib + `core.stats.geometry`);
+   без rasterio и QtGIS; DEM-растры — вне P1.6.
+2. `core/services/geo_service.py` — импорт контура (GeoJSON) / морфометрия;
    выход — поля `Dataset.metadata` / параметры бассейна для методик.
 3. GUI: «Морфометрия» (загрузить контур, показать сводку); визуализация — matplotlib
    (уже в стеке), без QtGIS.
@@ -640,7 +640,7 @@ smoke-тестами; каркас закоммичен.
 **Критерии приёмки:**
 
 - Для тестового контура площадь совпадает с эталоном в пределах допуска.
-- Новые зависимости — только по решению 9.3; иначе min-вариант без растров.
+- Новые зависимости — не добавляются (решение 9.3 = (б), без растров).
 
 **Как проверяем:** pytest на фикстуре + карта-превью в GUI.
 
@@ -717,7 +717,7 @@ smoke-тестами; каркас закоммичен.
 |---|--------|----------|-----------|
 | 9.1 | Источник API для временных рядов | (а) открытый гидро-API · (б) собственный REST · (в) сначала только mock/fixture | P1.2 |
 | 9.2 | Новые runtime-зависимости в P1 | (а) без новых (requests/scipy/pandas уже есть) · (б) точечно (rasterio и т.п.) с обоснованием | P1.2, P1.6 |
-| 9.3 | GIS/DEM-стек | (а) rasterio+numpy · (б) только GeoJSON-контуры · (в) min: ручная морфометрия без гео | P1.6 |
+| 9.3 | GIS/DEM-стек | **(б) только GeoJSON-контуры** (решение 23.09.2026): stdlib (`json`) + `core.stats.geometry`, без rasterio; DEM-растры — вне P1.6 | P1.6 |
 | 9.4 | Объём P1.4 (сколько методик) | **зафиксировано N=10** (решение при старте): spectral_hurst, drought_spi, baseflow, confidence_bands, composite_curves, intra_annual, snowmelt, spillway, ecological_flow, ice_phenomena | P1.4 |
 | 9.5 | Метрики калибровки по умолчанию | **зафиксировано: MSE и NSE** (по умолчанию NSE; список `AVAILABLE_METRICS` расширяется программно) | P1.5 |
 
@@ -779,7 +779,7 @@ smoke-тестами; каркас закоммичен.
 
 | Дата | Версия | Изменение |
 |------|--------|-----------|
-| 23.09.2026 | 2.0 | **P1.1–P1.5 + P1.7 выполнены и запушены** (`origin/global-implementation`, feat до `6860165`); **мёрдж в `main` выполнен** (решение 8.2, fast-forward `d3967c7` → tip; origin/main == origin/global-implementation). Тесты: 217 pytest + 135 корневых; навигация 23/23/23; GUI smoke OK; 20 методик в реестре. P1.7: `scenario_type`, `ReservoirScenarioService`, `storage_yield`, GUI-блок водохранилища + Δ-таблица + баланс-график. Открыт P1.6 (решение 9.3) |
+| 23.09.2026 | 2.0 | **P1.1–P1.7 выполнены и запушены** (`origin/global-implementation`, feat до P1.7 `6860165`); **решение 9.3 = (б)** GeoJSON-контуры закрыто; **P1.6** морфометрия готова (geometry + geo_service + tab_geo, nav 24); **мёрдж в `main` выполнен** (решение 8.2, fast-forward `d3967c7` → tip; origin/main == origin/global-implementation). Тесты: 235 pytest + 135 корневых; навигация 24/24/24; GUI smoke OK; 20 методик в реестре. P1.7: `scenario_type`, `ReservoirScenarioService`, `storage_yield`, GUI-блок водохранилища + Δ-таблица + баланс-график. Открыт P2 (Monte Carlo / климат / Decision Support) |
 | 23.09.2026 | 1.9 | P0 запушен (`origin/global-implementation`, HEAD `6244444`, hygiene commit). Добавлен раздел **6.1 Этапы P1 (P1.1–P1.7)** и открытые решения 9.1–9.5; код P1 не начат |
 | 23.09.2026 | 1.8 | Этапы 4–7 P0 выполнены (тесты: 117 pytest + 135 корневых регрессий; сборка PyInstaller → `dist/HydroSphere/HydroSphere.exe` запускается; навигация 23/23/23). **Закоммичено и запушено** (13 atomic commits + `6244444`) |
 | 23.09.2026 | 1.7 | Этап 6 выполнен: `report_service` (13 секций, `render_text`/`save_report` utf-8-sig), вкладка «Отчёт» с `ReportBuildWorker` (QThread), 15 тестов, i18n-ключи `report_*`; формат — txt без новых зависимостей (решение 8.1-в) |

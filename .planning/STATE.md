@@ -1,6 +1,6 @@
 # Состояние работы
 
-## Текущий этап: P0–P1.7 запушены; выполнен мёрдж `global-implementation` → `main` (решение 8.2)
+## Текущий этап: P0–P1.7 + P1.6 запушены; выполнен мёрдж `global-implementation` → `main` (решение 8.2)
 
 ### Выполненные этапы ROADMAP
 
@@ -13,9 +13,25 @@
 | P1.4 расширенная статистика N=10 | **готово, запушен** (`9247389`) | `test_extended_methodologies` (24) |
 | P1.5 калибровка MSE/NSE | **готово, запушен** (`b022ef7`+`f815305`) | `test_calibration_service` (18) |
 | P1.7 Reservoir Scenario Simulator | **готово, запушен** (`6860165`, 6 atomic commits `3f01684`..`6860165`) | `test_reservoir_scenario` (15) |
+| P1.6 GIS/DEM морфометрия (9.3=(б)) | **готово** (в worktree, коммит ниже) | `test_geo_service` (18) |
 | мёрдж в main | **выполнен** (решение 8.2) | — |
 
-Итого: **217 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav 23/23/23, GUI offscreen smoke OK (23 pages).
+Итого: **235 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav **24/24/24**, GUI offscreen smoke OK (24 pages).
+
+### P1.6 — что сделано (решение 9.3 = (б) GeoJSON)
+
+1. **решение 9.3** — зафиксировано в обоих ROADMAP: только GeoJSON-контуры, stdlib + `core.stats.geometry`, без rasterio/QtGIS; DEM-растры — вне P1.6.
+2. **`core/stats/geometry.py`** — planar shoelace + spherical lonlat area, haversine perimeter, vertex-average centroid; pure `math`.
+3. **`core/services/geo_service.py`** — Feature/FC/Polygon|MultiPolygon → `BasinMorphometry` + `to_metadata()`; `GeoServiceError` на ошибки формата.
+4. **GUI** — вкладка «Морфометрия» (`tab_geo.py`): диалог GeoJSON, сводка, таблица metadata, matplotlib-превью; меню «Загрузить контур…»; nav 24.
+5. **tests** — 18: analytical area/perimeter/centroid, spherical sanity, happy paths, errors, AST no-banned-deps guard.
+6. **build.py** — hidden imports geo_service / geometry / tab_geo; i18n `menu_load_contour`, `sidebar_geo`.
+
+### Верификация DoD P1.6 (2026-09-23)
+
+- `pytest tests -q` → **235**; root → **135**; nav **24/24/24**; GUI smoke OK (`pages=24`, `has_open_geo=True`, `menu_has_contour=True`).
+- ruff тронутые = 0; build/main_window delta=0.
+- Квадрат 1 км² — площадь точно 1e6 м² (rel 1e-9); без новых runtime-зависимостей.
 
 ### P1.7 — что сделано
 
@@ -74,18 +90,18 @@
 4. **меню** «Импорт из источника (API)…» → `import_from_api`; **i18n** `api_*`/`menu_import_api`; **build.py** `core.services.api_source`, `gui.dialogs.api_import_dialog`; экспорт из `core.services`.
 5. **Новых runtime-зависимостей нет** (решение 9.2: только уже имеющийся `requests`); решение 9.1 закрыто адаптером + mock/fixture (открытые гидро-API — по желанию пользователя позже).
 
-### Остатки (не блокируют; P0+P1.1–P1.7 + мёрдж закрыты)
+### Остатки (не блокируют; P0+P1.1–P1.7 + P1.6 + мёрдж закрыты)
 
 - 2 предсуществующих `except Exception` в `main_window` — по мере рефакторинга.
 - Ручной GUI / приёмка P1 — за пользователем.
-- P1.6 GIS/DEM — открыт (решение 9.3 не принято).
-- Следующий этап по ROADMAP: P1.6 (или иной по команде).
+- Следующий этап по ROADMAP: P2 (Monte Carlo / климат / Decision Support) или иной по команде.
 
 ### Примечания
 
 - GSD-команды и фоновые субагенты недоступны (ProviderModelNotFoundError) — работаем напрямую.
 - `core/stats/*` N803/N806 — предсуществующая нотация, не трогать.
 - `i18n/__init__.py` — предсуществующие ruff, файл не трогали.
-- i18n для reservoir GUI не добавлялся: `tab_scenarios` historically uses hardcoded ru strings (как весь файл); меню/калибровка — через i18n.
+- i18n для reservoir GUI не добавлялся: `tab_scenarios` historically uses hardcoded ru strings (как весь файл); меню/калибровка/контур — через i18n.
+- P1.6: DEM-растры (rasterio) — осознанно вне объёма (решение 9.3 = (б)); при необходимости — reopen 9.3 позже.
 
-Обновлено: 2026-09-23 (P1.7 + мёрдж 8.2: origin/main == origin/global-implementation, 0/0; ветки синхронизированы)
+Обновлено: 2026-09-23 (P1.6 GeoJSON + P1.7 + мёрдж 8.2: origin/main == origin/global-implementation, 0/0; ветки синхронизированы)
