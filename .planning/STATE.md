@@ -1,6 +1,6 @@
 # Состояние работы
 
-## Текущий этап: P0–P1.7 + P1.6 + P2.1–P2.5 запушены; §6.2 P2 закрыт; §6.3 P3 расписана (код не начат)
+## Текущий этап: P0–P2.5 запушены; §6.3 расписана; **P3.1 выполнен** (код); P3.2–P3.5 не начаты
 
 ### Выполненные этапы ROADMAP
 
@@ -17,13 +17,14 @@
 | ROADMAP §6.2 P2.1–P2.5 | **готово, запушен** (`f9e48c2` docs) | — |
 | P2.1 Monte Carlo (10.1/10.2) | **готово, запушен** (`6ae65a0` feat + `a5c0096` docs) | `test_monte_carlo` (20) |
 | P2.2 чувствительность (tornado) | **готово, запушен** (`55bde3a` feat + `bdb9d81` docs) | `test_sensitivity_service` (18) |
-| ROADMAP §6.3 P3.1–P3.5 | **расписано** (решения 11.1–11.3 открыты; код не начат) | — |
+| ROADMAP §6.3 P3.1–P3.5 | **расписано** (`c6506e3` docs) | — |
 | P2.3 климат (delta-change) | **готово, запушен** (`2c44287` feat + `8b4bf4a` docs) | `test_climate_service` (17) |
 | P2.4 визуализация (fan/hist/tornado) | **готово, запушен** (`2c44287` + `8b4bf4a`) | helpers + GUI |
 | P2.5 Decision Support (10.3=а) | **готово, запушен** (`2c44287` + `8b4bf4a`) | `test_decision_support_service` (23) |
+| **P3.1 многопролётная ГВП** | **код готов** (feat+docs в работе) | `test_backwater_profile_service` (13) |
 | мёрдж в main | **выполнен** (решение 8.2) | — |
 
-Итого: **313 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav **25/25/25**, GUI offscreen smoke OK (25 pages).
+Итого: **326 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav **25/25/25**, GUI offscreen smoke OK (25 pages).
 
 ### P1.6 — что сделано (решение 9.3 = (б) GeoJSON)
 
@@ -81,6 +82,20 @@
 - `pytest tests -q` → **313** (+17+23); root → **135**; `test_report_service` → **15** (13 секций); nav **25/25/25**; smoke OK; `P2345_UI_OK`.
 - ruff тронутые = 0; build/main_window delta=0; plot_style N802/N814 — baseline.
 - Без новых runtime-зависимостей; решение **10.3 (а)** закрыто.
+
+### P3.1 — что сделано (многопролётная ГВП)
+
+1. **`core/hydraulics_profile.py`** — `Reach` (validate: B/n/slope/L > 0, m ≥ 0, имя) + `route_backwater_profile`: цепочка `backwater_curve_step` от понижающего конца, control = exit depth предыдущего reach; глобальные series без дубля стыка; per-reach block (normal_depth, junction_depth); core `backwater.py` **не изменялся** (только вызов).
+2. **`core/services/backwater_profile_service.py`** — `ReachSpec` / `BackwaterProfileRequest` / `BackwaterProfileResult` / `BackwaterProfileService` / `BackwaterProfileError`; provenance `backwater_profile@1.0`; JSON-safe `to_dict()`; без математики.
+3. **`tests/test_backwater_profile_service.py`** — 13: 1 пролёт бит-в-бит ≡ core, provenance, стыковка, 3 reach, 7 типов ошибок, AST no-banned-deps.
+4. **GUI `widget_work9.py`** — таблица пролётов (добавить/удалить) + кнопка многопролётной ГВП в **существующей** вкладке «Кривые подпора» (nav = 25); текст + WSE-график со стыками.
+5. **exports** — `core/services/__init__.py`, `build.py` hidden-imports `core.hydraulics_profile` + `backwater_profile_service`.
+
+### Верификация DoD P3.1 (2026-09-23)
+
+- `pytest tests -q` → **326** (+13); root → **135**; nav **25/25/25**; GUI smoke OK (`pages=25`).
+- ruff: новые = 0; build 7/7, main_window 36/36 delta=0; widget_work9 — без новых (бейзлайн N806/N802 сохранён).
+- 1 пролёт: числа бит-в-бит == `backwater_curve_step`; без новых runtime-зависимостей; решение 11.x не закрывалось (11.2/11.3 — P3.3/P3.5).
 
 ### P1.7 — что сделано
 
@@ -143,7 +158,7 @@
 
 - 2 предсуществующих `except Exception` в `main_window` — по мере рефакторинга.
 - Ручной GUI / приёмка — за пользователем.
-- **§6.2 P2 закрыт; §6.3 P3 расписана.** Дальше — этапы **P3.1 → P3.5** (решения 11.1–11.3).
+- **§6.2 P2 закрыт; P3.1 код готов.** Дальше — **P3.2 → P3.5** (решения 11.1–11.3; 11.1 — при P3.2, 11.2 — P3.3, 11.3 — P3.5).
 
 ### Примечания
 
@@ -154,4 +169,4 @@
 - P1.6: DEM-растры (rasterio) — осознанно вне объёма (решение 9.3 = (б)); при необходимости — reopen 9.3 позже.
 - P2.1: demo model y=a·x+b — для smoke/знакомства; подключение к калиброванным моделям/P2.2 — позже.
 
-Обновлено: 2026-09-23 (§6.3 P3 расписана v2.5; P2.3–P2.5 запушены: feat `2c44287`, docs `8b4bf4a`/`104a848`; P2.2 + P2.1 + §6.2 + P1.6 + P1.7 + мёрдж 8.2; nav 25, 313+135; origin/main == origin/global-implementation)
+Обновлено: 2026-09-23 (P3.1 код готов: 326+135, nav 25, smoke OK; §6.3 расписана `c6506e3`; P2.3–P2.5 feat `2c44287` docs `8b4bf4a`/`104a848`; origin/main == origin/global-implementation)

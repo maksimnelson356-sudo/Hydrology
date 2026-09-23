@@ -1,5 +1,25 @@
 # Changelog — HydroSphere
 
+## v2026.09.23 — P3.1: многопролётная кривая подпора
+
+### Добавлено
+- **`core/hydraulics_profile.py`** — `Reach` (name, B, m, n, slope, L + `validate()`) + `route_backwater_profile(reaches, q, h_downstream, dx)`: цепочка вызовов `backwater_curve_step` от нижнего конца вверх, стыковка control-глубины (exit depth reach[i] → H_downstream reach[i+1]; core стартует как `max(control, 1.1·h_n)`), глобальные distances/depths без дубля стыка, per-reach block (normal_depth, junction_depth); ошибки: пустой список, q≤0, h_downstream<0, dx≤0, геометрия.
+- **`core/services/backwater_profile_service.py`** — `ReachSpec` / `BackwaterProfileRequest` / `BackwaterProfileResult` / `BackwaterProfileService.run` / `BackwaterProfileError` / `BACKWATER_PROFILE_PROVENANCE = backwater_profile@1.0`; валидация (имена уникальны/не пусты, геометрия), JSON-safe `to_dict()`; математики нет — только вызов core.
+- **`tests/test_backwater_profile_service.py`** — 13 тестов: 1 пролёт бит-в-бит ≡ `backwater_curve_step`, provenance/to_dict, стыковка (junction_depth ≡ exit, глобальная L, монотонность), 3 пролёта, ошибки (пустой список/Q/H0/геометрия/дубли имён/пустое имя/пустой core/L≤0), AST no-banned-deps.
+- **GUI `gui/widget_work9.py`** — в существующей вкладке «Кривые подпора (ГВП)»: таблица пролётов (Имя/B/m/n/I/L) + добавить/удалить строку + кнопка «Рассчитать многопролётную ГВП» → текст-сводка (provenance, hн, h_на_стыке) + общий график WSE с отметками стыков; nav остаётся 25.
+
+### Изменено
+- **`core/services/__init__.py`** — экспорт `BackwaterProfile*` / `ReachSpec` / `BACKWATER_PROFILE_PROVENANCE`.
+- **`build.py`** — hidden imports `core.hydraulics_profile`, `core.services.backwater_profile_service`.
+
+### Проверки (DoD P3.1)
+- `python -m pytest tests -q` → **326 passed** (было 313, +13).
+- Корневые `test_*.py` → **135 passed**; nav **25/25/25**; GUI smoke OK (`pages=25`).
+- ruff: новые файлы = 0; `build.py` 7/7 delta=0; `main_window.py` 36/36 delta=0; `widget_work9` бейзлайн без новых; `plot_style` N802/N814 — baseline.
+- Ядро `backwater.py` не изменялось; без новых runtime-зависимостей.
+
+---
+
 ## v2026.09.23 — §6.3 P3 расписан (plan only, код не начат)
 
 ### Добавлено
