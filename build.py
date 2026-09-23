@@ -58,6 +58,7 @@ HIDDEN_IMPORTS = [
     "core.services.project_service", "core.services.quality_pipeline",
     "core.services.report_service",
     "core.services.result_store", "core.services.scenario_service",
+    "core.services.reservoir_scenario_service",
     "core.services.validation_service",
     "core.services.handlers", "core.services.handlers.__init__",
     "core.stats.metrics",

@@ -7,10 +7,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
+    QDoubleSpinBox,
     QFormLayout,
     QFrame,
     QGroupBox,
@@ -32,6 +35,10 @@ from PyQt6.QtWidgets import (
 
 from core.domain.models import ScenarioStatus
 from core.services.calculation_service import CalculationError
+from core.services.reservoir_scenario_service import (
+    ReservoirScenarioError,
+    ReservoirScenarioService,
+)
 from core.services.scenario_service import ScenarioNotFoundError, ScenarioService
 
 if TYPE_CHECKING:
@@ -51,6 +58,9 @@ class ScenarioTab(QWidget):
         super().__init__()
         self.scenario_service = scenario_service
         self.service_container = service_container
+        self.reservoir_service = (
+            ReservoirScenarioService(scenario_service) if scenario_service else None
+        )
         self._last_used_methodology: dict[UUID, str] = {}
         self._setup_ui()
         self._refresh_scenarios()
@@ -135,6 +145,57 @@ class ScenarioTab(QWidget):
         run_layout.addRow("", self.btn_run_with_method)
         right_layout.addWidget(run_group)
 
+        # P1.7 Reservoir Scenario Simulator
+        reservoir_group = QGroupBox("Водохранилище (сценарный расчёт)")
+        reservoir_layout = QFormLayout(reservoir_group)
+        self.edit_res_name = QLineEdit()
+        self.edit_res_name.setPlaceholderText("Название (напр. Base)")
+        self.spin_res_demand = QDoubleSpinBox()
+        self.spin_res_demand.setRange(0.01, 100000.0)
+        self.spin_res_demand.setValue(50.0)
+        self.spin_res_demand.setDecimals(2)
+        self.spin_res_vmax = QDoubleSpinBox()
+        self.spin_res_vmax.setRange(0.0, 100000.0)
+        self.spin_res_vmax.setValue(2.0)
+        self.spin_res_vmax.setDecimals(3)
+        self.spin_res_s0 = QDoubleSpinBox()
+        self.spin_res_s0.setRange(0.0, 100000.0)
+        self.spin_res_s0.setValue(0.0)
+        self.spin_res_s0.setDecimals(3)
+        self.spin_res_guarantee = QDoubleSpinBox()
+        self.spin_res_guarantee.setRange(1.0, 100.0)
+        self.spin_res_guarantee.setValue(95.0)
+        self.spin_res_guarantee.setDecimals(1)
+        self.spin_res_guarantee.setSuffix(" %")
+        self.combo_res_mode = QComboBox()
+        self.combo_res_mode.addItems(
+            ["guarantee_for_volume", "volume_for_guarantee", "natural_supply"]
+        )
+        self.btn_res_create = QPushButton("Создать сценарий")
+        self.btn_res_create.clicked.connect(self._create_reservoir_scenario)
+        self.btn_res_run = QPushButton("Запустить водохранилище")
+        self.btn_res_run.clicked.connect(self._run_reservoir_scenario)
+        self.btn_res_delta = QPushButton("Сравнить Δ")
+        self.btn_res_delta.clicked.connect(self._compare_reservoir_delta)
+        reservoir_layout.addRow("Название:", self.edit_res_name)
+        reservoir_layout.addRow("Забор D, м³/с:", self.spin_res_demand)
+        reservoir_layout.addRow("V полезное, км³:", self.spin_res_vmax)
+        reservoir_layout.addRow("S₀, км³:", self.spin_res_s0)
+        reservoir_layout.addRow("Гарантия:", self.spin_res_guarantee)
+        reservoir_layout.addRow("Режим:", self.combo_res_mode)
+        reservoir_layout.addRow("", self.btn_res_create)
+        reservoir_layout.addRow("", self.btn_res_run)
+        reservoir_layout.addRow("", self.btn_res_delta)
+        right_layout.addWidget(reservoir_group)
+
+        # Balance series plot (P1.7)
+        plot_group = QGroupBox("Баланс водохранилища (км³)")
+        plot_layout = QVBoxLayout(plot_group)
+        self.figure_balance = Figure(figsize=(5, 2.5))
+        self.canvas_balance = FigureCanvas(self.figure_balance)
+        plot_layout.addWidget(self.canvas_balance)
+        right_layout.addWidget(plot_group)
+
         # Comparison results
         compare_group = QGroupBox("Сравнение сценариев")
         compare_layout = QVBoxLayout(compare_group)
@@ -147,7 +208,7 @@ class ScenarioTab(QWidget):
         self.compare_param_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         compare_layout.addWidget(self.compare_param_table)
         # Result comparison
-        compare_layout.addWidget(QLabel("Результаты:"))
+        compare_layout.addWidget(QLabel("Результаты и Δ:"))
         self.compare_result_table = QTableWidget()
         self.compare_result_table.setColumnCount(0)
         self.compare_result_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -472,3 +533,151 @@ class ScenarioTab(QWidget):
             output_item.setFlags(output_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self.compare_result_table.setItem(row_idx, 2, output_item)
         self.compare_result_table.resizeColumnsToContents()
+
+    # ------------------------------------------------------------------
+    # P1.7 Reservoir Scenario Simulator
+    # ------------------------------------------------------------------
+    def _require_reservoir_service(self) -> ReservoirScenarioService | None:
+        if self.reservoir_service is None and self.scenario_service is not None:
+            self.reservoir_service = ReservoirScenarioService(self.scenario_service)
+        if self.reservoir_service is None:
+            self.error.emit("Сервис сценариев недоступен")
+        return self.reservoir_service
+
+    def _create_reservoir_scenario(self):
+        """Create a scenario typed as reservoir with regulation parameters."""
+        service = self._require_reservoir_service()
+        if service is None:
+            return
+        name = self.edit_res_name.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Ошибка", "Введите название сценария")
+            return
+        try:
+            scenario = service.create(
+                name=name,
+                demand_m3_s=self.spin_res_demand.value(),
+                v_max_km3=self.spin_res_vmax.value() or None,
+                s0_km3=self.spin_res_s0.value() or None,
+                target_guarantee=self.spin_res_guarantee.value(),
+                mode=self.combo_res_mode.currentText(),
+            )
+        except ReservoirScenarioError as e:
+            QMessageBox.warning(self, "Ошибка", str(e))
+            return
+        self.status_message.emit(f"Создан reservoir-сценарий: {scenario.name}")
+        self._refresh_scenarios()
+        for i in range(self.scenario_list.count()):
+            item = self.scenario_list.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == scenario.id:
+                self.scenario_list.setCurrentItem(item)
+                break
+
+    def _run_reservoir_scenario(self):
+        """Run the selected reservoir scenario through multi_year_regulation."""
+        service = self._require_reservoir_service()
+        if service is None:
+            return
+        item = self.scenario_list.currentItem()
+        if not item:
+            QMessageBox.warning(self, "Ошибка", "Выберите сценарий в списке")
+            return
+        scenario_id = item.data(Qt.ItemDataRole.UserRole)
+        try:
+            result = service.run(scenario_id)
+            self.status_message.emit(
+                f"Reservoir-сценарий выполнен: гарантия "
+                f"{result.output_data.get('guarantee_percent', '—')} %"
+            )
+            self._plot_balance_series(scenario_id)
+        except (
+            ScenarioNotFoundError,
+            ReservoirScenarioError,
+            CalculationError,
+            ValueError,
+        ) as e:
+            self.error.emit(str(e))
+
+    def _compare_reservoir_delta(self):
+        """Build a numeric Δ table across stored reservoir results."""
+        service = self._require_reservoir_service()
+        if service is None:
+            return
+        selected_items = self.scenario_list.selectedItems()
+        scenario_ids = (
+            [item.data(Qt.ItemDataRole.UserRole) for item in selected_items]
+            if selected_items
+            else None
+        )
+        try:
+            rows = service.compare_delta(scenario_ids)
+        except (ScenarioNotFoundError, ReservoirScenarioError) as e:
+            self.error.emit(str(e))
+            return
+        if not rows:
+            self.compare_result_table.setRowCount(0)
+            self.compare_result_table.setColumnCount(0)
+            self.status_message.emit("Нет результатов для сравнения — запустите сценарии")
+            return
+        self._show_delta_table(rows)
+        self.status_message.emit(f"Δ-таблица: {len(rows)} метрик")
+
+    def _show_delta_table(self, rows: list[dict]):
+        """Render compare_numeric_results rows (metric / baseline / values / Δ)."""
+        # Collect ordered non-delta columns first, then Δ columns.
+        base_cols = ["metric", "baseline"]
+        value_cols: list[str] = []
+        delta_cols: list[str] = []
+        for row in rows:
+            for key in row:
+                if key in base_cols or key in value_cols or key in delta_cols:
+                    continue
+                if key.startswith("Δ "):
+                    delta_cols.append(key)
+                else:
+                    value_cols.append(key)
+        headers = base_cols + value_cols + delta_cols
+        self.compare_result_table.setColumnCount(len(headers))
+        self.compare_result_table.setHorizontalHeaderLabels(headers)
+        self.compare_result_table.setRowCount(len(rows))
+        for row_idx, row in enumerate(rows):
+            for col_idx, key in enumerate(headers):
+                value = row.get(key)
+                if value is None:
+                    display = ""
+                elif isinstance(value, float):
+                    display = f"{value:.4g}"
+                else:
+                    display = str(value)
+                cell = QTableWidgetItem(display)
+                cell.setFlags(cell.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self.compare_result_table.setItem(row_idx, col_idx, cell)
+        self.compare_result_table.resizeColumnsToContents()
+
+    def _plot_balance_series(self, scenario_id: UUID):
+        """Plot balance_series_km3 of a run reservoir scenario."""
+        service = self._require_reservoir_service()
+        if service is None:
+            return
+        try:
+            series = service.series_for(scenario_id)
+        except (ScenarioNotFoundError, ReservoirScenarioError) as e:
+            self.error.emit(str(e))
+            return
+        self.figure_balance.clear()
+        axes = self.figure_balance.add_subplot(111)
+        axes.plot(range(len(series)), series, marker="o", markersize=3, linewidth=1.2)
+        axes.set_xlabel("Шаг (год + S₀)")
+        axes.set_ylabel("км³")
+        axes.grid(True, alpha=0.3)
+        self.figure_balance.tight_layout()
+        self.canvas_balance.draw_idle()
+
+    def _populate_methodology_combo(self):
+        """Fill the methodology combo from the service container registry."""
+        if not self.service_container:
+            return
+        self.combo_methodology.clear()
+        for methodology_id in self.service_container.registered_methodology_ids():
+            descriptor = self.service_container.registry.get(methodology_id)
+            self.combo_methodology.addItem(descriptor.name, descriptor.qualified_name)
