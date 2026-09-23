@@ -1,6 +1,6 @@
 # Состояние работы
 
-## Текущий этап: P0–P1.7 + P1.6 + P2.1 запушены; §6.2 P2 расписан; мёрдж 8.2 выполнен
+## Текущий этап: P0–P1.7 + P1.6 + P2.1 + P2.2 запушены; §6.2 P2 расписан; мёрдж 8.2 выполнен
 
 ### Выполненные этапы ROADMAP
 
@@ -16,9 +16,10 @@
 | P1.6 GIS/DEM морфометрия (9.3=(б)) | **готово, запушен** (`58f63b8` feat + `424f238` docs) | `test_geo_service` (18) |
 | ROADMAP §6.2 P2.1–P2.5 | **готово, запушен** (`f9e48c2` docs) | — |
 | P2.1 Monte Carlo (10.1/10.2) | **готово, запушен** (`6ae65a0` feat + `a5c0096` docs) | `test_monte_carlo` (20) |
+| P2.2 чувствительность (tornado) | **готово, запушен** (feat + docs) | `test_sensitivity_service` (18) |
 | мёрдж в main | **выполнен** (решение 8.2) | — |
 
-Итого: **255 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav **25/25/25**, GUI offscreen smoke OK (25 pages).
+Итого: **273 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav **25/25/25**, GUI offscreen smoke OK (25 pages).
 
 ### P1.6 — что сделано (решение 9.3 = (б) GeoJSON)
 
@@ -48,6 +49,20 @@
 - `pytest tests -q` → **255**; root → **135**; nav **25/25/25**; GUI smoke OK (`pages=25`, `has_monte_carlo=True`, `menu_has_mc=True`).
 - ruff тронутые = 0; build/main_window delta=0.
 - Детерминизм seed=42 бит-в-бит; p50 нормали ≈ μ; без новых runtime-зависимостей.
+
+### P2.2 — что сделано (tornado sensitivity)
+
+1. **`core/services/sensitivity_service.py`** — OAT `analyze`/`run`: baseline ± Δ (абсолютный из `deltas` или `relative_delta × |baseline|`, нулевой baseline → scale 1.0), swing = |f(high) − f(low)|, ранг по убыванию swing с tie-break по имени; provenance `sensitivity_oat@1.0`; stdlib + `core.domain` only.
+2. **`tests/test_sensitivity_service.py`** — 18: acceptance rank `[x1, x2]` на `y = 3·x1 + 1·x2`, swing = 2·coef·delta, монотонная `x³`, tie-break, relative delta, ошибки, provenance, AST-guard.
+3. **GUI `tab_monte_carlo.py`** — блок «Чувствительность — Tornado»: спинбокс ±Δ, кнопка, `build_sensitivity_request()` (baseline = центр колонки распределения), horizontal bar matplotlib, метка порядка.
+4. **`core/services/__init__.py` / `build.py`** — экспорт `Sensitivity*` + hidden import `core.services.sensitivity_service`.
+
+### Верификация DoD P2.2 (2026-09-23)
+
+- `pytest tests -q` → **273** (+18); root → **135**; nav **25/25/25**; GUI smoke OK; tornado UI → `TORNADO_UI_OK` (order `a, b, c`).
+- ruff тронутые = 0; build/main_window delta=0.
+- Критерий ROADMAP: `y = a·x1 + b·x2`, a > b → ранг `[x1, x2]` — закрыт pytest.
+- Без новых runtime-зависимостей; математика в сервисе, GUI только рисует.
 
 ### P1.7 — что сделано
 
@@ -106,11 +121,11 @@
 4. **меню** «Импорт из источника (API)…» → `import_from_api`; **i18n** `api_*`/`menu_import_api`; **build.py** `core.services.api_source`, `gui.dialogs.api_import_dialog`; экспорт из `core.services`.
 5. **Новых runtime-зависимостей нет** (решение 9.2: только уже имеющийся `requests`); решение 9.1 закрыто адаптером + mock/fixture (открытые гидро-API — по желанию пользователя позже).
 
-### Остатки (не блокируют; P0+P1.1–P1.7 + P1.6 + P2.1 + мёрдж закрыты)
+### Остатки (не блокируют; P0+P1.1–P1.7 + P1.6 + P2.1 + P2.2 + мёрдж закрыты)
 
 - 2 предсуществующих `except Exception` в `main_window` — по мере рефакторинга.
 - Ручной GUI / приёмка — за пользователем.
-- Следующие этапы по ROADMAP §6.2: **P2.2** чувствительность → **P2.3** климат → **P2.4** визуализация → **P2.5** DS (по команде).
+- Следующие этапы по ROADMAP §6.2: **P2.3** климат → **P2.4** визуализация → **P2.5** DS (по команде).
 
 ### Примечания
 
@@ -121,4 +136,4 @@
 - P1.6: DEM-растры (rasterio) — осознанно вне объёма (решение 9.3 = (б)); при необходимости — reopen 9.3 позже.
 - P2.1: demo model y=a·x+b — для smoke/знакомства; подключение к калиброванным моделям/P2.2 — позже.
 
-Обновлено: 2026-09-23 (P2.1 Monte Carlo + §6.2 + P1.6 + P1.7 + мёрдж 8.2; nav 25, 255+135; origin/main == origin/global-implementation)
+Обновлено: 2026-09-23 (P2.2 sensitivity tornado + P2.1 Monte Carlo + §6.2 + P1.6 + P1.7 + мёрдж 8.2; nav 25, 273+135; origin/main == origin/global-implementation)

@@ -5,10 +5,10 @@
 > с критериями приёмки и открытые решения. Расчётное ядро не переписывается — над ним
 > надстраивается сервисный слой и рабочее место инженера.
 >
-> **Статус:** ТЗ, версия 2.2 · **Дата:** 23.09.2026 · **Ветка:** `global-implementation`
+> **Статус:** ТЗ, версия 2.3 · **Дата:** 23.09.2026 · **Ветка:** `global-implementation`
 > **P0 (этапы 0–7) выполнен и запушен** (`origin/global-implementation`, HEAD `6244444`).
 > **P1.1–P1.7 выполнены** (решение 9.3=(б) закрыто 23.09.2026), мёрдж в `main` выполнен (origin/main == origin/global-implementation).
-> **P2.1 Monte Carlo выполнен** (решения 10.1(a)/10.2(a)); §6.2 — этапы P2.2–P2.5 дальше по плану.
+> **P2.1 Monte Carlo выполнен** (решения 10.1(a)/10.2(a)); **P2.2 чувствительность (tornado) выполнен**; §6.2 — этапы P2.3–P2.5 дальше по плану.
 
 ---
 
@@ -807,8 +807,8 @@ smoke-тестами; каркас закоммичен.
 
 | Этап | Содержание | Ключевые артефакты | Оценка |
 |------|------------|--------------------|--------|
-| P2.1 | Monte Carlo + неопределённости | `monte_carlo_service.py`, `tab_monte_carlo.py`, tests | ~3–4 дня |
-| P2.2 | Анализ чувствительности (tornado) | `sensitivity_service.py` + GUI | ~2–3 дня |
+| P2.1 | Monte Carlo и неопределённости | **готово** `monte_carlo_service.py` + `tab_monte_carlo` | ~2–3 дня |
+| P2.2 | Анализ чувствительности (tornado) | **готово** `sensitivity_service.py` + GUI-блок в MC | ~2–3 дня |
 | P2.3 | Климатические сценарии (delta-change) | `climate_service.py`, GUI | ~2–3 дня |
 | P2.4 | Расширенная визуализация | `plot_style` helpers, fan/tornado/hist | ~1–2 дня |
 | P2.5 | Decision Support | `decision_support_service.py`, report section | ~2–3 дня |
@@ -919,6 +919,7 @@ MC — фундамент неопределённостей; DS опирает�
 
 | Дата | Версия | Изменение |
 |------|--------|-----------|
+| 23.09.2026 | 2.3 | **P2.2 чувствительность (tornado) выполнен**: `sensitivity_service` (OAT ±Δ, rank, tie-break, provenance `sensitivity_oat@1.0`), GUI-блок в `tab_monte_carlo`, 18 тестов; 273 passed + 135 root; changelog/STATE обновлены |
 | 23.09.2026 | 2.2 | **P2.1 Monte Carlo выполнен**: `monte_carlo_service` (uniform/normal/triangular, seedable, N=1000; решения 10.1(a)/10.2(a)), `tab_monte_carlo` + воркер + гистограмма, nav 25, 20 тестов; changelog/STATE обновлены |
 | 23.09.2026 | 2.1 | **§6.2 Этапы P2 (P2.1–P2.5)** расписаны с критериями приёмки; шапка и таблица версионирования обновлены (P2 → §6.2); добавлены открытые решения 10.1–10.3; код P2 не начат |
 | 23.09.2026 | 2.0 | **P1.1–P1.7 выполнены и запушены** (`origin/global-implementation`, feat до P1.7 `6860165`); **решение 9.3 = (б)** GeoJSON-контуры закрыто; **P1.6** морфометрия готова (geometry + geo_service + tab_geo, nav 24); **мёрдж в `main` выполнен** (решение 8.2, fast-forward `d3967c7` → tip; origin/main == origin/global-implementation). Тесты: 235 pytest + 135 корневых; навигация 24/24/24; GUI smoke OK; 20 методик в реестре. P1.7: `scenario_type`, `ReservoirScenarioService`, `storage_yield`, GUI-блок водохранилища + Δ-таблица + баланс-график. Открыт P2 (Monte Carlo / климат / Decision Support) |

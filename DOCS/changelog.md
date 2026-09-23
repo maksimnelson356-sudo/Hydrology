@@ -1,5 +1,26 @@
 # Changelog — HydroSphere
 
+## v2026.09.23 — P2.2: анализ чувствительности (tornado)
+
+### Добавлено
+- **`core/services/sensitivity_service.py`** — `SensitivityService.analyze/run`, `SensitivityRequest` (baseline + абсолютные `deltas` + `relative_delta=0.1`, fallback scale 1.0 при нулевом baseline), `ParameterInfluence` (swing = |f(high) − f(low)|), `SensitivityResult.order`, `SensitivityError`; стабильный tie-break по имени; `run()` → `CalculationResult` с provenance `sensitivity_oat@1.0`; только stdlib + `core.domain.models` (без новых runtime-зависимостей).
+- **`tests/test_sensitivity_service.py`** — 18 тестов: ранг `[x1, x2]` для `y = 3·x1 + 1·x2`, swing = 2·coef·delta, монотонная `x³`, tie-break `[a, b]`, relative delta (zero/nonzero baseline), ошибки (пустой baseline, не-число, ghost delta, delta ≤ 0, relative_delta ≤ 0, NaN model, исключение модели), `run()` provenance, AST no-banned-deps + allowed-imports guard.
+- **GUI `gui/tabs/tab_monte_carlo.py`** — блок «Чувствительность — Tornado (P2.2)»: спинбокс ±Δ (отн.), кнопка «🌪 Построить Tornado», `build_sensitivity_request()` (baseline = центр колонки распределения), horizontal bar matplotlib, метка порядка параметров; математика — только в сервисе.
+
+### Изменено
+- **`core/services/__init__.py`** — экспорт `SensitivityService` / `SensitivityRequest` / `ParameterInfluence` / `SensitivityResult` / `SensitivityError` / `DEFAULT_RELATIVE_DELTA`.
+- **`build.py`** — hidden import `core.services.sensitivity_service`.
+- **docstring** `sensitivity_service` упомянут в `core/services/__init__.py`.
+
+### Проверки (DoD P2.2)
+- `python -m pytest tests -q` → **273 passed** (было 255, +18).
+- Корневые `test_*.py` → **135 passed**.
+- nav **25/25/25**; GUI offscreen smoke OK (`pages=25`, `has_monte_carlo=True`, `menu_has_mc=True`); tornado UI smoke → `TORNADO_UI_OK` (order `a, b, c`).
+- ruff: новые файлы = 0; `build.py` 7/7 delta=0; `main_window.py` 36/36 delta=0.
+- Линейная модель `y = a·x1 + b·x2`, a > b → ранг `[x1, x2]` (pytest acceptance).
+
+---
+
 ## v2026.09.23 — P2.1: Monte Carlo и неопределённости (решения 10.1/10.2)
 
 ### Добавлено
