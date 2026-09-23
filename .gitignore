@@ -22,6 +22,9 @@ installer_output/
 
 # --- OpenCode / local artifacts ---
 .omo/
+.opencode/
 *.bak
 _independent_validation.py
 TOOL_TEST.md
+_file_inventory.json
+generate_file_inventory.py
