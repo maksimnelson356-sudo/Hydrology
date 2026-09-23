@@ -29,6 +29,8 @@ from .project_service import (
     ProjectService,
     ProjectServiceError,
 )
+from .report_service import Report, ReportSection, ReportService
+from .result_store import ProvenanceStep, ResultStore, provenance_chain
 from .scenario_service import ScenarioNotFoundError, ScenarioService
 from .validation_service import ValidationService
 
@@ -36,6 +38,9 @@ __all__ = [
     "DEFAULT_METHODOLOGIES",
     "PROJECT_EXTENSION",
     "RECOMMENDATIONS",
+    "Report",
+    "ReportSection",
+    "ReportService",
     "SCHEMA_VERSION",
     "SUPPORTED_SCHEMA_VERSIONS",
     "CalculationContext",
@@ -46,10 +51,13 @@ __all__ = [
     "MethodologyRegistry",
     "ProjectService",
     "ProjectServiceError",
+    "ProvenanceStep",
+    "ResultStore",
     "ScenarioNotFoundError",
     "ScenarioService",
     "ServiceContainer",
     "ValidationService",
     "build_container",
     "build_default_registry",
+    "provenance_chain",
 ]
