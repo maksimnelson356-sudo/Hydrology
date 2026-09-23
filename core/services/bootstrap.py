@@ -19,17 +19,21 @@ from core.services.methodology_registry import (
     MethodologyRegistry,
     build_default_registry,
 )
+from core.services.result_store import ResultStore
+from core.services.scenario_service import ScenarioService
 
 __all__ = ["ServiceContainer", "build_container"]
 
 
 @dataclass
 class ServiceContainer:
-    """Wired service layer: registry + calculation service (+ quality service)."""
+    """Wired service layer: registry + calculation + quality + result store + scenario service."""
 
     registry: MethodologyRegistry
     calculation: CalculationService
     quality: DataQualityService
+    results: ResultStore
+    scenario: ScenarioService
 
     def registered_methodology_ids(self) -> list[str]:
         """Ids that have both a descriptor and a calculation handler."""
@@ -59,7 +63,11 @@ def build_container() -> ServiceContainer:
         )
 
     quality = DataQualityService(registry=registry)
-    return ServiceContainer(registry=registry, calculation=calculation, quality=quality)
+    results = ResultStore()
+    scenario_service = ScenarioService(calculation_service=calculation)
+    return ServiceContainer(
+        registry=registry, calculation=calculation, quality=quality, results=results, scenario=scenario_service
+    )
 
 
 def _make_validator(registry: MethodologyRegistry, methodology_id: str):
