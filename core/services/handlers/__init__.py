@@ -233,6 +233,18 @@ def handle_reservoir_regulation(context: CalculationContext) -> dict[str, Any]:
     return _clean(dict(result))
 
 
+def handle_storage_yield(context: CalculationContext) -> dict[str, Any]:
+    """Кривая «объём водохранилища — гарантированная отдача» (P1.7)."""
+    from core.hydrorash.reservoir_regulation import storage_yield_curve
+
+    frame = storage_yield_curve(
+        _values(context),
+        V_range_km3=_param(context, "V_range_km3", None),
+        target_guarantee=float(_param(context, "target_guarantee", 95.0)),
+    )
+    return _to_float_dict(frame)
+
+
 # ----------------------------------------------------------------------
 # P1.4 extended methodologies (thin adapters only)
 # ----------------------------------------------------------------------
@@ -424,6 +436,8 @@ HANDLERS: dict[str, Any] = {
     "min_runoff": handle_min_runoff,
     "flow_duration": handle_flow_duration,
     "reservoir_regulation": handle_reservoir_regulation,
+    # P1.7
+    "storage_yield": handle_storage_yield,
     # P1.4
     "spectral_hurst": handle_spectral_hurst,
     "drought_spi": handle_drought_spi,

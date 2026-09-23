@@ -86,6 +86,7 @@ def test_container_registers_all_p0_handlers():
         "spectral_hurst",
         "spillway",
         "stats_parameters",
+        "storage_yield",
         "trends_full",
     ]
 

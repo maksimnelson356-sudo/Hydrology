@@ -353,6 +353,15 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         notes="СП 33-101-2003 / СП 33.13330.2016; core/hydrorash/reservoir_regulation.py",
     ),
     MethodologyDescriptor(
+        id="storage_yield",
+        name="Кривая «объём — гарантированная отдача»",
+        category="reservoir",
+        standard="СП 58.13330.2019",
+        scope="Максимальная отдача D при заданном полезном объёме и целевой гарантии",
+        limitations=("Для каждой V_max отдача ищется бинарным поиском по правилу Риппла",),
+        notes="Реализация: core/hydrorash/reservoir_regulation.py, storage_yield_curve",
+    ),
+    MethodologyDescriptor(
         id="trends_full",
         name="Анализ тренда (линейный, Манн-Кендалл, Сен, Pettitt)",
         category="statistics",

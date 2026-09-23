@@ -105,8 +105,10 @@ def test_p14_ids_are_registered():
 
 def test_p14_grows_registered_list_by_ten():
     container = make_container()
-    # P0 had 9 handlers; P1.4 adds 10 → 19 total registered (descriptor + handler).
-    assert len(container.registered_methodology_ids()) == 19
+    # P0 had 9 handlers; P1.4 adds 10; P1.7 adds storage_yield → 20 total
+    # registered (descriptor + handler).
+    assert len(container.registered_methodology_ids()) == 20
+    assert "storage_yield" in container.registered_methodology_ids()
     assert len(P14_IDS) == 10
 
 
