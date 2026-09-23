@@ -4,7 +4,9 @@ gui/tabs/tab_monte_carlo.py
 прогон N итераций в фоновом воркере, сводка (mean/std/p5/p50/p95) и
 гистограмма с квантилями matplotlib.
 
-Математика — в ``MonteCarloService``; вкладка только собирает запрос и рисует.
+Блок P2.2 «Чувствительность»: one-at-a-time ±Δ и tornado-ранжирование
+через ``SensitivityService`` (математика в сервисе; GUI только рисует).
+
 Демо-модель: y = a·x + b (x фиксирован) — для smoke и первого знакомства.
 Без новых runtime-зависимостей (решения 10.1, 10.2).
 """
@@ -19,6 +21,7 @@ from matplotlib.figure import Figure
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -39,6 +42,12 @@ from core.services.monte_carlo_service import (
     MonteCarloRequest,
     MonteCarloService,
     ParameterSpec,
+)
+from core.services.sensitivity_service import (
+    DEFAULT_RELATIVE_DELTA,
+    SensitivityError,
+    SensitivityRequest,
+    SensitivityService,
 )
 
 HINT_STYLE = (
@@ -107,6 +116,7 @@ class TabMonteCarlo(QWidget):
         self._service = MonteCarloService()
         self._worker: MonteCarloWorker | None = None
         self._result: Any = None
+        self._sensitivity_result: Any = None
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -281,6 +291,106 @@ class TabMonteCarlo(QWidget):
         self._canvas = FigureCanvas(self._figure)
         preview_layout.addWidget(self._canvas)
         layout.addWidget(preview_box, stretch=1)
+
+        # --- P2.2 sensitivity / tornado block -------------------------
+        sens_box = QGroupBox("Чувствительность — Tornado (P2.2)")
+        sens_layout = QVBoxLayout(sens_box)
+
+        sens_controls = QHBoxLayout()
+        form_rel = QFormLayout()
+        self.spin_rel_delta = QDoubleSpinBox()
+        self.spin_rel_delta.setRange(0.001, 10.0)
+        self.spin_rel_delta.setSingleStep(0.01)
+        self.spin_rel_delta.setDecimals(3)
+        self.spin_rel_delta.setValue(DEFAULT_RELATIVE_DELTA)
+        self.spin_rel_delta.setSuffix(" × |baseline|")
+        form_rel.addRow("±Δ (отн.):", self.spin_rel_delta)
+        sens_controls.addLayout(form_rel)
+
+        self.btn_tornado = QPushButton("🌪 Построить Tornado")
+        self.btn_tornado.setStyleSheet(RUN_STYLE)
+        self.btn_tornado.clicked.connect(self._on_tornado_clicked)
+        sens_controls.addWidget(self.btn_tornado)
+        sens_controls.addStretch()
+        sens_layout.addLayout(sens_controls)
+
+        self.lbl_tornado_order = QLabel("Порядок: —")
+        self.lbl_tornado_order.setWordWrap(True)
+        sens_layout.addWidget(self.lbl_tornado_order)
+
+        self._tornado_figure = Figure(figsize=(5, 2.2), tight_layout=True)
+        self._tornado_canvas = FigureCanvas(self._tornado_figure)
+        sens_layout.addWidget(self._tornado_canvas)
+        layout.addWidget(sens_box, stretch=1)
+
+    def build_sensitivity_request(self) -> SensitivityRequest:
+        """Baseline = центр каждой колонки распределения; Δ — отн. из спинбокса."""
+        rows = self.table.rowCount()
+        if rows == 0:
+            raise SensitivityError("Добавьте хотя бы один параметр")
+        baseline: dict[str, float] = {}
+        for row in range(rows):
+            name_item = self.table.item(row, 0)
+            dist_item = self.table.item(row, 1)
+            name = (name_item.text() if name_item else "").strip()
+            dist = (dist_item.text() if dist_item else "").strip().lower()
+            if not name:
+                raise SensitivityError(f"Строка {row + 1}: пустое имя параметра")
+            values: list[float] = []
+            for col in (2, 3, 4):
+                item = self.table.item(row, col)
+                if item is None or not item.text().strip():
+                    continue
+                try:
+                    values.append(float(item.text().replace(",", ".")))
+                except ValueError as exc:
+                    raise SensitivityError(
+                        f"Строка {row + 1}, колонка {col}: «{item.text()}» не число"
+                    ) from exc
+            if not values:
+                raise SensitivityError(f"«{name}»: нет числовых значений")
+            if dist == "uniform" and len(values) >= 2:
+                baseline[name] = 0.5 * (values[0] + values[1])
+            elif dist == "normal" and len(values) >= 1:
+                baseline[name] = values[0]  # mean
+            elif dist == "triangular" and len(values) >= 2:
+                baseline[name] = values[1]  # mode
+            else:
+                baseline[name] = values[0]
+        return SensitivityRequest(
+            baseline=baseline,
+            deltas={},
+            relative_delta=float(self.spin_rel_delta.value()),
+        )
+
+    def _on_tornado_clicked(self) -> None:
+        try:
+            request = self.build_sensitivity_request()
+            result = SensitivityService.analyze(self._demo_model, request)
+        except SensitivityError as exc:
+            self.error.emit(str(exc))
+            QMessageBox.critical(self, "Чувствительность", str(exc))
+            return
+        self._sensitivity_result = result
+        order = ", ".join(result.order)
+        self.lbl_tornado_order.setText(f"Порядок: {order}")
+        self._draw_tornado(result)
+        self.status_message.emit(f"Tornado: {order}")
+
+    def _draw_tornado(self, result: Any) -> None:
+        self._tornado_figure.clear()
+        axes = self._tornado_figure.add_subplot(111)
+        names = list(result.order)
+        swings = [item.swing for item in result.influences]
+        # most sensitive at the top
+        y_pos = list(range(len(names)))[::-1]
+        axes.barh(y_pos, swings, color="#1565C0", alpha=0.85, height=0.6)
+        axes.set_yticks(y_pos)
+        axes.set_yticklabels(names, fontsize=9)
+        axes.set_xlabel("|Δ output|", fontsize=9)
+        axes.set_title("Tornado — чувствительность параметров", fontsize=10)
+        axes.grid(True, axis="x", linestyle=":", alpha=0.4)
+        self._tornado_canvas.draw_idle()
 
     # ------------------------------------------------------------------
     # Slots

@@ -13,6 +13,7 @@ Services:
 - ReservoirScenarioService: multi-year regulation as scenario runs (P1.7)
 - GeoService: GeoJSON basin contour morphometry (P1.6, decision 9.3 = (b))
 - MonteCarloService: uncertainty propagation with seedable sampling (P2.1)
+- SensitivityService: one-at-a-time tornado ranking (P2.2)
 
 Services contain no mathematics: formulas stay in the calculation core
 (`core.stats`, `core.hydrorash`).
@@ -62,11 +63,20 @@ from .reservoir_scenario_service import (
 )
 from .result_store import ProvenanceStep, ResultStore, provenance_chain
 from .scenario_service import ScenarioNotFoundError, ScenarioService
+from .sensitivity_service import (
+    DEFAULT_RELATIVE_DELTA,
+    ParameterInfluence,
+    SensitivityError,
+    SensitivityRequest,
+    SensitivityResult,
+    SensitivityService,
+)
 from .validation_service import ValidationService
 
 __all__ = [
     "AVAILABLE_METRICS",
     "DEFAULT_N_RUNS",
+    "DEFAULT_RELATIVE_DELTA",
     "DISTRIBUTIONS",
     "BasinMorphometry",
     "DEFAULT_METHODOLOGIES",
@@ -75,7 +85,12 @@ __all__ = [
     "MonteCarloError",
     "MonteCarloRequest",
     "MonteCarloService",
+    "ParameterInfluence",
     "ParameterSpec",
+    "SensitivityError",
+    "SensitivityRequest",
+    "SensitivityResult",
+    "SensitivityService",
     "SummaryStats",
     "PROJECT_EXTENSION",
     "RECOMMENDATIONS",
