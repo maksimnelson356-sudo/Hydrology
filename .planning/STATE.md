@@ -1,6 +1,6 @@
 # Состояние работы
 
-## Текущий этап: P0–P1.7 + P1.6 + P2.1 + P2.2 запушены; §6.2 P2 расписан; мёрдж 8.2 выполнен
+## Текущий этап: P0–P1.7 + P1.6 + P2.1–P2.5 запушены; §6.2 P2 закрыт; мёрдж 8.2 выполнен
 
 ### Выполненные этапы ROADMAP
 
@@ -17,9 +17,12 @@
 | ROADMAP §6.2 P2.1–P2.5 | **готово, запушен** (`f9e48c2` docs) | — |
 | P2.1 Monte Carlo (10.1/10.2) | **готово, запушен** (`6ae65a0` feat + `a5c0096` docs) | `test_monte_carlo` (20) |
 | P2.2 чувствительность (tornado) | **готово, запушен** (`55bde3a` feat + `bdb9d81` docs) | `test_sensitivity_service` (18) |
+| P2.3 климат (delta-change) | **готово** | `test_climate_service` (17) |
+| P2.4 визуализация (fan/hist/tornado) | **готово** | helpers + GUI |
+| P2.5 Decision Support (10.3=а) | **готово** | `test_decision_support_service` (23) |
 | мёрдж в main | **выполнен** (решение 8.2) | — |
 
-Итого: **273 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav **25/25/25**, GUI offscreen smoke OK (25 pages).
+Итого: **313 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav **25/25/25**, GUI offscreen smoke OK (25 pages).
 
 ### P1.6 — что сделано (решение 9.3 = (б) GeoJSON)
 
@@ -63,6 +66,20 @@
 - ruff тронутые = 0; build/main_window delta=0.
 - Критерий ROADMAP: `y = a·x1 + b·x2`, a > b → ранг `[x1, x2]` — закрыт pytest.
 - Без новых runtime-зависимостей; математика в сервисе, GUI только рисует.
+
+### P2.3–P2.5 — что сделано (решение 10.3 = (а))
+
+1. **`climate_service.py`** — multiplicative/additive delta-change, clone Dataset без мутации, metadata `climate` для `.hsp`; 17 тестов (identity, ×1.1, empty, NaN, round-trip).
+2. **P2.4 `gui/plot_style.py`** — `draw_fan_chart`, `draw_histogram_quantiles`, `draw_tornado_hbars`; histogram/tornado в `tab_monte_carlo` переключены на хелперы; fan — для климатического до/после.
+3. **`decision_support_service.py`** — P(exceed) от **пользовательского** Q_крит (10.3а), класс риска low/med/high (0.05/0.20), recommendation; 23 теста с аналитической выборкой; provenance `decision_support@1.0`.
+4. **GUI `tab_monte_carlo`** — блоки «Климат» (δ, режим, mean до/после + fan) и «Решения» (Q_крит, P(exceed), класс).
+5. **Отчёт** — 13 секций не тронуты (опциональная секция DS не добавлялась, чтобы не ломать `section_count == 13`).
+
+### Верификация DoD P2.3–P2.5 (2026-09-23)
+
+- `pytest tests -q` → **313** (+17+23); root → **135**; `test_report_service` → **15** (13 секций); nav **25/25/25**; smoke OK; `P2345_UI_OK`.
+- ruff тронутые = 0; build/main_window delta=0; plot_style N802/N814 — baseline.
+- Без новых runtime-зависимостей; решение **10.3 (а)** закрыто.
 
 ### P1.7 — что сделано
 
@@ -121,11 +138,11 @@
 4. **меню** «Импорт из источника (API)…» → `import_from_api`; **i18n** `api_*`/`menu_import_api`; **build.py** `core.services.api_source`, `gui.dialogs.api_import_dialog`; экспорт из `core.services`.
 5. **Новых runtime-зависимостей нет** (решение 9.2: только уже имеющийся `requests`); решение 9.1 закрыто адаптером + mock/fixture (открытые гидро-API — по желанию пользователя позже).
 
-### Остатки (не блокируют; P0+P1.1–P1.7 + P1.6 + P2.1 + P2.2 + мёрдж закрыты)
+### Остатки (не блокируют; P0+P1.1–P1.7 + P1.6 + P2.1–P2.5 + мёрдж закрыты)
 
 - 2 предсуществующих `except Exception` в `main_window` — по мере рефакторинга.
 - Ручной GUI / приёмка — за пользователем.
-- Следующие этапы по ROADMAP §6.2: **P2.3** климат → **P2.4** визуализация → **P2.5** DS (по команде).
+- **§6.2 P2 закрыт.** Дальше — P3 (по команде) или приёмка P2.
 
 ### Примечания
 
@@ -136,4 +153,4 @@
 - P1.6: DEM-растры (rasterio) — осознанно вне объёма (решение 9.3 = (б)); при необходимости — reopen 9.3 позже.
 - P2.1: demo model y=a·x+b — для smoke/знакомства; подключение к калиброванным моделям/P2.2 — позже.
 
-Обновлено: 2026-09-23 (P2.2 sensitivity tornado + P2.1 Monte Carlo + §6.2 + P1.6 + P1.7 + мёрдж 8.2; nav 25, 273+135; origin/main == origin/global-implementation)
+Обновлено: 2026-09-23 (P2.3–P2.5 климат/визуализация/DS + P2.2 + P2.1 + §6.2 + P1.6 + P1.7 + мёрдж 8.2; nav 25, 313+135; origin/main == origin/global-implementation)

@@ -1,5 +1,30 @@
 # Changelog — HydroSphere
 
+## v2026.09.23 — P2.3–P2.5: климат, визуализация, Decision Support (решение 10.3)
+
+### Добавлено
+- **`core/services/climate_service.py`** — `ClimateScenario` / `ClimateService` / `ClimateError` / `CLIMATE_MODES` / `CLIMATE_METADATA_KEY`: multiplicative `y×(1+δ)` и additive `y+δ` (delta-change), apply к `dict[int,float]` и clone `Dataset` без мутации входа; сценарий пишется в `Dataset.metadata["climate"]` (JSON-safe, `.hsp` round-trip); ошибки на пустом ряду / NaN / неизвестном режиме; stdlib only.
+- **`tests/test_climate_service.py`** — 17 тестов: δ=0 identity, ×1.1 exact ratio, additive, empty series/dataset, mode/name/NaN validation, Dataset clone no-mutate + metadata JSON round-trip, AST no-banned-deps.
+- **`core/services/decision_support_service.py`** — `DecisionSupportService` / `DecisionSupportRequest` / `DecisionSupportResult` / `ThresholdAssessment` / `DecisionSupportError` / `RISK_CLASSES` / `DEFAULT_RISK_CUTOFFS`: `P(exceed) = count(x>Q_крит)/N` по **пользовательским** порогам (решение **10.3 (а)**), класс риска низкий/средний/высокий (cut-offs 0.05/0.20), `recommendation` / `worst_class`; `run()` → provenance `decision_support@1.0`; stdlib only.
+- **`tests/test_decision_support_service.py`** — 23 теста: аналитический P(exceed) (0..99 ramp, flat series), классы риска на границах, несколько порогов, empty/NaN/bad-cutoffs errors, provenance, «нет порогов → ошибка 10.3 (а)», AST-guard.
+- **`gui/plot_style.py` (P2.4)** — `draw_fan_chart`, `draw_histogram_quantiles`, `draw_tornado_hbars` — только отрисовка, без новых зависимостей.
+- **GUI `tab_monte_carlo`** — блоки «Климат — delta-change» (δ, режим, до/после mean + fan/lines) и «Решения — P(exceed)» (Q_крит spinbox, класс риска, recommendation); histogram/tornado переключены на хелперы P2.4.
+
+### Изменено
+- **`core/services/__init__.py`** — экспорт `Climate*` + `DecisionSupport*` / `RISK_CLASSES` / `DEFAULT_RISK_CUTOFFS`.
+- **`build.py`** — hidden imports `core.services.climate_service`, `core.services.decision_support_service`.
+- **ROADMAP** — версия **2.4**, решение **10.3 (а)** закрыто, P2.3–P2.5 отмечены выполненными; `.planning/ROADMAP.md` синхронизирован.
+- **Отчёт** — 13 секций **не тронуты** (P2.5 секция опциональна; тесты report_service 15 green).
+
+### Проверки (DoD P2.3–P2.5)
+- `python -m pytest tests -q` → **313 passed** (было 273, +17 climate +23 DS).
+- Корневые `test_*.py` → **135 passed**; `test_report_service` → **15 passed** (13 секций).
+- nav **25/25/25**; GUI smoke OK; `P2345_UI_OK` (climate + DS + tornado + fan/hist/tornado helpers).
+- ruff: новые файлы = 0; `main_window.py` 36/36 delta=0; `build.py` 7/7 delta=0; `plot_style` N802/N814 — предсуществующие baseline.
+- Без новых runtime-зависимостей; решение **10.3 (а)** — только явные Q_крит.
+
+---
+
 ## v2026.09.23 — P2.2: анализ чувствительности (tornado)
 
 ### Добавлено
