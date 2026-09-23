@@ -70,6 +70,7 @@ from core.stats.sheet_reader import read_work_sheet
 from core.stats.trends import full_trend_analysis
 from gui.controller import DataController, PlotController
 from gui.dialogs.data_quality_dialog import DataQualityDialog
+from gui.dialogs.import_dialog import ImportDialog
 from gui.plot_style import (
     COLORS,
     FONT_DEFAULT,
@@ -487,6 +488,9 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
         file_menu = menubar.addMenu("Файл данных")
         file_menu.addAction("Открыть данные...", self.load_data)
+        file_menu.addAction(
+            t("menu_import_series", "Импорт ряда (CSV / Excel)..."), self.import_series
+        )
         file_menu.addAction("Создать шаблон", self.create_unified_template)
         file_menu.addAction(t("menu_save_report_excel", "Сохранить отчёт в Excel..."), self.save_report)
         file_menu.addAction(t("menu_report_engineering", "Сформировать инженерный отчёт..."), self._open_report_tab)
@@ -1344,6 +1348,82 @@ class MainWindow(QMainWindow):
         if not filepath:
             return
         self.load_data_from_path(filepath)
+
+    def import_series(self):
+        """P1.1: импорт одного ряда из CSV/TSV/Excel через ImportService."""
+        dialog = ImportDialog(self)
+        dialog.dataset_ready.connect(self._on_import_series_ready)
+        dialog.exec()
+
+    def _on_import_series_ready(self, dataset):
+        """Применить импортированный Dataset в UI, проект и отчёт качества."""
+        if dataset is None or not dataset.data:
+            QMessageBox.warning(self, t("import_title", "Импорт"), t("import_failed", "Пустой ряд."))
+            return
+        try:
+            df = pd.DataFrame(
+                {
+                    "year": sorted(int(y) for y in dataset.data),
+                    "value": [float(dataset.data[y]) for y in sorted(dataset.data)],
+                }
+            )
+            name = dataset.name or "Импорт"
+            # Non-destructive: imported series is a single post; merge if name exists.
+            posts = dict(getattr(self, "_all_posts", None) or {})
+            posts[name] = df
+            self._all_posts = posts
+            self.available_posts = list(posts.keys())
+            self.df = df
+            self.current_post = name
+            self.df_raw = None
+            if hasattr(self, "_populate_post_combos") and hasattr(self, "combo_post"):
+                self._populate_post_combos()
+            self.on_post_changed(name)
+
+            # Project: remember source + dataset (round-trips via .hsp).
+            try:
+                self.project_service.add_dataset(dataset)
+                source = str(dataset.metadata.get("import_path") or "")
+                if source:
+                    self.project_service.set_data_file(
+                        source, dataset.metadata.get("import_source")
+                    )
+                self.project_service.set_selected_post(name)
+            except (ValueError, TypeError, OSError, AttributeError) as exc:
+                print(f"[WARN] import → project: {exc}")
+
+            # Auto quality report only — never mutates the series.
+            try:
+                report = DataQualityService().analyze(dataset)
+                blocking = [
+                    i
+                    for i in report.issues
+                    if getattr(i.severity, "value", "") in ("error", "critical")
+                ]
+                msg = (
+                    f"{t('import_done', 'Ряд импортирован')}: {name} "
+                    f"({dataset.length} точек)\n"
+                    f"Качество: {report.quality_grade} "
+                    f"({report.quality_score:.2f}); "
+                    f"проблем: {len(report.issues)}"
+                )
+                if blocking:
+                    msg += f"\nБлокирующих: {len(blocking)} — откройте «Качество данных»."
+                    QMessageBox.warning(self, t("import_title", "Импорт"), msg)
+                else:
+                    QMessageBox.information(self, t("import_title", "Импорт"), msg)
+                self._status_bar.showMessage(
+                    f"{t('import_done', 'Ряд импортирован')}: {name}"
+                )
+            except (ValueError, TypeError, AttributeError) as exc:
+                print(f"[WARN] import quality: {exc}")
+                self._status_bar.showMessage(
+                    f"{t('import_done', 'Ряд импортирован')}: {name}"
+                )
+        except (ValueError, TypeError, KeyError, OSError) as exc:
+            QMessageBox.critical(
+                self, t("import_title", "Импорт"), f"{type(exc).__name__}: {exc}"
+            )
 
     def load_data_from_path(self, filepath):
         """Загрузить данные из указанного файла (без диалога). Возвращает True при успехе."""
