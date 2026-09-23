@@ -9,6 +9,7 @@ Services:
 - ScenarioService: Scenario management (CRUD, comparison, runs)
 - ProjectService: Project persistence (.hsp) and the engineering project state
 - ImportService: CSV/TSV/Excel time series import into Dataset (P1.1)
+- CalibrationService: scipy.optimize parameter fitting with metrics (P1.5)
 
 Services contain no mathematics: formulas stay in the calculation core
 (`core.stats`, `core.hydrorash`).
@@ -17,6 +18,12 @@ Services contain no mathematics: formulas stay in the calculation core
 from .api_source import ApiSourceError, DataSource, FieldMap, HttpApiSource
 from .bootstrap import ServiceContainer, build_container
 from .calculation_service import CalculationContext, CalculationError, CalculationService
+from .calibration_service import (
+    AVAILABLE_METRICS,
+    CalibrationError,
+    CalibrationRequest,
+    CalibrationService,
+)
 from .data_quality_service import RECOMMENDATIONS, DataQualityService
 from .import_service import ColumnMapping, ImportPreview, ImportService, ImportServiceError
 from .methodology_registry import (
@@ -39,6 +46,7 @@ from .scenario_service import ScenarioNotFoundError, ScenarioService
 from .validation_service import ValidationService
 
 __all__ = [
+    "AVAILABLE_METRICS",
     "DEFAULT_METHODOLOGIES",
     "PROJECT_EXTENSION",
     "RECOMMENDATIONS",
@@ -50,6 +58,9 @@ __all__ = [
     "CalculationContext",
     "CalculationError",
     "CalculationService",
+    "CalibrationError",
+    "CalibrationRequest",
+    "CalibrationService",
     "ColumnMapping",
     "DataQualityService",
     "DataSource",

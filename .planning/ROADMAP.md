@@ -719,7 +719,7 @@ smoke-тестами; каркас закоммичен.
 | 9.2 | Новые runtime-зависимости в P1 | (а) без новых (requests/scipy/pandas уже есть) · (б) точечно (rasterio и т.п.) с обоснованием | P1.2, P1.6 |
 | 9.3 | GIS/DEM-стек | (а) rasterio+numpy · (б) только GeoJSON-контуры · (в) min: ручная морфометрия без гео | P1.6 |
 | 9.4 | Объём P1.4 (сколько методик) | **зафиксировано N=10** (решение при старте): spectral_hurst, drought_spi, baseflow, confidence_bands, composite_curves, intra_annual, snowmelt, spillway, ecological_flow, ice_phenomena | P1.4 |
-| 9.5 | Метрики калибровки по умолчанию | MSE / NSE / пользовательский список | P1.5 |
+| 9.5 | Метрики калибровки по умолчанию | **зафиксировано: MSE и NSE** (по умолчанию NSE; список `AVAILABLE_METRICS` расширяется программно) | P1.5 |
 
 ---
 

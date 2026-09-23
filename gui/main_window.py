@@ -496,6 +496,9 @@ class MainWindow(QMainWindow):
         file_menu.addAction(
             t("menu_import_api", "Импорт из источника (API)..."), self.import_from_api
         )
+        file_menu.addAction(
+            t("menu_calibrate", "Калибровка параметров..."), self.open_calibration
+        )
         file_menu.addAction("Создать шаблон", self.create_unified_template)
         file_menu.addAction(t("menu_save_report_excel", "Сохранить отчёт в Excel..."), self.save_report)
         file_menu.addAction(t("menu_report_engineering", "Сформировать инженерный отчёт..."), self._open_report_tab)
@@ -1365,6 +1368,46 @@ class MainWindow(QMainWindow):
         dialog = ApiImportDialog(self)
         dialog.dataset_ready.connect(self._on_import_series_ready)
         dialog.exec()
+
+    def open_calibration(self):
+        """P1.5: калибровка параметров модели к текущему ряду (фоновый воркер)."""
+        dataset = self._dataset_from_dataframe(self.current_post or "Ряд", self.df)
+        if dataset is None or not dataset.data:
+            QMessageBox.warning(
+                self,
+                t("calibration_title", "Калибровка параметров"),
+                t("import_failed", "Сначала загрузите или импортируйте ряд."),
+            )
+            return
+        from gui.dialogs.calibration_dialog import CalibrationDialog
+
+        dialog = CalibrationDialog(
+            dataset,
+            self.current_post or "Ряд",
+            scenario_service=self.service_container.scenario,
+            parent=self,
+        )
+        dialog.calibration_finished.connect(self._on_calibration_finished)
+        dialog.exec()
+
+    def _on_calibration_finished(self, result):
+        """P1.5: положить результат калибровки в историю и статус-бар."""
+        try:
+            self.service_container.results.register(result)
+            if getattr(self.project_service, "path", None) is not None:
+                self.project_service.add_calculation(result)
+            if hasattr(self, "tab_results"):
+                self.tab_results.refresh()
+            self._status_bar.showMessage(
+                t(
+                    "calibration_done",
+                    f"Калибровка: {result.output_data.get('metric', '')} "
+                    f"{result.output_data.get('metric_before', 0):.4g} → "
+                    f"{result.output_data.get('metric_after', 0):.4g}",
+                )
+            )
+        except (ValueError, TypeError, AttributeError) as e:
+            print(f"[WARN] calibration register: {e}")
 
     def _on_import_series_ready(self, dataset):
         """Применить импортированный Dataset в UI, проект и отчёт качества."""

@@ -1,5 +1,30 @@
 # Changelog — HydroSphere
 
+## v2026.09.23 — P1.5: калибровка и оптимизация (решение 9.5: MSE/NSE)
+
+### Добавлено
+- **`core/stats/metrics.py`** — `mse` / `nse` (Nash–Sutcliffe), `AVAILABLE_METRICS = ("mse", "nse")`; решение 9.5: по умолчанию NSE.
+- **`core/services/calibration_service.py`** — тонкий адаптер над `scipy.optimize.minimize`: `CalibrationRequest` (initial, bounds, metric, method), `calibrate` → `CalculationResult` с provenance (что калибровалось, метрика, итерации, «до/после»), `apply_to_scenario` через `ScenarioService.update` (откат — запись прежних параметров).
+- **`tests/test_calibration_service.py`** — 18 тестов: сходимость на синтетике (калиброванный параметр ближе к истинному, чем дефолтный; MSE и NSE), provenance, отказ при инвертированных/out-of-bounds limits, пустом ряде/параметрах, неизвестной метрике, shape mismatch; apply + rollback в сценарии.
+- **`gui/dialogs/calibration_dialog.py`** — диалог: модели (линейная/показательная), метрика, метод, таблица параметров/limits, фоновый `CalibrationWorker`, метрика «до/после», комбо сценариев + «Применить».
+- **меню** «Калибровка параметров…» → `open_calibration`; результат регистрируется в `ResultStore` и (при открытом проекте) в истории.
+
+### Изменено
+- **`core/services/__init__.py`** — экспорт `CalibrationService` / `CalibrationRequest` / `CalibrationError` / `AVAILABLE_METRICS`.
+- **`gui/dialogs/__init__.py`** — экспорт `CalibrationDialog`.
+- **`build.py`** — `HIDDEN_IMPORTS`: `core.services.calibration_service`, `core.stats.metrics`, `gui.dialogs.calibration_dialog`.
+- **i18n** `menu_calibrate`, `calibration_*` (ru/en).
+- **`DOCS/ROADMAP.md` + `.planning/ROADMAP.md`** — решение 9.5 зафиксировано (MSE и NSE, default NSE).
+
+### Проверки (DoD P1.5)
+- `python -m pytest tests -q` → **202 passed** (было 184, +18).
+- Корневые `test_*.py` → **135 passed**.
+- ruff: новые файлы = 0; `build.py` 7/7 delta=0; `main_window.py` 36/36 delta=0.
+- nav 23/23/23; GUI offscreen smoke OK (23 pages, `menu_has_calibrate=True`).
+- Экспорт `from core.services import CalibrationService` → `('mse', 'nse')`.
+
+---
+
 ## v2026.09.23 — P1.4: расширенная статистика (N=10 методик в реестре)
 
 ### Добавлено
