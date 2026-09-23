@@ -4,5 +4,6 @@ gui/dialogs/__init__.py
 """
 
 from .data_quality_dialog import DataQualityDialog
+from .import_dialog import ImportDialog
 
-__all__ = ["DataQualityDialog"]
+__all__ = ["DataQualityDialog", "ImportDialog"]

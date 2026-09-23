@@ -92,5 +92,26 @@
     "report_building": "Building report...",
     "report_ready": "Report ready",
     "report_saved": "Report saved",
-    "report_save_title": "Save Report"
+    "report_save_title": "Save Report",
+
+    "menu_import_series": "Import Series (CSV / Excel)...",
+    "import_title": "Import Series (CSV / Excel)",
+    "import_hint": "The file is parsed without repairing data: gaps stay gaps; quality is checked by a separate report.",
+    "import_path_placeholder": "No file selected…",
+    "import_browse": "Browse…",
+    "import_file": "File:",
+    "import_mapping": "Column mapping",
+    "import_name": "Name:",
+    "import_name_placeholder": "Series name…",
+    "import_unit": "Units:",
+    "import_location": "Object:",
+    "import_location_placeholder": "River / basin (optional)",
+    "import_preview_placeholder": "Select a file to preview the first rows…",
+    "import_run": "Import",
+    "import_running": "Importing series…",
+    "import_pick_columns": "Select year and value columns.",
+    "import_same_columns": "Year and value columns must differ.",
+    "import_failed": "Could not import the file.",
+    "import_done": "Series imported",
+    "btn_cancel": "Cancel"
 }

@@ -92,5 +92,26 @@
     "report_building": "Формирование отчёта…",
     "report_ready": "Отчёт готов",
     "report_saved": "Отчёт сохранён",
-    "report_save_title": "Сохранить отчёт"
+    "report_save_title": "Сохранить отчёт",
+
+    "menu_import_series": "Импорт ряда (CSV / Excel)...",
+    "import_title": "Импорт ряда (CSV / Excel)",
+    "import_hint": "Файл разбирается без «лечения» данных: пропуски остаются пропусками, качество проверяется отдельным отчётом.",
+    "import_path_placeholder": "Файл не выбран…",
+    "import_browse": "Обзор…",
+    "import_file": "Файл:",
+    "import_mapping": "Сопоставление колонок",
+    "import_name": "Название:",
+    "import_name_placeholder": "Название ряда…",
+    "import_unit": "Единицы:",
+    "import_location": "Объект:",
+    "import_location_placeholder": "Река / бассейн (необязательно)",
+    "import_preview_placeholder": "Выберите файл, чтобы увидеть первые строки…",
+    "import_run": "Импортировать",
+    "import_running": "Импорт ряда…",
+    "import_pick_columns": "Выберите колонки года и значения.",
+    "import_same_columns": "Колонки года и значения должны отличаться.",
+    "import_failed": "Не удалось импортировать файл.",
+    "import_done": "Ряд импортирован",
+    "btn_cancel": "Отмена"
 }
