@@ -14,6 +14,8 @@ Services:
 - GeoService: GeoJSON basin contour morphometry (P1.6, decision 9.3 = (b))
 - MonteCarloService: uncertainty propagation with seedable sampling (P2.1)
 - SensitivityService: one-at-a-time tornado ranking (P2.2)
+- ClimateService: multiplicative/additive delta-change on series (P2.3)
+- DecisionSupportService: P(exceed) + risk class on user Q_крит (P2.5, 10.3 (a))
 
 Services contain no mathematics: formulas stay in the calculation core
 (`core.stats`, `core.hydrorash`).
@@ -28,7 +30,22 @@ from .calibration_service import (
     CalibrationRequest,
     CalibrationService,
 )
+from .climate_service import (
+    CLIMATE_MODES,
+    ClimateError,
+    ClimateScenario,
+    ClimateService,
+)
 from .data_quality_service import RECOMMENDATIONS, DataQualityService
+from .decision_support_service import (
+    DEFAULT_RISK_CUTOFFS,
+    RISK_CLASSES,
+    DecisionSupportError,
+    DecisionSupportRequest,
+    DecisionSupportResult,
+    DecisionSupportService,
+    ThresholdAssessment,
+)
 from .geo_service import BasinMorphometry, GeoService, GeoServiceError
 from .import_service import ColumnMapping, ImportPreview, ImportService, ImportServiceError
 from .methodology_registry import (
@@ -75,10 +92,21 @@ from .validation_service import ValidationService
 
 __all__ = [
     "AVAILABLE_METRICS",
+    "CLIMATE_MODES",
     "DEFAULT_N_RUNS",
     "DEFAULT_RELATIVE_DELTA",
+    "DEFAULT_RISK_CUTOFFS",
     "DISTRIBUTIONS",
+    "RISK_CLASSES",
     "BasinMorphometry",
+    "ClimateError",
+    "ClimateScenario",
+    "ClimateService",
+    "DecisionSupportError",
+    "DecisionSupportRequest",
+    "DecisionSupportResult",
+    "DecisionSupportService",
+    "ThresholdAssessment",
     "DEFAULT_METHODOLOGIES",
     "GeoService",
     "GeoServiceError",

@@ -57,6 +57,8 @@ HIDDEN_IMPORTS = [
     "core.services.geo_service",
     "core.services.monte_carlo_service",
     "core.services.sensitivity_service",
+    "core.services.climate_service",
+    "core.services.decision_support_service",
     "core.services.methodology_registry",
     "core.services.project_service", "core.services.quality_pipeline",
     "core.services.report_service",

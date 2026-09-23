@@ -561,5 +561,90 @@ def add_info_box(ax, text, loc="lower right", fontsize=8):
             horizontalalignment=ha, bbox=props, family="monospace")
 
 
+# ============================================================
+# P2.4 — расширенная визуализация (fan / histogram / tornado)
+# Математики нет: только отрисовка. Без новых зависимостей.
+# ============================================================
+
+def draw_histogram_quantiles(ax, samples, summary, title="Выход — Monte Carlo"):
+    """Гистограмма выборки с линиями p5 / p50 / p95.
+
+    Args:
+        ax: matplotlib Axes.
+        samples: sequence of floats (MC output).
+        summary: dict with keys p5, p50, p95 (and optionally mean).
+        title: axes title.
+    """
+    import numpy as np  # local: keeps plot_style import light for non-plot paths
+
+    data = np.asarray(list(samples), dtype=float)
+    if data.size == 0:
+        ax.set_title(title, fontsize=10)
+        return
+    bins = min(40, max(10, data.size // 25))
+    ax.hist(data, bins=bins, color="#1565C0", alpha=0.75)
+    for key, color in (("p5", "#C62828"), ("p50", "#2E7D32"), ("p95", "#E65100")):
+        if key in summary and summary[key] is not None:
+            ax.axvline(
+                summary[key], color=color, linestyle="--", linewidth=1.4, label=key
+            )
+    ax.set_title(title, fontsize=10)
+    ax.set_xlabel("y", fontsize=9)
+    ax.set_ylabel("Частота", fontsize=9)
+    ax.legend(fontsize=8)
+    ax.grid(True, linestyle=":", alpha=0.4)
+
+
+def draw_tornado_hbars(ax, names, swings, title="Tornado — чувствительность"):
+    """Горизонтальные полосы tornado: most sensitive at the top.
+
+    Args:
+        ax: matplotlib Axes.
+        names: parameter names (ordered most→least sensitive preferred).
+        swings: |Δ output| magnitudes, same order as names.
+        title: axes title.
+    """
+    labels = list(names)
+    values = [float(v) for v in swings]
+    if not labels:
+        ax.set_title(title, fontsize=10)
+        return
+    y_pos = list(range(len(labels)))[::-1]
+    ax.barh(y_pos, values, color="#1565C0", alpha=0.85, height=0.6)
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(labels, fontsize=9)
+    ax.set_xlabel("|Δ output|", fontsize=9)
+    ax.set_title(title, fontsize=10)
+    ax.grid(True, axis="x", linestyle=":", alpha=0.4)
+
+
+def draw_fan_chart(ax, x, median, p_low, p_high, *, title="Fan-chart", label="p5–p95"):
+    """Ленточный (fan) график: медиана + заливка между percentile-полосами.
+
+    Args:
+        ax: matplotlib Axes.
+        x: x-coordinates (years or index).
+        median: central line values.
+        p_low: lower band (e.g. p5).
+        p_high: upper band (e.g. p95).
+        title: axes title.
+        label: legend label for the band.
+    """
+    xs = list(x)
+    if not xs:
+        ax.set_title(title, fontsize=10)
+        return
+    med = [float(v) for v in median]
+    lo = [float(v) for v in p_low]
+    hi = [float(v) for v in p_high]
+    ax.fill_between(xs, lo, hi, color="#90CAF9", alpha=0.55, label=label)
+    ax.plot(xs, med, color="#0D47A1", linewidth=1.8, label="медиана")
+    ax.set_title(title, fontsize=10)
+    ax.set_xlabel("x", fontsize=9)
+    ax.set_ylabel("y", fontsize=9)
+    ax.legend(fontsize=8)
+    ax.grid(True, linestyle=":", alpha=0.4)
+
+
 # Инициализация
 apply_global_style()

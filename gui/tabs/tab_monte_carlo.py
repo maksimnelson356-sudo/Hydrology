@@ -4,23 +4,26 @@ gui/tabs/tab_monte_carlo.py
 прогон N итераций в фоновом воркере, сводка (mean/std/p5/p50/p95) и
 гистограмма с квантилями matplotlib.
 
-Блок P2.2 «Чувствительность»: one-at-a-time ±Δ и tornado-ранжирование
-через ``SensitivityService`` (математика в сервисе; GUI только рисует).
+Блоки:
+- P2.2 «Чувствительность»: OAT ±Δ и tornado-ранжирование (SensitivityService).
+- P2.3 «Климат»: delta-change ×(1+δ) на демо-ряд (ClimateService), до/после.
+- P2.5 «Решения»: P(exceed) и класс риска по пользовательскому Q_крит
+  (DecisionSupportService, решение 10.3 (а)).
 
-Демо-модель: y = a·x + b (x фиксирован) — для smoke и первого знакомства.
-Без новых runtime-зависимостей (решения 10.1, 10.2).
+Графики — хелперы `gui/plot_style` (P2.4). Математика — только в сервисах.
+Без новых runtime-зависимостей (решения 10.1, 10.2, 10.3 (а)).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
@@ -36,6 +39,17 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.services.climate_service import (
+    CLIMATE_MODES,
+    ClimateError,
+    ClimateScenario,
+    ClimateService,
+)
+from core.services.decision_support_service import (
+    DecisionSupportError,
+    DecisionSupportRequest,
+    DecisionSupportService,
+)
 from core.services.monte_carlo_service import (
     DEFAULT_N_RUNS,
     MonteCarloError,
@@ -48,6 +62,11 @@ from core.services.sensitivity_service import (
     SensitivityError,
     SensitivityRequest,
     SensitivityService,
+)
+from gui.plot_style import (
+    draw_fan_chart,
+    draw_histogram_quantiles,
+    draw_tornado_hbars,
 )
 
 HINT_STYLE = (
@@ -74,6 +93,18 @@ _PARAM_HEADERS = (
     "Параметр 2",
     "Параметр 3",
 )
+
+#: Demo hydrological series for climate before/after (year → Q m³/s).
+_CLIMATE_DEMO: dict[int, float] = {
+    2000: 12.0,
+    2001: 15.5,
+    2002: 11.0,
+    2003: 18.0,
+    2004: 14.2,
+    2005: 16.8,
+    2006: 13.1,
+    2007: 17.4,
+}
 
 
 class MonteCarloWorker(QThread):
@@ -117,6 +148,8 @@ class TabMonteCarlo(QWidget):
         self._worker: MonteCarloWorker | None = None
         self._result: Any = None
         self._sensitivity_result: Any = None
+        self._climate_result: dict[int, float] | None = None
+        self._ds_result: Any = None
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -323,6 +356,177 @@ class TabMonteCarlo(QWidget):
         sens_layout.addWidget(self._tornado_canvas)
         layout.addWidget(sens_box, stretch=1)
 
+        # --- P2.3 climate delta-change block --------------------------
+        climate_box = QGroupBox("Климат — delta-change (P2.3)")
+        climate_layout = QVBoxLayout(climate_box)
+
+        climate_controls = QHBoxLayout()
+        form_delta = QFormLayout()
+        self.spin_climate_delta = QDoubleSpinBox()
+        self.spin_climate_delta.setRange(-0.9, 5.0)
+        self.spin_climate_delta.setSingleStep(0.01)
+        self.spin_climate_delta.setDecimals(3)
+        self.spin_climate_delta.setValue(0.1)
+        form_delta.addRow("δ:", self.spin_climate_delta)
+
+        self.combo_climate_mode = QComboBox()
+        self.combo_climate_mode.addItems(list(CLIMATE_MODES))
+        form_delta.addRow("Режим:", self.combo_climate_mode)
+        climate_controls.addLayout(form_delta)
+
+        self.btn_climate = QPushButton("🌡 Применить климат-фактор")
+        self.btn_climate.setStyleSheet(RUN_STYLE)
+        self.btn_climate.clicked.connect(self._on_climate_clicked)
+        climate_controls.addWidget(self.btn_climate)
+        climate_controls.addStretch()
+        climate_layout.addLayout(climate_controls)
+
+        self.lbl_climate = QLabel("До/после: —")
+        self.lbl_climate.setWordWrap(True)
+        climate_layout.addWidget(self.lbl_climate)
+
+        self._climate_figure = Figure(figsize=(5, 2.0), tight_layout=True)
+        self._climate_canvas = FigureCanvas(self._climate_figure)
+        climate_layout.addWidget(self._climate_canvas)
+        layout.addWidget(climate_box, stretch=1)
+
+        # --- P2.5 decision support block ------------------------------
+        ds_box = QGroupBox("Решения — P(exceed) и риск (P2.5, решение 10.3 (а))")
+        ds_layout = QVBoxLayout(ds_box)
+
+        ds_controls = QHBoxLayout()
+        form_q = QFormLayout()
+        self.edit_q_crit = QDoubleSpinBox()
+        self.edit_q_crit.setRange(-1e9, 1e9)
+        self.edit_q_crit.setDecimals(3)
+        self.edit_q_crit.setValue(14.0)
+        form_q.addRow("Q_крит:", self.edit_q_crit)
+        ds_controls.addLayout(form_q)
+
+        self.btn_ds = QPushButton("📊 Оценить риск")
+        self.btn_ds.setStyleSheet(RUN_STYLE)
+        self.btn_ds.clicked.connect(self._on_ds_clicked)
+        ds_controls.addWidget(self.btn_ds)
+        ds_controls.addStretch()
+        ds_layout.addLayout(ds_controls)
+
+        self.lbl_ds = QLabel("P(exceed): —")
+        self.lbl_ds.setWordWrap(True)
+        ds_layout.addWidget(self.lbl_ds)
+        layout.addWidget(ds_box, stretch=1)
+
+    # ------------------------------------------------------------------
+    # P2.3 climate
+    # ------------------------------------------------------------------
+    def build_climate_scenario(self) -> ClimateScenario:
+        """Scenario from δ spinbox + mode combo (demo series applied on click)."""
+        mode = self.combo_climate_mode.currentText().strip().lower()
+        if mode not in CLIMATE_MODES:
+            raise ClimateError(f"Неизвестный режим «{mode}»")
+        return ClimateScenario(
+            name=f"climate δ={self.spin_climate_delta.value():g}",
+            delta=float(self.spin_climate_delta.value()),
+            mode=mode,
+        )
+
+    def _on_climate_clicked(self) -> None:
+        try:
+            scenario = self.build_climate_scenario()
+            before = ClimateService.identity(_CLIMATE_DEMO)
+            after = ClimateService.apply_series(_CLIMATE_DEMO, scenario)
+        except ClimateError as exc:
+            self.error.emit(str(exc))
+            QMessageBox.critical(self, "Климат", str(exc))
+            return
+        self._climate_result = after
+        mean_b = sum(before.values()) / len(before)
+        mean_a = sum(after.values()) / len(after)
+        ratio = mean_a / mean_b if mean_b else float("nan")
+        self.lbl_climate.setText(
+            f"До/после: mean {mean_b:.4g} → {mean_a:.4g} (ratio {ratio:.4g}); "
+            f"режим {scenario.mode}, δ={scenario.delta:g}"
+        )
+        self._draw_climate(before, after, scenario)
+        self.status_message.emit(
+            f"Климат: δ={scenario.delta:g} {scenario.mode}, mean {mean_b:.4g}→{mean_a:.4g}"
+        )
+
+    def _draw_climate(
+        self,
+        before: dict[int, float],
+        after: dict[int, float],
+        scenario: ClimateScenario,
+    ) -> None:
+        self._climate_figure.clear()
+        axes = self._climate_figure.add_subplot(111)
+        years = sorted(after)
+        med = [after[y] for y in years]
+        low = [min(before[y], after[y]) for y in years]
+        high = [max(before[y], after[y]) for y in years]
+        draw_fan_chart(
+            axes,
+            years,
+            med,
+            low,
+            high,
+            title=f"Климат delta-change: {scenario.mode}, δ={scenario.delta:g}",
+            label="диапазон до/после",
+        )
+        axes.plot(
+            years,
+            [before[y] for y in years],
+            marker="o",
+            color="#78909C",
+            linewidth=1.4,
+            linestyle="--",
+            label="до",
+        )
+        axes.plot(
+            years,
+            med,
+            marker="s",
+            color="#0D47A1",
+            linewidth=1.5,
+            label="после",
+        )
+        axes.set_xlabel("Год", fontsize=9)
+        axes.set_ylabel("Q, м³/с", fontsize=9)
+        axes.legend(fontsize=8)
+        self._climate_canvas.draw_idle()
+
+    # ------------------------------------------------------------------
+    # P2.5 decision support
+    # ------------------------------------------------------------------
+    def build_ds_request(self) -> DecisionSupportRequest:
+        """Samples from last MC run (or demo ramp) + user Q_крит (10.3 (а))."""
+        samples: list[float] = []
+        if self._result is not None:
+            raw = self._result.output_data.get("samples") or []
+            samples = [float(v) for v in raw]
+        if not samples:
+            # analytic demo: 0..99 so P(exceed) is known for smoke
+            samples = [float(i) for i in range(100)]
+        q = float(self.edit_q_crit.value())
+        return DecisionSupportRequest(samples=samples, thresholds={"Q_крит": q})
+
+    def _on_ds_clicked(self) -> None:
+        try:
+            request = self.build_ds_request()
+            result = DecisionSupportService.assess(request)
+        except DecisionSupportError as exc:
+            self.error.emit(str(exc))
+            QMessageBox.critical(self, "Решения", str(exc))
+            return
+        self._ds_result = result
+        item = result.assessments[0]
+        self.lbl_ds.setText(
+            f"P(exceed) = {item.p_exceed:.4f} ({item.n_exceed}/{item.n_samples}), "
+            f"класс риска: {item.risk_class}; {result.recommendation}"
+        )
+        self.status_message.emit(
+            f"Риск: P={item.p_exceed:.4f}, класс={item.risk_class}"
+        )
+
     def build_sensitivity_request(self) -> SensitivityRequest:
         """Baseline = центр каждой колонки распределения; Δ — отн. из спинбокса."""
         rows = self.table.rowCount()
@@ -382,14 +586,7 @@ class TabMonteCarlo(QWidget):
         axes = self._tornado_figure.add_subplot(111)
         names = list(result.order)
         swings = [item.swing for item in result.influences]
-        # most sensitive at the top
-        y_pos = list(range(len(names)))[::-1]
-        axes.barh(y_pos, swings, color="#1565C0", alpha=0.85, height=0.6)
-        axes.set_yticks(y_pos)
-        axes.set_yticklabels(names, fontsize=9)
-        axes.set_xlabel("|Δ output|", fontsize=9)
-        axes.set_title("Tornado — чувствительность параметров", fontsize=10)
-        axes.grid(True, axis="x", linestyle=":", alpha=0.4)
+        draw_tornado_hbars(axes, names, swings, title="Tornado — чувствительность параметров")
         self._tornado_canvas.draw_idle()
 
     # ------------------------------------------------------------------
@@ -456,17 +653,5 @@ class TabMonteCarlo(QWidget):
     def _draw_histogram(self, samples: list[float], summary: dict) -> None:
         self._figure.clear()
         axes = self._figure.add_subplot(111)
-        data = np.asarray(samples, dtype=float)
-        axes.hist(data, bins=min(40, max(10, len(data) // 25)), color="#1565C0", alpha=0.75)
-        for key, color, label in (
-            ("p5", "#C62828", "p5"),
-            ("p50", "#2E7D32", "p50"),
-            ("p95", "#E65100", "p95"),
-        ):
-            axes.axvline(summary[key], color=color, linestyle="--", linewidth=1.4, label=label)
-        axes.set_title("Выход y — Monte Carlo", fontsize=10)
-        axes.set_xlabel("y", fontsize=9)
-        axes.set_ylabel("Частота", fontsize=9)
-        axes.legend(fontsize=8)
-        axes.grid(True, linestyle=":", alpha=0.4)
+        draw_histogram_quantiles(axes, samples, summary, title="Выход y — Monte Carlo")
         self._canvas.draw_idle()
