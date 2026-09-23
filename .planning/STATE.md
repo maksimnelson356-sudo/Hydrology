@@ -15,7 +15,7 @@
 | P1.7 Reservoir Scenario Simulator | **готово, запушен** (`6860165`, 6 atomic commits `3f01684`..`6860165`) | `test_reservoir_scenario` (15) |
 | P1.6 GIS/DEM морфометрия (9.3=(б)) | **готово, запушен** (`58f63b8` feat + `424f238` docs) | `test_geo_service` (18) |
 | ROADMAP §6.2 P2.1–P2.5 | **готово, запушен** (`f9e48c2` docs) | — |
-| P2.1 Monte Carlo (10.1/10.2) | **готово** (в worktree, коммит ниже) | `test_monte_carlo` (20) |
+| P2.1 Monte Carlo (10.1/10.2) | **готово, запушен** (`6ae65a0` feat + `a5c0096` docs) | `test_monte_carlo` (20) |
 | мёрдж в main | **выполнен** (решение 8.2) | — |
 
 Итого: **255 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav **25/25/25**, GUI offscreen smoke OK (25 pages).
