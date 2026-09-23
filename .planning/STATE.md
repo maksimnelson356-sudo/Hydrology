@@ -1,6 +1,6 @@
 # Состояние работы
 
-## Текущий этап: P0–P1.7 запушены (ожидает push); открыт мёрдж в main
+## Текущий этап: P0–P1.7 запушены; выполнен мёрдж `global-implementation` → `main` (решение 8.2)
 
 ### Выполненные этапы ROADMAP
 
@@ -12,8 +12,8 @@
 | P1.2 импорт через API | **готово, запушен** (`5383206`) | `test_api_source` (18) |
 | P1.4 расширенная статистика N=10 | **готово, запушен** (`9247389`) | `test_extended_methodologies` (24) |
 | P1.5 калибровка MSE/NSE | **готово, запушен** (`b022ef7`+`f815305`) | `test_calibration_service` (18) |
-| P1.7 Reservoir Scenario Simulator | **готово, коммит ожидает** | `test_reservoir_scenario` (15) |
-| мёрдж в main | открыто | — |
+| P1.7 Reservoir Scenario Simulator | **готово, запушен** (`6860165`, 6 atomic commits `3f01684`..`6860165`) | `test_reservoir_scenario` (15) |
+| мёрдж в main | **выполнен** (решение 8.2) | — |
 
 Итого: **217 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav 23/23/23, GUI offscreen smoke OK (23 pages).
 
@@ -30,9 +30,15 @@
 
 - `pytest tests -q` → **217**; root → **135**; nav 23/23/23; GUI smoke OK.
 - ruff тронутые = 0; build/main_window delta=0.
-- Push до P1.7: HEAD = origin = `f815305`.
+- Push P1.7: HEAD = origin/global-implementation = **`6860165`** (6 atomic commits).
 
-### Остатки (не блокируют; P0+P1.1–P1.5+P1.7 готовы)
+### Мёрдж в main (решение 8.2, 2026-09-23)
+
+- `main` был предком `global-implementation` → **fast-forward** к `6860165` (без конфликтов).
+- Тесты на main перед push: 217 / 135 / nav / GUI smoke — зелёные.
+- `git push origin main` — выполнен; origin/main = `6860165`.
+
+### Остатки (не блокируют; P0+P1.1–P1.5+P1.7 + мёрдж готовы)
 
 ### P1.4 — что сделано (решение 9.4: N=10)
 
@@ -67,18 +73,18 @@
 4. **меню** «Импорт из источника (API)…» → `import_from_api`; **i18n** `api_*`/`menu_import_api`; **build.py** `core.services.api_source`, `gui.dialogs.api_import_dialog`; экспорт из `core.services`.
 5. **Новых runtime-зависимостей нет** (решение 9.2: только уже имеющийся `requests`); решение 9.1 закрыто адаптером + mock/fixture (открытые гидро-API — по желанию пользователя позже).
 
-### Остатки (не блокируют; P0+P1.1–P1.4 закрыты)
+### Остатки (не блокируют; P0+P1.1–P1.7 + мёрдж закрыты)
 
 - 2 предсуществующих `except Exception` в `main_window` — по мере рефакторинга.
 - Ручной GUI / приёмка P1 — за пользователем.
-- Коммит+push P1.7 — ждёт (DoD п.7).
-- Следующий: **мёрдж `global-implementation` → `main`** (решение 8.2).
-- `main` локально `d3967c7` [origin/main: ahead 2] — мёрдж ждёт команды.
+- P1.6 GIS/DEM — открыт (решение 9.3 не принято).
+- Следующий этап по ROADMAP: P1.6 (или иной по команде).
 
 ### Примечания
 
 - GSD-команды и фоновые субагенты недоступны (ProviderModelNotFoundError) — работаем напрямую.
 - `core/stats/*` N803/N806 — предсуществующая нотация, не трогать.
 - `i18n/__init__.py` — предсуществующие ruff, файл не трогали.
+- i18n для reservoir GUI не добавлялся: `tab_scenarios` historically uses hardcoded ru strings (как весь файл); меню/калибровка — через i18n.
 
-Обновлено: 2026-09-23 (P1.7 реализован, коммит ожидает)
+Обновлено: 2026-09-23 (P1.7 запушен `6860165`, мёрдж в main выполнен)
