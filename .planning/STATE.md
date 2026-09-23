@@ -30,13 +30,13 @@
 
 - `pytest tests -q` → **217**; root → **135**; nav 23/23/23; GUI smoke OK.
 - ruff тронутые = 0; build/main_window delta=0.
-- Push P1.7: HEAD = origin/global-implementation = **`6860165`** (6 atomic commits).
+- Push P1.7 feat: `3f01684`..`6860165`; docs: `54a7257`. HEAD = origin/global-implementation = **`54a7257`**.
 
 ### Мёрдж в main (решение 8.2, 2026-09-23)
 
-- `main` был предком `global-implementation` → **fast-forward** к `6860165` (без конфликтов).
-- Тесты на main перед push: 217 / 135 / nav / GUI smoke — зелёные.
-- `git push origin main` — выполнен; origin/main = `6860165`.
+- `main` был предком `global-implementation` → **fast-forward** `d3967c7` → **`54a7257`** (без конфликтов).
+- Тесты на main после merge: 217 / 135 / nav / GUI smoke — зелёные.
+- `git push origin main` — выполнен; **origin/main = `54a7257`** (= origin/global-implementation).
 
 ### Остатки (не блокируют; P0+P1.1–P1.5+P1.7 + мёрдж готовы)
 
@@ -87,4 +87,4 @@
 - `i18n/__init__.py` — предсуществующие ruff, файл не трогали.
 - i18n для reservoir GUI не добавлялся: `tab_scenarios` historically uses hardcoded ru strings (как весь файл); меню/калибровка — через i18n.
 
-Обновлено: 2026-09-23 (P1.7 запушен `6860165`, мёрдж в main выполнен)
+Обновлено: 2026-09-23 (P1.7 + мёрдж: HEAD = origin/main = origin/global-implementation = `54a7257`)
