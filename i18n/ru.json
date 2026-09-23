@@ -74,5 +74,23 @@
     "radio_values_only": "Только значения",
     "btn_paste": "Вставить из буфера",
     "preview_group": "Предпросмотр",
-    "manual_input_instructions": "Введите данные (каждое значение на новой строке или через запятую/точку с запятой):"
+    "manual_input_instructions": "Введите данные (каждое значение на новой строке или через запятую/точку с запятой):",
+
+    "menu_report_engineering": "Сформировать инженерный отчёт...",
+    "sidebar_report": "Отчёт",
+    "report_title": "Инженерный отчёт",
+    "report_hint": "Отчёт собирается из данных открытого проекта: 13 разделов, предупреждения и вывод. Сборка идёт в фоновом потоке.",
+    "report_options": "Что включать в отчёт",
+    "report_include_scenarios": "Сценарии",
+    "report_include_charts": "Графики",
+    "report_include_checks": "Проверки",
+    "report_title_placeholder": "Заголовок отчёта (из проекта)",
+    "report_build": "Сформировать",
+    "report_save_as": "Сохранить как…",
+    "report_preview": "Предпросмотр",
+    "report_preview_placeholder": "Нажмите «Сформировать», чтобы увидеть отчёт…",
+    "report_building": "Формирование отчёта…",
+    "report_ready": "Отчёт готов",
+    "report_saved": "Отчёт сохранён",
+    "report_save_title": "Сохранить отчёт"
 }

@@ -74,5 +74,23 @@
     "radio_values_only": "Values Only",
     "btn_paste": "Paste from Clipboard",
     "preview_group": "Preview",
-    "manual_input_instructions": "Enter data (each value on a new line or comma/semicolon separated):"
+    "manual_input_instructions": "Enter data (each value on a new line or comma/semicolon separated):",
+
+    "menu_report_engineering": "Generate Engineering Report...",
+    "sidebar_report": "Report",
+    "report_title": "Engineering Report",
+    "report_hint": "The report is assembled from the open project: 13 sections, warnings and conclusion. Built in a background thread.",
+    "report_options": "Include in report",
+    "report_include_scenarios": "Scenarios",
+    "report_include_charts": "Charts",
+    "report_include_checks": "Checks",
+    "report_title_placeholder": "Report title (from project)",
+    "report_build": "Build",
+    "report_save_as": "Save As...",
+    "report_preview": "Preview",
+    "report_preview_placeholder": "Click \"Build\" to see the report...",
+    "report_building": "Building report...",
+    "report_ready": "Report ready",
+    "report_saved": "Report saved",
+    "report_save_title": "Save Report"
 }
