@@ -19,6 +19,7 @@ from core.services.methodology_registry import (
     MethodologyRegistry,
     build_default_registry,
 )
+from core.services.quality_pipeline import QualityPipeline
 from core.services.result_store import ResultStore
 from core.services.scenario_service import ScenarioService
 
@@ -34,6 +35,7 @@ class ServiceContainer:
     quality: DataQualityService
     results: ResultStore
     scenario: ScenarioService
+    quality_pipeline: QualityPipeline | None = None
 
     def registered_methodology_ids(self) -> list[str]:
         """Ids that have both a descriptor and a calculation handler."""
@@ -66,7 +68,12 @@ def build_container() -> ServiceContainer:
     results = ResultStore()
     scenario_service = ScenarioService(calculation_service=calculation)
     return ServiceContainer(
-        registry=registry, calculation=calculation, quality=quality, results=results, scenario=scenario_service
+        registry=registry,
+        calculation=calculation,
+        quality=quality,
+        results=results,
+        scenario=scenario_service,
+        quality_pipeline=QualityPipeline(quality=quality),
     )
 
 

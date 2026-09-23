@@ -31,6 +31,7 @@ from .project_service import (
     ProjectService,
     ProjectServiceError,
 )
+from .quality_pipeline import QualityGateDecision, QualityPipeline, QualityPipelineResult
 from .report_service import Report, ReportSection, ReportService
 from .result_store import ProvenanceStep, ResultStore, provenance_chain
 from .scenario_service import ScenarioNotFoundError, ScenarioService
@@ -58,6 +59,9 @@ __all__ = [
     "ProjectService",
     "ProjectServiceError",
     "ProvenanceStep",
+    "QualityGateDecision",
+    "QualityPipeline",
+    "QualityPipelineResult",
     "ResultStore",
     "ScenarioNotFoundError",
     "ScenarioService",

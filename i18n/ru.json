@@ -113,5 +113,11 @@
     "import_same_columns": "Колонки года и значения должны отличаться.",
     "import_failed": "Не удалось импортировать файл.",
     "import_done": "Ряд импортирован",
+    "quality_gate_title": "Качество данных",
+    "quality_gate_block_header": "Расчёт заблокирован: проблемы качества данных.",
+    "quality_gate_confirm": "Продолжить расчёт вопреки проблемам?",
+    "quality_gate_cancelled": "Расчёт отменён: качество данных",
+    "quality_gate_warnings": "Предупреждений качества",
+    "quality_gate_before_calc": "расчёт потребует подтверждения",
     "btn_cancel": "Отмена"
 }

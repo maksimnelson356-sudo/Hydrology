@@ -54,6 +54,7 @@ from core.gts_reference import GTSClass, classify_gts_by_parameters
 from core.services.bootstrap import build_container
 from core.services.data_quality_service import DataQualityService
 from core.services.project_service import ProjectService
+from core.services.quality_pipeline import QualityPipeline
 from core.stats.composite_curves import compute_composite_curve, find_change_point
 
 # Core imports (statistical calculations)
@@ -1392,14 +1393,14 @@ class MainWindow(QMainWindow):
             except (ValueError, TypeError, OSError, AttributeError) as exc:
                 print(f"[WARN] import → project: {exc}")
 
-            # Auto quality report only — never mutates the series.
+            # P1.3: auto quality via pipeline — report only, never mutates the series.
             try:
-                report = DataQualityService().analyze(dataset)
-                blocking = [
-                    i
-                    for i in report.issues
-                    if getattr(i.severity, "value", "") in ("error", "critical")
-                ]
+                pipeline = getattr(self.service_container, "quality_pipeline", None)
+                if pipeline is None:
+                    pipeline = QualityPipeline(quality=DataQualityService())
+                gate = pipeline.after_import(dataset)
+                report = gate.report
+                blocking = list(gate.decision.blocking)
                 msg = (
                     f"{t('import_done', 'Ряд импортирован')}: {name} "
                     f"({dataset.length} точек)\n"
@@ -1408,8 +1409,14 @@ class MainWindow(QMainWindow):
                     f"проблем: {len(report.issues)}"
                 )
                 if blocking:
-                    msg += f"\nБлокирующих: {len(blocking)} — откройте «Качество данных»."
+                    msg += (
+                        f"\nБлокирующих: {len(blocking)} — "
+                        f"{t('quality_gate_before_calc', 'расчёт потребует подтверждения')}."
+                    )
                     QMessageBox.warning(self, t("import_title", "Импорт"), msg)
+                elif gate.decision.warnings:
+                    msg += f"\nПредупреждений: {len(gate.decision.warnings)}"
+                    QMessageBox.information(self, t("import_title", "Импорт"), msg)
                 else:
                     QMessageBox.information(self, t("import_title", "Импорт"), msg)
                 self._status_bar.showMessage(
@@ -1586,6 +1593,65 @@ class MainWindow(QMainWindow):
     # ============================================================
     # Качество данных (Этап 2, DOCS/ROADMAP.md)
     # ============================================================
+    def _quality_gate_before_calculation(self) -> bool:
+        """P1.3: QualityPipeline.before_calculation — блокировка до подтверждения.
+
+        CRITICAL/ERROR без подтверждения не дают стартовать расчёту.
+        Данные не изменяются; гейт только решает, продолжать ли.
+        """
+        dataset = self._dataset_from_dataframe(self.current_post or "Ряд", self.df)
+        if dataset is None:
+            return True
+        try:
+            pipeline = getattr(self.service_container, "quality_pipeline", None)
+            if pipeline is None:
+                pipeline = QualityPipeline(quality=DataQualityService())
+            gate = pipeline.before_calculation(dataset, confirmed=False)
+            if gate.allowed:
+                if gate.decision.warnings:
+                    self._status_bar.showMessage(
+                        t(
+                            "quality_gate_warnings",
+                            f"Предупреждений качества: {len(gate.decision.warnings)}",
+                        )
+                    )
+                return True
+
+            lines = [
+                t(
+                    "quality_gate_block_header",
+                    "Расчёт заблокирован: проблемы качества данных.",
+                ),
+                "",
+            ]
+            for issue in gate.decision.blocking[:8]:
+                lines.append(f"• [{issue.severity.value}] {issue.message}")
+            if len(gate.decision.blocking) > 8:
+                lines.append(
+                    f"… и ещё {len(gate.decision.blocking) - 8}"
+                )
+            lines.append("")
+            lines.append(
+                t("quality_gate_confirm", "Продолжить расчёт вопреки проблемам?")
+            )
+
+            answer = QMessageBox.question(
+                self,
+                t("quality_gate_title", "Качество данных"),
+                "\n".join(lines),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                self._status_bar.showMessage(
+                    t("quality_gate_cancelled", "Расчёт отменён: качество данных")
+                )
+                return False
+            return True
+        except (ValueError, TypeError, AttributeError) as exc:
+            print(f"[WARN] quality gate: {exc}")
+            return True
+
     def show_data_quality(self):
         """Диалог качества данных: отчёт и рекомендации, без изменения данных."""
         if self.df is None or self.df.empty:
@@ -2048,6 +2114,8 @@ class MainWindow(QMainWindow):
 
     def calculate_and_plot(self):
         if self.df is None:
+            return
+        if not self._quality_gate_before_calculation():
             return
         try:
             values = self.df['value'].dropna().values

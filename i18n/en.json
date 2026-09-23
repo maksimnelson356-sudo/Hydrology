@@ -113,5 +113,11 @@
     "import_same_columns": "Year and value columns must differ.",
     "import_failed": "Could not import the file.",
     "import_done": "Series imported",
+    "quality_gate_title": "Data Quality",
+    "quality_gate_block_header": "Calculation blocked: data quality problems.",
+    "quality_gate_confirm": "Continue calculation despite the problems?",
+    "quality_gate_cancelled": "Calculation cancelled: data quality",
+    "quality_gate_warnings": "Quality warnings",
+    "quality_gate_before_calc": "calculation will require confirmation",
     "btn_cancel": "Cancel"
 }
