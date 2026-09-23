@@ -1,5 +1,29 @@
 # Changelog — HydroSphere
 
+## v2026.09.23 — P2.1: Monte Carlo и неопределённости (решения 10.1/10.2)
+
+### Добавлено
+- **`core/services/monte_carlo_service.py`** — `ParameterSpec` / `MonteCarloRequest` / `MonteCarloService` / `SummaryStats` / `MonteCarloError`: семплирование uniform/normal/triangular через seedable `numpy.random.Generator`, прогон user-model N раз, сводка mean/std/p5/p50/p95/min/max; результат — `CalculationResult` с provenance (N, seed, distributions); без новых runtime-зависимостей (решения **10.1(a)** distributions, **10.2(a)** N=1000).
+- **`tests/test_monte_carlo.py`** — 20 тестов: детерминизм seed, p50/p5/p95 нормальной выборки (±1.645σ), границы uniform/triangular, ошибки (N<1, unknown dist, empty/duplicate params, inverted bounds, NaN model), provenance `monte_carlo@1.0`, AST-guard (нет banned deps, только numpy+stdlib+core).
+- **GUI `gui/tabs/tab_monte_carlo.py`** — вкладка «Monte Carlo»: таблица параметров (имя/распределение/значения), N и seed, демо-модель `y = a·x + b`, фоновый `MonteCarloWorker` (QThread), сводка labels, гистограмма matplotlib с p5/p50/p95-линиями; `build_request()` / `run_finished`.
+- **меню** «Запуск Monte Carlo…» → `open_monte_carlo`; nav **25** разделов («Monte Carlo» после «Морфометрии»).
+
+### Изменено
+- **ROADMAP §6.2** — этапы P2.1–P2.5 расписаны с критериями приёмки; открытые решения 10.1–10.3 (коммит `f9e48c2` docs).
+- **`core/services/__init__.py`** — экспорт `MonteCarloService` / `MonteCarloRequest` / `ParameterSpec` / `SummaryStats` / `MonteCarloError` / `DEFAULT_N_RUNS` / `DISTRIBUTIONS`.
+- **`gui/tabs/__init__.py`** — `TabMonteCarlo`.
+- **`build.py`** — hidden imports: `core.services.monte_carlo_service`, `gui.tabs.tab_monte_carlo`.
+- **i18n** `menu_run_monte_carlo`, `sidebar_monte_carlo` (ru/en).
+
+### Проверки (DoD P2.1)
+- `python -m pytest tests -q` → **255 passed** (было 235, +20).
+- Корневые `test_*.py` → **135 passed**.
+- nav **25/25/25**; GUI offscreen smoke OK (`pages=25`, `has_monte_carlo=True`, `menu_has_mc=True`, `default_params=3 n=1000`).
+- ruff: новые файлы = 0; `build.py` 7/7 delta=0; `main_window.py` 36/36 delta=0.
+- Детерминизм при seed=42 бит-в-бит; p50 нормали (μ=10, N=20000) ≈ 10 ± 0.1; без новых runtime-зависимостей.
+
+---
+
 ## v2026.09.23 — P1.6: GIS/DEM / морфометрия (решение 9.3 = (б) GeoJSON)
 
 ### Добавлено

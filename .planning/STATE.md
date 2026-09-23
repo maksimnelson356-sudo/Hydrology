@@ -1,6 +1,6 @@
 # Состояние работы
 
-## Текущий этап: P0–P1.7 + P1.6 запушены; выполнен мёрдж `global-implementation` → `main` (решение 8.2)
+## Текущий этап: P0–P1.7 + P1.6 + P2.1 запушены; §6.2 P2 расписан; мёрдж 8.2 выполнен
 
 ### Выполненные этапы ROADMAP
 
@@ -14,9 +14,11 @@
 | P1.5 калибровка MSE/NSE | **готово, запушен** (`b022ef7`+`f815305`) | `test_calibration_service` (18) |
 | P1.7 Reservoir Scenario Simulator | **готово, запушен** (`6860165`, 6 atomic commits `3f01684`..`6860165`) | `test_reservoir_scenario` (15) |
 | P1.6 GIS/DEM морфометрия (9.3=(б)) | **готово, запушен** (`58f63b8` feat + `424f238` docs) | `test_geo_service` (18) |
+| ROADMAP §6.2 P2.1–P2.5 | **готово, запушен** (`f9e48c2` docs) | — |
+| P2.1 Monte Carlo (10.1/10.2) | **готово** (в worktree, коммит ниже) | `test_monte_carlo` (20) |
 | мёрдж в main | **выполнен** (решение 8.2) | — |
 
-Итого: **235 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav **24/24/24**, GUI offscreen smoke OK (24 pages).
+Итого: **255 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav **25/25/25**, GUI offscreen smoke OK (25 pages).
 
 ### P1.6 — что сделано (решение 9.3 = (б) GeoJSON)
 
@@ -32,6 +34,20 @@
 - `pytest tests -q` → **235**; root → **135**; nav **24/24/24**; GUI smoke OK (`pages=24`, `has_open_geo=True`, `menu_has_contour=True`).
 - ruff тронутые = 0; build/main_window delta=0.
 - Квадрат 1 км² — площадь точно 1e6 м² (rel 1e-9); без новых runtime-зависимостей.
+
+### P2.1 — что сделано (решения 10.1, 10.2)
+
+1. **ROADMAP §6.2** — этапы P2.1–P2.5 расписаны (коммит docs `f9e48c2`); открытые решения 10.1–10.3.
+2. **`core/services/monte_carlo_service.py`** — `ParameterSpec` / `MonteCarloRequest` / `MonteCarloService.run/sample_parameters/summarize` / `SummaryStats`; seedable `np.random.default_rng`; распределения uniform/normal/triangular (10.1a); N default 1000 (10.2a); `CalculationResult` + provenance.
+3. **`tests/test_monte_carlo.py`** — 20: детерминизм, p50/p5/p95 аналитика, границы, ошибки, provenance, AST no-banned-deps.
+4. **GUI `tab_monte_carlo.py`** — таблица параметров, N/seed, демо-модель y=a·x+b, `MonteCarloWorker` QThread, сводка + гистограмма с квантилями; меню «Запуск Monte Carlo…»; nav 25.
+5. **build.py / i18n** — hidden imports `monte_carlo_service`, `tab_monte_carlo`; ключи `menu_run_monte_carlo`, `sidebar_monte_carlo`.
+
+### Верификация DoD P2.1 (2026-09-23)
+
+- `pytest tests -q` → **255**; root → **135**; nav **25/25/25**; GUI smoke OK (`pages=25`, `has_monte_carlo=True`, `menu_has_mc=True`).
+- ruff тронутые = 0; build/main_window delta=0.
+- Детерминизм seed=42 бит-в-бит; p50 нормали ≈ μ; без новых runtime-зависимостей.
 
 ### P1.7 — что сделано
 
@@ -90,18 +106,19 @@
 4. **меню** «Импорт из источника (API)…» → `import_from_api`; **i18n** `api_*`/`menu_import_api`; **build.py** `core.services.api_source`, `gui.dialogs.api_import_dialog`; экспорт из `core.services`.
 5. **Новых runtime-зависимостей нет** (решение 9.2: только уже имеющийся `requests`); решение 9.1 закрыто адаптером + mock/fixture (открытые гидро-API — по желанию пользователя позже).
 
-### Остатки (не блокируют; P0+P1.1–P1.7 + P1.6 + мёрдж закрыты)
+### Остатки (не блокируют; P0+P1.1–P1.7 + P1.6 + P2.1 + мёрдж закрыты)
 
 - 2 предсуществующих `except Exception` в `main_window` — по мере рефакторинга.
-- Ручной GUI / приёмка P1 — за пользователем.
-- Следующий этап по ROADMAP: P2 (Monte Carlo / климат / Decision Support) или иной по команде.
+- Ручной GUI / приёмка — за пользователем.
+- Следующие этапы по ROADMAP §6.2: **P2.2** чувствительность → **P2.3** климат → **P2.4** визуализация → **P2.5** DS (по команде).
 
 ### Примечания
 
 - GSD-команды и фоновые субагенты недоступны (ProviderModelNotFoundError) — работаем напрямую.
 - `core/stats/*` N803/N806 — предсуществующая нотация, не трогать.
 - `i18n/__init__.py` — предсуществующие ruff, файл не трогали.
-- i18n для reservoir GUI не добавлялся: `tab_scenarios` historically uses hardcoded ru strings (как весь файл); меню/калибровка/контур — через i18n.
+- i18n для reservoir GUI не добавлялся: `tab_scenarios` historically uses hardcoded ru strings (как весь файл); меню/калибровка/контур/Monte Carlo — через i18n.
 - P1.6: DEM-растры (rasterio) — осознанно вне объёма (решение 9.3 = (б)); при необходимости — reopen 9.3 позже.
+- P2.1: demo model y=a·x+b — для smoke/знакомства; подключение к калиброванным моделям/P2.2 — позже.
 
-Обновлено: 2026-09-23 (P1.6 GeoJSON + P1.7 + мёрдж 8.2: origin/main == origin/global-implementation, 0/0; ветки синхронизированы)
+Обновлено: 2026-09-23 (P2.1 Monte Carlo + §6.2 + P1.6 + P1.7 + мёрдж 8.2; nav 25, 255+135; origin/main == origin/global-implementation)
