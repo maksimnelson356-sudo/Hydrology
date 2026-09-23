@@ -70,6 +70,7 @@ from core.stats.series_extension import full_extension_workflow
 from core.stats.sheet_reader import read_work_sheet
 from core.stats.trends import full_trend_analysis
 from gui.controller import DataController, PlotController
+from gui.dialogs.api_import_dialog import ApiImportDialog
 from gui.dialogs.data_quality_dialog import DataQualityDialog
 from gui.dialogs.import_dialog import ImportDialog
 from gui.plot_style import (
@@ -491,6 +492,9 @@ class MainWindow(QMainWindow):
         file_menu.addAction("Открыть данные...", self.load_data)
         file_menu.addAction(
             t("menu_import_series", "Импорт ряда (CSV / Excel)..."), self.import_series
+        )
+        file_menu.addAction(
+            t("menu_import_api", "Импорт из источника (API)..."), self.import_from_api
         )
         file_menu.addAction("Создать шаблон", self.create_unified_template)
         file_menu.addAction(t("menu_save_report_excel", "Сохранить отчёт в Excel..."), self.save_report)
@@ -1353,6 +1357,12 @@ class MainWindow(QMainWindow):
     def import_series(self):
         """P1.1: импорт одного ряда из CSV/TSV/Excel через ImportService."""
         dialog = ImportDialog(self)
+        dialog.dataset_ready.connect(self._on_import_series_ready)
+        dialog.exec()
+
+    def import_from_api(self):
+        """P1.2: импорт ряда из HTTP API; provenance уже в Dataset.metadata."""
+        dialog = ApiImportDialog(self)
         dialog.dataset_ready.connect(self._on_import_series_ready)
         dialog.exec()
 

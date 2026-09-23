@@ -14,6 +14,7 @@ Services contain no mathematics: formulas stay in the calculation core
 (`core.stats`, `core.hydrorash`).
 """
 
+from .api_source import ApiSourceError, DataSource, FieldMap, HttpApiSource
 from .bootstrap import ServiceContainer, build_container
 from .calculation_service import CalculationContext, CalculationError, CalculationService
 from .data_quality_service import RECOMMENDATIONS, DataQualityService
@@ -51,6 +52,10 @@ __all__ = [
     "CalculationService",
     "ColumnMapping",
     "DataQualityService",
+    "DataSource",
+    "ApiSourceError",
+    "FieldMap",
+    "HttpApiSource",
     "ImportPreview",
     "ImportService",
     "ImportServiceError",
