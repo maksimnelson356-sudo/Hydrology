@@ -140,6 +140,33 @@ def pettitt_test(values):
     }
 
 
+def check_stationarity(values, method="mk", alpha=0.05):
+    """
+    Placeholder stationarity test.
+    Returns True if the series is considered stationary (no significant trend).
+    Uses Mann-Kendall test by default; if p-value >= alpha, we consider it stationary.
+    Parameters
+    ----------
+    values : array-like
+        The values of the series.
+    method : str, optional
+        Only "mk" (Mann-Kendall) is implemented.
+    alpha : float, optional
+        Significance level (default 0.05).
+    Returns
+    -------
+    bool
+        True if stationary (no significant trend), False otherwise.
+    """
+    values = np.asarray(values, dtype=float)
+    if len(values) < 4:
+        # Too few points to determine
+        return True
+    mk_result = mann_kendall_test(values)
+    # If significant trend detected, then non-stationary
+    return not mk_result['significant']
+
+
 def full_trend_analysis(df):
     """Полный анализ тренда"""
     years = df['year'].values.astype(float)

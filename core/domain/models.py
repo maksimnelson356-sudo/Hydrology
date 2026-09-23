@@ -9,7 +9,7 @@ They use standard library dataclasses and typing only.
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -67,10 +67,10 @@ class Project:
     name: str
     description: str = ""
     status: ProjectStatus = ProjectStatus.DRAFT
-    id: UUID = field(default_factory=uuid4)
-    created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    id: UUID = dataclasses.field(default_factory=uuid4)
+    created_at: datetime = dataclasses.field(default_factory=datetime.now)
+    updated_at: datetime = dataclasses.field(default_factory=datetime.now)
+    metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self):
         if not self.name or not self.name.strip():
@@ -93,10 +93,10 @@ class Dataset:
     unit: str = "m³/s"
     location: str = ""
     catchment_area_km2: float | None = None
-    id: UUID = field(default_factory=uuid4)
-    created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    id: UUID = dataclasses.field(default_factory=uuid4)
+    created_at: datetime = dataclasses.field(default_factory=datetime.now)
+    updated_at: datetime = dataclasses.field(default_factory=datetime.now)
+    metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self):
         if not self.name or not self.name.strip():
@@ -156,8 +156,8 @@ class Methodology:
     version: str                 # e.g., "1.0", "2024.1"
     standard: str | None = None  # e.g., "SP 33-101-2003", "GOST R 57205"
     description: str = ""
-    parameters: dict[str, Any] = field(default_factory=dict)
-    id: UUID = field(default_factory=uuid4)
+    parameters: dict[str, Any] = dataclasses.field(default_factory=dict)
+    id: UUID = dataclasses.field(default_factory=uuid4)
 
     def __post_init__(self):
         if not self.name or not self.name.strip():
@@ -186,14 +186,14 @@ class CalculationMetadata:
     Tracks what was calculated, with what methodology, and when.
     """
     methodology: Methodology
-    input_dataset_ids: list[UUID] = field(default_factory=list)
-    input_parameters: dict[str, Any] = field(default_factory=dict)
+    input_dataset_ids: list[UUID] = dataclasses.field(default_factory=list)
+    input_parameters: dict[str, Any] = dataclasses.field(default_factory=dict)
     status: CalculationStatus = CalculationStatus.PENDING
     started_at: datetime | None = None
     completed_at: datetime | None = None
     error_message: str | None = None
-    id: UUID = field(default_factory=uuid4)
-    created_at: datetime = field(default_factory=datetime.now)
+    id: UUID = dataclasses.field(default_factory=uuid4)
+    created_at: datetime = dataclasses.field(default_factory=datetime.now)
 
     def mark_running(self) -> None:
         """Mark calculation as running."""
@@ -226,10 +226,10 @@ class CalculationResult:
     Contains the output data and reference to metadata.
     """
     metadata: CalculationMetadata
-    output_data: dict[str, Any] = field(default_factory=dict)
-    warnings: list[str] = field(default_factory=list)
-    id: UUID = field(default_factory=uuid4)
-    created_at: datetime = field(default_factory=datetime.now)
+    output_data: dict[str, Any] = dataclasses.field(default_factory=dict)
+    warnings: list[str] = dataclasses.field(default_factory=list)
+    id: UUID = dataclasses.field(default_factory=uuid4)
+    created_at: datetime = dataclasses.field(default_factory=datetime.now)
 
     @property
     def is_successful(self) -> bool:
@@ -251,12 +251,12 @@ class Scenario:
     name: str
     project_id: UUID
     base_dataset_id: UUID | None = None
-    parameters: dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = dataclasses.field(default_factory=dict)
     description: str = ""
     status: ScenarioStatus = ScenarioStatus.DRAFT
-    id: UUID = field(default_factory=uuid4)
-    created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
+    id: UUID = dataclasses.field(default_factory=uuid4)
+    created_at: datetime = dataclasses.field(default_factory=datetime.now)
+    updated_at: datetime = dataclasses.field(default_factory=datetime.now)
     parent_scenario_id: UUID | None = None  # For cloning tracking
 
     def __post_init__(self):
@@ -301,9 +301,9 @@ class ValidationIssue:
     code: str
     message: str
     severity: ValidationSeverity
-    field: str | None = None
-    # NOTE: the attribute `field` above shadows `dataclasses.field` inside this class
-    # body, so the fully qualified name must be used here.
+    field: str | None = dataclasses.field(default=None)
+    # NOTE: the attribute `field` above would shadow `dataclasses.field` inside this class
+    # body, so we use the full `dataclasses.field`.
     details: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
@@ -313,9 +313,9 @@ class ValidationResult:
     Validation outcome for a calculation or dataset.
     """
     is_valid: bool
-    issues: list[ValidationIssue] = field(default_factory=list)
-    validated_at: datetime = field(default_factory=datetime.now)
-    metadata: dict[str, Any] = field(default_factory=dict)
+    issues: list[ValidationIssue] = dataclasses.field(default_factory=list)
+    validated_at: datetime = dataclasses.field(default_factory=datetime.now)
+    metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     @property
     def errors(self) -> list[ValidationIssue]:
@@ -374,9 +374,9 @@ class DataQualityReport:
     stationarity_passed: bool
     completeness_ratio: float  # 0.0 - 1.0
     quality_score: float       # 0.0 - 1.0
-    issues: list[ValidationIssue] = field(default_factory=list)
-    statistics: dict[str, float] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.now)
+    issues: list[ValidationIssue] = dataclasses.field(default_factory=list)
+    statistics: dict[str, float] = dataclasses.field(default_factory=dict)
+    created_at: datetime = dataclasses.field(default_factory=datetime.now)
 
     @property
     def quality_grade(self) -> str:
