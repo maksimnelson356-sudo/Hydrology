@@ -10,6 +10,7 @@ Services:
 - ProjectService: Project persistence (.hsp) and the engineering project state
 - ImportService: CSV/TSV/Excel time series import into Dataset (P1.1)
 - CalibrationService: scipy.optimize parameter fitting with metrics (P1.5)
+- ReservoirScenarioService: multi-year regulation as scenario runs (P1.7)
 
 Services contain no mathematics: formulas stay in the calculation core
 (`core.stats`, `core.hydrorash`).
@@ -41,6 +42,12 @@ from .project_service import (
 )
 from .quality_pipeline import QualityGateDecision, QualityPipeline, QualityPipelineResult
 from .report_service import Report, ReportSection, ReportService
+from .reservoir_scenario_service import (
+    RESERVOIR_METHODOLOGY,
+    RESERVOIR_SCENARIO_TYPE,
+    ReservoirScenarioError,
+    ReservoirScenarioService,
+)
 from .result_store import ProvenanceStep, ResultStore, provenance_chain
 from .scenario_service import ScenarioNotFoundError, ScenarioService
 from .validation_service import ValidationService
@@ -78,7 +85,11 @@ __all__ = [
     "QualityGateDecision",
     "QualityPipeline",
     "QualityPipelineResult",
+    "RESERVOIR_METHODOLOGY",
+    "RESERVOIR_SCENARIO_TYPE",
     "ResultStore",
+    "ReservoirScenarioError",
+    "ReservoirScenarioService",
     "ScenarioNotFoundError",
     "ScenarioService",
     "ServiceContainer",
