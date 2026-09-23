@@ -1,5 +1,29 @@
 # Changelog — HydroSphere
 
+## v2026.09.23 — P1.7: Reservoir Scenario Simulator
+
+### Добавлено
+- **`core/domain/models.py`** — `Scenario.scenario_type` (default `"generic"`); для P1.7 значение `"reservoir"`; `clone`/`with_parameters` сохраняют тип; `__post_init__` отклоняет пустой тип.
+- **`core/domain/serialization.py`** — `scenario_to_dict`/`scenario_from_dict` серилизуют `scenario_type` (обратно совместимо: отсутствующее поле → `"generic"`).
+- **`core/services/reservoir_scenario_service.py`** — `ReservoirScenarioService` поверх `ScenarioService`: `create` (demand/V/S₀/guarantee/mode/year с валидацией), `list_reservoir`, `run` → `reservoir_regulation` handler, `compare_delta` → numeric Δ-таблица, `series_for` → `balance_series_km3`; `ReservoirScenarioError`.
+- **`core/services/scenario_service.py`** — `create(..., scenario_type=...)`; `compare_numeric_results` (Δ vs baseline по скалярным метрикам); `run` принимает строку или `Methodology` (`_as_methodology`).
+- **handlers** — `handle_storage_yield` + descriptor `storage_yield` (кривая «объём — отдача»); реестр: **20 registered** (19 + storage_yield).
+- **GUI `tab_scenarios`** — блок «Водохранилище»: create/run/Δ-сравнение, график `balance_series_km3` (matplotlib); `_populate_methodology_combo`.
+
+### Изменено
+- **`tests/test_methodology_service.py` / `test_extended_methodologies.py`** — ожидание 20 registered id.
+- **`build.py`** — hidden import `core.services.reservoir_scenario_service`.
+
+### Проверки (DoD P1.7)
+- `python -m pytest tests -q` → **217 passed** (было 202, +15).
+- Корневые `test_*.py` → **135 passed**.
+- Эквивалентность: run == прямой вызов `multi_year_regulation` / `storage_yield_curve`.
+- Два сценария с разными D дают различимые series и Δ в таблице; `.hsp` roundtrip сохраняет `scenario_type`.
+- nav 23/23/23; GUI offscreen smoke OK (23 pages).
+- ruff: новые файлы = 0; `build.py`/`main_window.py` delta=0.
+
+---
+
 ## v2026.09.23 — P1.5: калибровка и оптимизация (решение 9.5: MSE/NSE)
 
 ### Добавлено
