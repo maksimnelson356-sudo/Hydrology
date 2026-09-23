@@ -8,6 +8,7 @@ Services:
 - MethodologyRegistry: Methodology identification, normative basis and applicability
 - ScenarioService: Scenario management (CRUD, comparison, runs)
 - ProjectService: Project persistence (.hsp) and the engineering project state
+- ImportService: CSV/TSV/Excel time series import into Dataset (P1.1)
 
 Services contain no mathematics: formulas stay in the calculation core
 (`core.stats`, `core.hydrorash`).
@@ -16,6 +17,7 @@ Services contain no mathematics: formulas stay in the calculation core
 from .bootstrap import ServiceContainer, build_container
 from .calculation_service import CalculationContext, CalculationError, CalculationService
 from .data_quality_service import RECOMMENDATIONS, DataQualityService
+from .import_service import ColumnMapping, ImportPreview, ImportService, ImportServiceError
 from .methodology_registry import (
     DEFAULT_METHODOLOGIES,
     MethodologyDescriptor,
@@ -46,7 +48,11 @@ __all__ = [
     "CalculationContext",
     "CalculationError",
     "CalculationService",
+    "ColumnMapping",
     "DataQualityService",
+    "ImportPreview",
+    "ImportService",
+    "ImportServiceError",
     "MethodologyDescriptor",
     "MethodologyRegistry",
     "ProjectService",
