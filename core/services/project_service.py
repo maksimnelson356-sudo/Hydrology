@@ -85,6 +85,11 @@ class ProjectService:
         """Calculation results stored in the project."""
         return list(self._calculations)
 
+    def clear_calculations(self) -> None:
+        """Remove all calculation results from the project."""
+        self._calculations.clear()
+        self._project.touch()
+
     @property
     def scenarios(self) -> list[Scenario]:
         """Scenarios stored in the project."""
