@@ -20,6 +20,7 @@ from uuid import UUID, uuid4
 from core.domain.models import (
     CalculationResult,
     Dataset,
+    Methodology,
     Scenario,
     ScenarioStatus,
 )
@@ -28,6 +29,16 @@ from core.services.calculation_service import CalculationError, CalculationServi
 
 class ScenarioNotFoundError(KeyError):
     """Raised when a scenario id is not present in the service."""
+
+
+def _as_methodology(spec: str | Methodology) -> Methodology:
+    """Resolve a methodology name (optionally versioned) into a Methodology."""
+    if isinstance(spec, Methodology):
+        return spec
+    if "@" in spec:
+        name, version = spec.split("@", 1)
+        return Methodology(name=name, version=version or "1.0")
+    return Methodology(name=spec, version="1.0")
 
 
 class ScenarioService:
@@ -58,6 +69,7 @@ class ScenarioService:
         dataset: Dataset | None = None,
         parent: Scenario | None = None,
         project_id: UUID | None = None,
+        scenario_type: str = "generic",
     ) -> Scenario:
         """Create a new scenario in the project."""
         scenario = Scenario(
@@ -66,6 +78,7 @@ class ScenarioService:
             base_dataset_id=base_dataset_id or (self._base_dataset.id if self._base_dataset else None),
             parameters=dict(parameters or {}),
             description=description,
+            scenario_type=scenario_type,
             parent_scenario_id=parent.id if parent is not None else None,
         )
         self._scenarios[scenario.id] = scenario
@@ -218,6 +231,64 @@ class ScenarioService:
             )
         return rows
 
+    def compare_numeric_results(
+        self,
+        scenario_ids: Sequence[UUID] | None = None,
+        baseline_id: UUID | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Build a numeric delta table across stored results (P1.7).
+
+        One row per scalar output key; columns: metric, baseline value,
+        each scenario value, delta = scenario - baseline for non-baseline columns.
+        Non-scalar outputs (lists / dicts / DataFrames) are skipped.
+        """
+        scenarios = self.list() if scenario_ids is None else [self.get(sid) for sid in scenario_ids]
+        if not scenarios:
+            return []
+        if baseline_id is None:
+            baseline = scenarios[0]
+        else:
+            baseline = self.get(baseline_id)
+            if baseline not in scenarios:
+                scenarios = [baseline, *scenarios]
+        results: dict[UUID, dict[str, Any]] = {}
+        for scenario in scenarios:
+            result = self._results.get(scenario.id)
+            results[scenario.id] = dict(result.output_data) if result is not None else {}
+
+        keys: list[str] = []
+        for scenario in scenarios:
+            for key, value in results[scenario.id].items():
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    continue
+                if key not in keys:
+                    keys.append(key)
+
+        rows: list[dict[str, Any]] = []
+        baseline_values = results[baseline.id]
+        for key in keys:
+            baseline_value = baseline_values.get(key)
+            row: dict[str, Any] = {
+                "metric": key,
+                "baseline": baseline.name,
+                baseline.name: baseline_value,
+            }
+            for scenario in scenarios:
+                if scenario.id == baseline.id:
+                    continue
+                value = results[scenario.id].get(key)
+                row[scenario.name] = value
+                if (
+                    isinstance(value, (int, float))
+                    and isinstance(baseline_value, (int, float))
+                    and not isinstance(value, bool)
+                    and not isinstance(baseline_value, bool)
+                ):
+                    row[f"Δ {scenario.name}"] = value - baseline_value
+            rows.append(row)
+        return rows
+
     # ------------------------------------------------------------------
     # Calculation
     # ------------------------------------------------------------------
@@ -250,7 +321,7 @@ class ScenarioService:
                 methodology_qualified_name,
             )
         result = self._calculation_service.execute(
-            methodology=methodology_qualified_name,
+            methodology=_as_methodology(methodology_qualified_name),
             dataset=data,
             parameters=scenario.parameters,
             input_dataset_ids=[data.id],
