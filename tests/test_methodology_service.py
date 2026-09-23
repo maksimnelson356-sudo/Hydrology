@@ -68,13 +68,23 @@ def test_container_registers_all_p0_handlers():
     container = make_container()
 
     assert sorted(container.registered_methodology_ids()) == [
+        "baseflow",
+        "composite_curves",
+        "confidence_bands",
+        "drought_spi",
+        "ecological_flow",
         "flow_duration",
         "frequency_kritsky_menkel",
         "frequency_pearson3",
         "homogeneity_full",
+        "ice_phenomena",
+        "intra_annual",
         "max_runoff",
         "min_runoff",
         "reservoir_regulation",
+        "snowmelt",
+        "spectral_hurst",
+        "spillway",
         "stats_parameters",
         "trends_full",
     ]

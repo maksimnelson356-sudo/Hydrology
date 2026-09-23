@@ -1,18 +1,37 @@
 # Состояние работы
 
-## Текущий этап: P0 закрыт; P1.1 + P1.3 + P1.2 закоммичены и запушены; открыт P1.4+
+## Текущий этап: P0 закрыт; P1.1 + P1.3 + P1.2 + P1.4 готовы (коммит P1.4 ожидает команды); открыт P1.5+
 
 ### Выполненные этапы ROADMAP
 
 | Этап | Статус | Тесты |
 |------|--------|-------|
-| 0–7 (P0) | готово | 117 → 160 в `tests/`, 135 root |
+| 0–7 (P0) | готово | 117 → 184 в `tests/`, 135 root |
 | P1.1 импорт CSV/TSV/Excel | **готово, запушен** (`9cf38b0`) | `test_import_service` (15) |
 | P1.3 QualityPipeline | **готово, запушен** (`ed68de5`) | `test_quality_pipeline` (10) |
 | P1.2 импорт через API | **готово, запушен** (`5383206`) | `test_api_source` (18) |
-| P1.4+ (калибровка, GIS, …) | открыто | — |
+| P1.4 расширенная статистика N=10 | **готово, не закоммичено** | `test_extended_methodologies` (24) |
+| P1.5+ (калибровка, GIS, …) | открыто | — |
 
-Итого: **160 passed** (`tests/`), корневые `test_*.py` → **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav 23/23/23, GUI offscreen smoke OK (23 pages, menu API есть).
+Итого: **184 passed** (`tests/`), корневые `test_*.py` → **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav 23/23/23, GUI offscreen smoke OK (23 pages).
+
+### P1.4 — что сделано (решение 9.4: N=10)
+
+1. **handlers** — 10 тонких адаптеров: spectral_hurst, drought_spi, baseflow, confidence_bands, composite_curves, intra_annual, snowmelt, spillway, ecological_flow, ice_phenomena; только вызовы ядра + `_clean`/`_to_float_dict`.
+2. **methodology_registry** — 8 новых descriptor'ов + `required_parameters` для ice_phenomena; нормативы из docstring'ов; composite_curves/ice_phenomena получили handlers (descriptor'ы уже были).
+3. **GUI/tools** — реестр общий: `run_methodology --list` → 19 id; вкладка «Методики» подхватывает автоматически через `build_container()`.
+4. **tests** — `tests/test_extended_methodologies.py` (24): регистрация, COMPLETED, equivalence == core, missing params, min_points=20 для Хёрста.
+5. **ROADMAP** (DOCS + .planning) — N=10 зафиксирован; changelog обновлён.
+6. **build.py** — HIDDEN_IMPORTS уже покрывают core.stats.* / core.hydrorash.* / handlers (delta=0).
+
+### Верификация DoD P1.4 (2026-09-23)
+
+- `python -m pytest tests -q` → **184 passed**.
+- Корневые `test_*` → **135 passed** (`test_edge_cases`/`test_q` — no tests ran, `test_real_data` — warnings only, как раньше).
+- ruff: handlers/registry/tests = 0; `main_window.py` 36/36 delta=0; `build.py` 7/7 delta=0.
+- nav: 23/23/23; offscreen `GUI_SMOKE_OK` (23 pages).
+- `run_methodology --list` → 19 методик; `--method spectral_hurst|drought_spi|baseflow --demo` → COMPLETED.
+- Push P1.1–P1.3: `9cf38b0..5383206`; HEAD после STATE = `4bfc3fa`. P1.4 — uncommitted.
 
 ### P1.3 — что сделано
 
@@ -29,19 +48,12 @@
 4. **меню** «Импорт из источника (API)…» → `import_from_api`; **i18n** `api_*`/`menu_import_api`; **build.py** `core.services.api_source`, `gui.dialogs.api_import_dialog`; экспорт из `core.services`.
 5. **Новых runtime-зависимостей нет** (решение 9.2: только уже имеющийся `requests`); решение 9.1 закрыто адаптером + mock/fixture (открытые гидро-API — по желанию пользователя позже).
 
-### Верификация DoD P1.3+P1.2 (2026-09-23)
+### Остатки (не блокируют; P0+P1.1–P1.4 закрыты)
 
-- `python -m pytest tests -q` → **160 passed**.
-- Корневые `test_*` → **135 passed** (`test_edge_cases`/`test_q` — no tests ran, `test_real_data` — warnings only, как раньше).
-- ruff: новые файлы чисты; `main_window.py` 36/36 delta=0; `build.py` 7/7 delta=0.
-- nav: 23/23/23; offscreen `GUI_SMOKE_OK` (23 pages) + `API_MENU_OK`.
-- Push: `9cf38b0..5383206` → `origin/global-implementation` (P1.1 `9cf38b0` уже был; P1.3 `ed68de5`, P1.2 `5383206` запушены).
-
-### Остатки (не блокируют; P0+P1.1–1.3 закрыты)
-
+- Коммит+push P1.4 — ждёт явной команды (DoD п.7: коммит в `global-implementation`).
 - 2 предсуществующих `except Exception` в `main_window` — по мере рефакторинга.
 - Ручной GUI / приёмка P1 — за пользователем.
-- Следующий этап по порядку: **P1.4** (калибровка/оптимизация) — по команде.
+- Следующий этап по порядку: **P1.5** — по команде (P1.6 GIS — порядок уточняется).
 - `main` локально `d3967c7` [origin/main: ahead 2] — мёрдж `global-implementation` → `main` (решение 8.2) ждёт команды.
 
 ### Примечания
@@ -50,4 +62,4 @@
 - `core/stats/*` N803/N806 — предсуществующая нотация, не трогать.
 - `i18n/__init__.py` — предсуществующие ruff, файл не трогали.
 
-Обновлено: 2026-09-23
+Обновлено: 2026-09-23 (P1.4)

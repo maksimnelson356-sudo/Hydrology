@@ -1,5 +1,26 @@
 # Changelog — HydroSphere
 
+## v2026.09.23 — P1.4: расширенная статистика (N=10 методик в реестре)
+
+### Добавлено
+- **`core/services/handlers/__init__.py`** — 10 новых тонких handler'ов (без формул в services): `spectral_hurst` (экспонента Хёрста R/S), `drought_spi` (SPI, McKee), `baseflow` (straight_line / digital_filter / lyne_hollick), `confidence_bands` (бутстреп-полосы Пирсон III), `composite_curves` (составная кривая Рождественского; break_year — параметр или Pettitt), `intra_annual` (суммы по периодам водного года), `snowmelt` (снеговой баланс), `spillway` (пропускная способность ППУ), `ecological_flow` (сезонный Тессман), `ice_phenomena` (толщина льда).
+- **`core/services/methodology_registry.py`** — 8 новых descriptor'ов + `required_parameters` для `ice_phenomena` (latitude, mean_jan_temp); нормативы взяты из docstring'ов ядра; решение 9.4: **N=10**.
+- **`tests/test_extended_methodologies.py`** — 24 теста: регистрация 10 id, COMPLETED через сервис, эквивалентность handler == прямой вызов ядра, отказ при отсутствии обязательных параметров, min_points для spectral_hurst.
+
+### Изменено
+- **`tests/test_methodology_service.py`** — `test_container_registers_all_p0_handlers` ожидает 19 registered id (9 P0 + 10 P1.4).
+- **`DOCS/ROADMAP.md` + `.planning/ROADMAP.md`** — критерий P1.4 «N=10»; решение 9.4 зафиксировано (список id).
+
+### Проверки (DoD P1.4)
+- `python -m pytest tests -q` → **184 passed** (было 160, +24).
+- Корневые `test_*.py` → **135 passed** — не деградировали.
+- ruff: тронутые файлы без новых замечаний (`handlers`, `methodology_registry`, тесты = 0; `build.py`/`main_window.py` delta=0 к HEAD).
+- nav 23/23/23; GUI offscreen smoke OK (23 pages).
+- `run_methodology --list` → 19 методик; spot-check `spectral_hurst`/`drought_spi`/`baseflow` на `--demo` → COMPLETED.
+- `HIDDEN_IMPORTS` в `build.py` уже содержит все задействованные core-модули (изменений не требуется).
+
+---
+
 ## v2026.09.23 — P0, этапы 4–7: результаты, сценарии, отчёт, санитария GUI/сборки (этапы 0–7 закрыты)
 
 ### Добавлено
