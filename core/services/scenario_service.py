@@ -20,7 +20,6 @@ from uuid import UUID, uuid4
 from core.domain.models import (
     CalculationResult,
     Dataset,
-    Methodology,
     Scenario,
     ScenarioStatus,
 )
@@ -229,7 +228,7 @@ class ScenarioService:
     def run(
         self,
         scenario_id: UUID,
-        methodology: Methodology,
+        methodology_qualified_name: str,
         dataset: Dataset | None = None,
     ) -> CalculationResult:
         """
@@ -242,16 +241,16 @@ class ScenarioService:
         if self._calculation_service is None:
             raise CalculationError(
                 "ScenarioService has no CalculationService attached",
-                methodology.qualified_name,
+                methodology_qualified_name,
             )
         data = dataset or self.get_dataset(scenario_id)
         if data is None:
             raise CalculationError(
                 f"No dataset bound to scenario '{scenario.name}' and no base dataset set",
-                methodology.qualified_name,
+                methodology_qualified_name,
             )
         result = self._calculation_service.execute(
-            methodology=methodology,
+            methodology=methodology_qualified_name,
             dataset=data,
             parameters=scenario.parameters,
             input_dataset_ids=[data.id],
