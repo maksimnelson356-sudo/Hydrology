@@ -4,6 +4,7 @@ gui/tabs/__init__.py
 """
 
 from .tab_geo import TabGeo
+from .tab_monte_carlo import TabMonteCarlo
 from .tab_project import ProjectTab
 
-__all__ = ["ProjectTab", "TabGeo"]
+__all__ = ["ProjectTab", "TabGeo", "TabMonteCarlo"]

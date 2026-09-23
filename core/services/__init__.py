@@ -12,6 +12,7 @@ Services:
 - CalibrationService: scipy.optimize parameter fitting with metrics (P1.5)
 - ReservoirScenarioService: multi-year regulation as scenario runs (P1.7)
 - GeoService: GeoJSON basin contour morphometry (P1.6, decision 9.3 = (b))
+- MonteCarloService: uncertainty propagation with seedable sampling (P2.1)
 
 Services contain no mathematics: formulas stay in the calculation core
 (`core.stats`, `core.hydrorash`).
@@ -35,6 +36,15 @@ from .methodology_registry import (
     MethodologyRegistry,
     build_default_registry,
 )
+from .monte_carlo_service import (
+    DEFAULT_N_RUNS,
+    DISTRIBUTIONS,
+    MonteCarloError,
+    MonteCarloRequest,
+    MonteCarloService,
+    ParameterSpec,
+    SummaryStats,
+)
 from .project_service import (
     PROJECT_EXTENSION,
     SCHEMA_VERSION,
@@ -56,10 +66,17 @@ from .validation_service import ValidationService
 
 __all__ = [
     "AVAILABLE_METRICS",
+    "DEFAULT_N_RUNS",
+    "DISTRIBUTIONS",
     "BasinMorphometry",
     "DEFAULT_METHODOLOGIES",
     "GeoService",
     "GeoServiceError",
+    "MonteCarloError",
+    "MonteCarloRequest",
+    "MonteCarloService",
+    "ParameterSpec",
+    "SummaryStats",
     "PROJECT_EXTENSION",
     "RECOMMENDATIONS",
     "Report",

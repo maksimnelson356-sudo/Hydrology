@@ -55,6 +55,7 @@ HIDDEN_IMPORTS = [
     "core.services.calibration_service",
     "core.services.data_quality_service", "core.services.import_service",
     "core.services.geo_service",
+    "core.services.monte_carlo_service",
     "core.services.methodology_registry",
     "core.services.project_service", "core.services.quality_pipeline",
     "core.services.report_service",
@@ -76,6 +77,7 @@ HIDDEN_IMPORTS = [
     "gui.tabs", "gui.tabs.tab_project", "gui.tabs.tab_methodology",
     "gui.tabs.tab_data", "gui.tabs.tab_data_quality", "gui.tabs.tab_results",
     "gui.tabs.tab_scenarios", "gui.tabs.tab_report", "gui.tabs.tab_geo",
+    "gui.tabs.tab_monte_carlo",
     "gui.workers", "gui.workers.calculation_workers",
     "create_unified_template",
 ]
