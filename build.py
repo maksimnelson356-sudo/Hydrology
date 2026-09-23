@@ -59,6 +59,8 @@ HIDDEN_IMPORTS = [
     "core.services.sensitivity_service",
     "core.services.climate_service",
     "core.services.decision_support_service",
+    "core.hydraulics_profile",
+    "core.services.backwater_profile_service",
     "core.services.methodology_registry",
     "core.services.project_service", "core.services.quality_pipeline",
     "core.services.report_service",

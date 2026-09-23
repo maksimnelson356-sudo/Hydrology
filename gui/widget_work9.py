@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
+    QHBoxLayout,
     QPushButton,
     QSplitter,
     QTableWidget,
@@ -37,6 +38,12 @@ from core.hydrorash.reservoir_regulation import (
 from core.hydrorash.spillway import (
     orifice_flow,
     spillway_capacity_check,
+)
+from core.services.backwater_profile_service import (
+    BackwaterProfileError,
+    BackwaterProfileRequest,
+    BackwaterProfileService,
+    ReachSpec,
 )
 from gui.plot_style import auto_resize_table
 
@@ -163,6 +170,37 @@ class Work9Widget(QWidget):
 
         lay.addWidget(grp)
 
+        # --- P3.1: multi-reach profile table (same tab, no new nav) ---
+        multi_grp = QGroupBox("Многопролётная ГВП (цепочка пролётов)")
+        multi_lay = QVBoxLayout(multi_grp)
+
+        self.bw_reach_table = QTableWidget(0, 6)
+        self.bw_reach_table.setHorizontalHeaderLabels(
+            ["Имя", "B, м", "m", "n", "I", "L, м"]
+        )
+        self.bw_reach_table.horizontalHeader().setStretchLastSection(True)
+        auto_resize_table(self.bw_reach_table)
+        self._fill_default_reaches()
+        multi_lay.addWidget(self.bw_reach_table)
+
+        row_btns = QHBoxLayout()
+        btn_add = QPushButton("Добавить пролёт")
+        btn_add.clicked.connect(self._add_reach_row)
+        btn_del = QPushButton("Удалить последний")
+        btn_del.clicked.connect(self._remove_reach_row)
+        row_btns.addWidget(btn_add)
+        row_btns.addWidget(btn_del)
+        row_btns.addStretch(1)
+        multi_lay.addLayout(row_btns)
+
+        btn_multi = QPushButton("Рассчитать многопролётную ГВП")
+        btn_multi.setStyleSheet(
+            "QPushButton { background: #6A1B9A; color: white; font-weight: bold; }"
+        )
+        btn_multi.clicked.connect(self.calculate_backwater_profile)
+        multi_lay.addWidget(btn_multi)
+        lay.addWidget(multi_grp)
+
         btn = QPushButton("Рассчитать ГВП")
         btn.setStyleSheet("QPushButton { background: #1565C0; color: white; font-weight: bold; }")
         btn.clicked.connect(self.calculate_backwater)
@@ -255,6 +293,117 @@ class Work9Widget(QWidget):
         self.sp_result.append(f"Пропускная способность: {result['Q_capacity_m3_s']:.1f} м³/с")
         self.sp_result.append(f"Расчётный расход: {result['Q_design_m3_s']:.1f} м³/с")
         self.sp_result.append(f"Запас: {result['margin_percent']:.1f}%")
+
+    def _fill_default_reaches(self):
+        """Seed two demo reaches so the multi-reach button works out of the box."""
+        defaults = [
+            ("Нижний", 20.0, 2.0, 0.035, 0.001, 500.0),
+            ("Верхний", 15.0, 1.5, 0.040, 0.002, 500.0),
+        ]
+        self.bw_reach_table.setRowCount(len(defaults))
+        for row, values in enumerate(defaults):
+            for col, value in enumerate(values):
+                self.bw_reach_table.setItem(row, col, QTableWidgetItem(str(value)))
+
+    def _add_reach_row(self):
+        row = self.bw_reach_table.rowCount()
+        self.bw_reach_table.insertRow(row)
+        defaults = (f"Пролёт {row + 1}", "20.0", "2.0", "0.035", "0.001", "500.0")
+        for col, value in enumerate(defaults):
+            self.bw_reach_table.setItem(row, col, QTableWidgetItem(value))
+
+    def _remove_reach_row(self):
+        row = self.bw_reach_table.rowCount() - 1
+        if row >= 0:
+            self.bw_reach_table.removeRow(row)
+
+    def _reaches_from_table(self) -> list[ReachSpec]:
+        """Read the table into ReachSpec list (raises ValueError on bad cells)."""
+        specs: list[ReachSpec] = []
+        for row in range(self.bw_reach_table.rowCount()):
+            cells = []
+            for col in range(6):
+                item = self.bw_reach_table.item(row, col)
+                text = item.text().strip() if item else ""
+                cells.append(text)
+            name, b_s, m_s, n_s, i_s, l_s = cells
+            try:
+                specs.append(
+                    ReachSpec(
+                        name=name,
+                        B=float(b_s),
+                        m=float(m_s),
+                        n=float(n_s),
+                        slope=float(i_s),
+                        L=float(l_s),
+                    )
+                )
+            except ValueError as error:
+                raise ValueError(f"Строка {row + 1}: {error}") from error
+        return specs
+
+    def calculate_backwater_profile(self):
+        """Multi-reach chained backwater (P3.1): service → plot + text."""
+        try:
+            reaches = self._reaches_from_table()
+            request = BackwaterProfileRequest(
+                reaches=reaches,
+                Q=self.bw_Q.value(),
+                H_downstream=self.bw_Hres.value(),
+                dx=100.0,
+            )
+            result = BackwaterProfileService.run(request)
+        except (ValueError, BackwaterProfileError) as error:
+            self.bw_result.clear()
+            self.bw_result.append(f"❌ Ошибка: {error}")
+            return
+
+        self.bw_result.clear()
+        self.bw_result.append(
+            f"Многопролётная ГВП: {len(result.reaches)} пролётов, "
+            f"L_общ = {result.L_total_m:.0f} м, Q = {result.Q} м³/с"
+        )
+        self.bw_result.append(f"Provenance: {result.provenance}")
+        for block in result.reaches:
+            self.bw_result.append(
+                f"  {block['name']}: L={block['L']:.0f} м, "
+                f"hн={block['normal_depth']} м, "
+                f"h_на_стыке={block['junction_depth']} м"
+            )
+
+        self.bw_figure.clear()
+        ax = self.bw_figure.add_subplot(111)
+        ax.plot(
+            [d / 1000 for d in result.distances_m],
+            result.depths_m,
+            color="#6A1B9A",
+            linewidth=2,
+            label="ГВП (цепочка)",
+        )
+        for block in result.reaches:
+            x_j = block["L"] / 1000.0
+            ax.axvline(x=x_j, color="#9E9E9E", linestyle="--", alpha=0.7)
+            ax.annotate(
+                block["name"],
+                xy=(x_j, max(result.depths_m) if result.depths_m else 1.0),
+                fontsize=8,
+                color="#424242",
+                rotation=90,
+                va="top",
+            )
+        ax.axhline(
+            y=result.H_downstream,
+            color="#F44336",
+            linestyle=":",
+            label=f"H_контр = {result.H_downstream} м",
+        )
+        ax.set_xlabel("Расстояние от плотины, км")
+        ax.set_ylabel("Глубина, м")
+        ax.set_title("Многопролётная кривая подпора")
+        ax.grid(True, alpha=0.5)
+        ax.legend(fontsize=8)
+        self.bw_figure.tight_layout()
+        self.bw_canvas.draw()
 
     def calculate_backwater(self):
         Q = self.bw_Q.value()

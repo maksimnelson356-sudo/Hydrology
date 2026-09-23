@@ -16,12 +16,21 @@ Services:
 - SensitivityService: one-at-a-time tornado ranking (P2.2)
 - ClimateService: multiplicative/additive delta-change on series (P2.3)
 - DecisionSupportService: P(exceed) + risk class on user Q_крит (P2.5, 10.3 (a))
+- BackwaterProfileService: multi-reach chained backwater profiles (P3.1)
 
 Services contain no mathematics: formulas stay in the calculation core
 (`core.stats`, `core.hydrorash`).
 """
 
 from .api_source import ApiSourceError, DataSource, FieldMap, HttpApiSource
+from .backwater_profile_service import (
+    BACKWATER_PROFILE_PROVENANCE,
+    BackwaterProfileError,
+    BackwaterProfileRequest,
+    BackwaterProfileResult,
+    BackwaterProfileService,
+    ReachSpec,
+)
 from .bootstrap import ServiceContainer, build_container
 from .calculation_service import CalculationContext, CalculationError, CalculationService
 from .calibration_service import (
@@ -92,12 +101,17 @@ from .validation_service import ValidationService
 
 __all__ = [
     "AVAILABLE_METRICS",
+    "BACKWATER_PROFILE_PROVENANCE",
     "CLIMATE_MODES",
     "DEFAULT_N_RUNS",
     "DEFAULT_RELATIVE_DELTA",
     "DEFAULT_RISK_CUTOFFS",
     "DISTRIBUTIONS",
     "RISK_CLASSES",
+    "BackwaterProfileError",
+    "BackwaterProfileRequest",
+    "BackwaterProfileResult",
+    "BackwaterProfileService",
     "BasinMorphometry",
     "ClimateError",
     "ClimateScenario",
@@ -115,6 +129,7 @@ __all__ = [
     "MonteCarloService",
     "ParameterInfluence",
     "ParameterSpec",
+    "ReachSpec",
     "SensitivityError",
     "SensitivityRequest",
     "SensitivityResult",
