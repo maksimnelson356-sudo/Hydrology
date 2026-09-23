@@ -78,8 +78,13 @@ from gui.plot_style import (
     build_stylesheet,
     setup_axes_style,
 )
+from gui.tabs.tab_data import TabData
+from gui.tabs.tab_data_quality import TabDataQuality
 from gui.tabs.tab_methodology import MethodologyTab
 from gui.tabs.tab_project import ProjectTab
+from gui.tabs.tab_report import ReportTab
+from gui.tabs.tab_results import TabResults
+from gui.tabs.tab_scenarios import ScenarioTab
 from gui.widget_short import ShortWidget
 from gui.widget_work1 import Work1Widget
 from gui.widget_work2 import Work2Widget
@@ -91,6 +96,7 @@ from gui.widget_work7 import Work7Widget
 from gui.widget_work8 import Work8Widget
 from gui.widget_work9 import Work9Widget
 from gui.widget_work10 import Work10Widget
+from i18n import t
 from update_checker import get_updater
 
 
@@ -453,16 +459,37 @@ class MainWindow(QMainWindow):
             lambda msg: QMessageBox.critical(self, "Методики", msg)
         )
         self.tab_methodology.calculation_finished.connect(
-            lambda mid, result: self._status_bar.showMessage(
-                f"Расчёт {mid}: {result.metadata.status.value}"
+            lambda mid, result: (
+                self.service_container.results.register(result),
+                self.project_service.add_calculation(result),
+                self.tab_results.refresh(),
+                self._status_bar.showMessage(f"Расчёт {mid}: {result.metadata.status.value}")
             )
         )
+        self.tab_results = TabResults(result_store=self.service_container.results)
+        # Sync results with project service when project changes (new/open)
+        self.tab_project.project_changed.connect(self._sync_results_from_project)
+
+        # === Сценарии (P0, Этап 5): управление сценариями и их сравнение ===
+        self.tab_scenarios = ScenarioTab(scenario_service=self.service_container.scenario)
+        self.tab_scenarios.status_message.connect(self._status_bar.showMessage)
+        self.tab_scenarios.error.connect(lambda msg: QMessageBox.critical(self, "Сценарии", msg))
+
+        # === Отчёт (P0, Этап 6): инженерный отчёт из проекта ===
+        self.tab_report = ReportTab(
+            project_service=self.project_service,
+            scenario_service=self.service_container.scenario,
+            service_container=self.service_container,
+        )
+        self.tab_report.status_message.connect(self._status_bar.showMessage)
+        self.tab_report.error.connect(lambda msg: QMessageBox.critical(self, "Отчёт", msg))
 
         menubar = self.menuBar()
         file_menu = menubar.addMenu("Файл данных")
         file_menu.addAction("Открыть данные...", self.load_data)
         file_menu.addAction("Создать шаблон", self.create_unified_template)
-        file_menu.addAction("Сохранить отчёт в Excel...", self.save_report)
+        file_menu.addAction(t("menu_save_report_excel", "Сохранить отчёт в Excel..."), self.save_report)
+        file_menu.addAction(t("menu_report_engineering", "Сформировать инженерный отчёт..."), self._open_report_tab)
         file_menu.addAction("Создать проект...", self.tab_project.create_project)
         file_menu.addAction("Открыть проект...", self.tab_project.open_project)
         file_menu.addAction("Сохранить проект", self.tab_project.save_project)
@@ -474,8 +501,9 @@ class MainWindow(QMainWindow):
 
         self.tabs = QStackedWidget()
 
-        self.tab_data = QWidget()
-        self.setup_data_tab()
+        # === Данные и статистика (Этап 7): UI в gui/tabs/tab_data.py ===
+        self.tab_data = TabData()
+        self._wire_tab_data()
 
         self.tab_graph = QWidget()
         self.setup_graph_tab()
@@ -529,10 +557,20 @@ class MainWindow(QMainWindow):
         self.tab_work9 = Work9Widget()
         self.tab_work10 = Work10Widget()
         self.tab_short = ShortWidget()
+        self.tab_data_quality = TabDataQuality()
+        # Connect data quality tab signals to action methods
+        self.tab_data_quality.fill_missing_requested.connect(self.fill_missing_data)
+        self.tab_data_quality.fill_missing_with_correlation_requested.connect(self.fill_missing_with_correlation)
+        self.tab_data_quality.check_homogeneity_requested.connect(self.check_homogeneity)
+        self.tab_data_quality.detect_outliers_requested.connect(self.detect_outliers)
 
         self._nav_names = [
             "Проект",
+            "Качество данных",
             "Методики",
+            "Результаты",
+            "Сценарии",
+            "Отчёт",
             "Данные и статистика",
             "Кривая обеспеченности",
             "Анализ трендов",
@@ -553,7 +591,11 @@ class MainWindow(QMainWindow):
         ]
         self._nav_pages = [
             self.tab_project,
+            self.tab_data_quality,
             self.tab_methodology,
+            self.tab_results,
+            self.tab_scenarios,
+            self.tab_report,
             self.tab_data, self.tab_graph, self.tab_trend, self.tab_viz,
             self.tab_kritsky,
             self.tab_work1, self.tab_work2, self.tab_work3, self.tab_work4,
@@ -565,6 +607,10 @@ class MainWindow(QMainWindow):
         self._nav_colors = [
             "#0D47A1",
             "#4A148C",
+            "#1565C0",  # Качество данных
+            "#1565C0",   # Результаты
+            "#1565C0",   # Сценарии
+            "#1565C0",   # Отчёт
             "#1565C0", "#1565C0", "#1565C0", "#1565C0", "#1565C0",
             "#2E7D32", "#00695C", "#E65100", "#C62828",
             "#4527A0", "#00838F", "#6A1B9A", "#2E7D32",
@@ -712,6 +758,38 @@ class MainWindow(QMainWindow):
             notes.append(f"Пост «{post}» отсутствует в загруженных данных")
         return notes
 
+    def _sync_results_from_project(self, path):
+        """Синхронизировать хранилище результатов с проектом при создании/открытии проекта."""
+        if not path:  # новый проект
+            self.service_container.results.clear()
+            self.project_service.clear_calculations()
+            self.project_service.clear_scenarios()  # Also clear scenarios
+            self.service_container.scenario._scenarios.clear()
+            self.service_container.scenario._datasets.clear()
+            self.service_container.scenario._results.clear()
+            self.tab_results.refresh()
+            self.tab_scenarios._refresh_scenarios()
+            self._status_bar.showMessage("Результаты и сценарии очищены для нового проекта")
+        else:  # проект открыт
+            calculations = self.project_service.calculations
+            self.service_container.results.load_results(calculations)
+            self.tab_results.refresh()
+            # Load scenarios from project
+            scenarios = self.project_service.scenarios
+            self.service_container.scenario._scenarios = {s.id: s for s in scenarios}
+            # For each scenario, we don't have dataset overrides yet, so we rely on base dataset
+            # Clear any previously stored dataset overrides and results for scenarios
+            self.service_container.scenario._datasets.clear()
+            self.service_container.scenario._results.clear()
+            self.tab_scenarios._refresh_scenarios()
+            self._status_bar.showMessage(f"Восстановлено {len(calculations)} расчётов и {len(scenarios)} сценариев из проекта")
+            # Set the base dataset for the scenario service to the currently selected post's dataset
+            selected_post = self.project_service.selected_post
+            if selected_post:
+                dataset = self.project_service.get_dataset(selected_post)
+                if dataset:
+                    self.service_container.scenario.set_base_dataset(dataset)
+
     def _switch_page(self, index):
         if 0 <= index < self.tabs.count():
             self.tabs.setCurrentIndex(index)
@@ -719,122 +797,43 @@ class MainWindow(QMainWindow):
             if self._nav_pages[index] is self.tab_methodology:
                 self._sync_methodology_dataset()
 
-    def setup_data_tab(self):
-        layout = QVBoxLayout(self.tab_data)
+    def _open_report_tab(self):
+        """Переключает на страницу «Отчёт» (Этап 6)."""
+        idx = self._nav_names.index("Отчёт")
+        self._nav_list.setCurrentRow(idx)
 
-        hint = QLabel("Данные загружаются через меню или вводятся вручную")
-        hint.setStyleSheet("color: #666; font-style: italic; padding: 8px; background: #f0f0f0; border-radius: 4px;")
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
+    def _wire_tab_data(self) -> None:
+        """Alias TabData widgets and connect signals (Этап 7, без смены поведения)."""
+        td = self.tab_data
+        self.combo_post = td.combo_post
+        self.btn_fill = td.btn_fill
+        self.btn_fill_corr = td.btn_fill_corr
+        self.btn_homogeneity = td.btn_homogeneity
+        self.btn_outliers = td.btn_outliers
+        self.btn_quality = td.btn_quality
+        self.btn_composite = td.btn_composite
+        self.btn_clear_break = td.btn_clear_break
+        self.btn_quantiles = td.btn_quantiles
+        self.btn_gts_curve = td.btn_gts_curve
+        self.btn_composite_auto = td.btn_composite_auto
+        self.btn_extend = td.btn_extend
+        self.table = td.table
 
-        btn_load_file = QPushButton("📂 Загрузить данные из файла (Excel)")
-        btn_load_file.setStyleSheet(
-            "QPushButton { background-color: #1565C0; color: white; font-weight: bold; "
-            "padding: 10px; font-size: 13px; border-radius: 6px; }"
-            "QPushButton:hover { background-color: #0D47A1; }"
-        )
-        btn_load_file.clicked.connect(self.load_data)
-        layout.addWidget(btn_load_file)
-
-        btn_manual = QPushButton("✏ Ввести данные вручную")
-        btn_manual.setStyleSheet("QPushButton { background-color: #FF9800; color: white; font-weight: bold; padding: 6px; }")
-        btn_manual.clicked.connect(self.open_manual_input)
-
-        btn_add_post = QPushButton("➕ Добавить пост (ещё один файл)")
-        btn_add_post.setStyleSheet("QPushButton { background-color: #1565C0; color: white; font-weight: bold; padding: 6px; }")
-        btn_add_post.clicked.connect(self.add_additional_post)
-
-        btn_row_top = QHBoxLayout()
-        btn_row_top.addWidget(btn_manual)
-        btn_row_top.addWidget(btn_add_post)
-        layout.addLayout(btn_row_top)
-
-        post_layout = QHBoxLayout()
-        lbl_post = QLabel("Пост:")
-        lbl_post.setStyleSheet("font-weight: bold; font-size: 14px; color: #1565C0;")
-        post_layout.addWidget(lbl_post)
-        self.combo_post = QComboBox()
-        self.combo_post.setMinimumWidth(160)
-        self.combo_post.currentTextChanged.connect(self.on_post_changed)
-        post_layout.addWidget(self.combo_post)
-        post_layout.addStretch()
-
-        self.btn_fill = QPushButton("Восстановить пропуски (простое)")
-        self.btn_fill.clicked.connect(self.fill_missing_data)
-        self.btn_fill.setEnabled(False)
-
-        self.btn_fill_corr = QPushButton("Восстановить пропуски (по корреляции)")
-        self.btn_fill_corr.clicked.connect(self.fill_missing_with_correlation)
-        self.btn_fill_corr.setEnabled(False)
-
-        self.btn_homogeneity = QPushButton("Проверить однородность ряда")
-        self.btn_homogeneity.clicked.connect(self.check_homogeneity)
-        self.btn_homogeneity.setEnabled(False)
-
-        self.btn_outliers = QPushButton("Найти выдающиеся значения")
-        self.btn_outliers.clicked.connect(self.detect_outliers)
-        self.btn_outliers.setEnabled(False)
-
-        self.btn_quality = QPushButton("Качество данных и рекомендации")
-        self.btn_quality.clicked.connect(self.show_data_quality)
-        self.btn_quality.setEnabled(False)
-
-        self.btn_composite = QPushButton("Составная кривая (указать год разрыва)")
-        self.btn_composite.clicked.connect(self.set_composite_break)
-        self.btn_composite.setEnabled(False)
-
-        self.btn_clear_break = QPushButton("Сбросить составную кривую")
-        self.btn_clear_break.clicked.connect(self.clear_composite)
-        self.btn_clear_break.setEnabled(False)
-
-        self.btn_quantiles = QPushButton("Расчётные расходы (Q заданной обеспеченности)")
-        self.btn_quantiles.clicked.connect(self.calculate_quantiles)
-        self.btn_quantiles.setEnabled(False)
-
-        self.btn_gts_curve = QPushButton("Кривая с точками ГТС")
-        self.btn_gts_curve.clicked.connect(self.build_curve_with_gts)
-        self.btn_gts_curve.setEnabled(False)
-
-        self.btn_composite_auto = QPushButton("Составная кривая (авто)")
-        self.btn_composite_auto.clicked.connect(self.build_composite_curve)
-        self.btn_composite_auto.setEnabled(False)
-
-        self.btn_extend = QPushButton("Удлинить ряд по аналогу")
-        self.btn_extend.clicked.connect(self.extend_series)
-        self.btn_extend.setEnabled(False)
-
-        self.table = QTableWidget()
-        self.table.setColumnCount(2)
-        auto_resize_table(self.table)
-
-        # QSplitter для масштабирования
-        data_splitter = QSplitter(Qt.Orientation.Vertical)
-        top_widget = QWidget()
-        top_layout = QVBoxLayout(top_widget)
-        top_layout.addLayout(post_layout)
-        top_layout.addWidget(self.btn_fill)
-        top_layout.addWidget(self.btn_fill_corr)
-        top_layout.addWidget(self.btn_homogeneity)
-        top_layout.addWidget(self.btn_outliers)
-        top_layout.addWidget(self.btn_composite)
-        top_layout.addWidget(self.btn_clear_break)
-        top_layout.addWidget(self.btn_quantiles)
-        top_layout.addWidget(self.btn_gts_curve)
-        top_layout.addWidget(self.btn_composite_auto)
-        top_layout.addWidget(self.btn_extend)
-
-        bottom_widget = QWidget()
-        bottom_layout = QVBoxLayout(bottom_widget)
-        bottom_layout.addWidget(QLabel("Статистика:"))
-        bottom_layout.addWidget(self.table)
-
-        data_splitter.addWidget(top_widget)
-        data_splitter.addWidget(bottom_widget)
-        data_splitter.setStretchFactor(0, 1)
-        data_splitter.setStretchFactor(1, 2)
-        data_splitter.setSizes([400, 600])
-
-        layout.addWidget(data_splitter)
+        td.load_requested.connect(self.load_data)
+        td.manual_input_requested.connect(self.open_manual_input)
+        td.add_post_requested.connect(self.add_additional_post)
+        td.post_changed.connect(self.on_post_changed)
+        td.fill_requested.connect(self.fill_missing_data)
+        td.fill_corr_requested.connect(self.fill_missing_with_correlation)
+        td.homogeneity_requested.connect(self.check_homogeneity)
+        td.outliers_requested.connect(self.detect_outliers)
+        td.quality_requested.connect(self.show_data_quality)
+        td.composite_break_requested.connect(self.set_composite_break)
+        td.clear_composite_requested.connect(self.clear_composite)
+        td.quantiles_requested.connect(self.calculate_quantiles)
+        td.gts_curve_requested.connect(self.build_curve_with_gts)
+        td.composite_auto_requested.connect(self.build_composite_curve)
+        td.extend_requested.connect(self.extend_series)
 
     def _make_post_combo(self):
         """Создать синхронизированный комбобокс выбора поста."""
