@@ -1,5 +1,46 @@
 # Changelog — HydroSphere
 
+## v2026.09.23 — P0, этапы 4–7: результаты, сценарии, отчёт, санитария GUI/сборки (этапы 0–7 закрыты)
+
+### Добавлено
+- **`core/services/result_store.py`** — хранилище результатов расчётов с provenance-цепочкой (`provenance_chain`), регистрация/список/поиск по id; используется вкладкой «Результаты».
+- **`gui/tabs/tab_results.py`** — раздел «Результаты»: история расчётов, детали, провенанс (исходные данные → методика → параметры → версия движка), экспорт JSON, контекстное меню.
+- **`gui/tabs/tab_scenarios.py`** — раздел «Сценарии»: CRUD сценариев через `ScenarioService`, клонирование, сравнение с базовым (таблица параметров/результатов), статусы.
+- **`core/services/report_service.py`** — сборка инженерного отчёта по 13 разделам (исходные данные, качество, нормативная методика, параметры, формулы, расчёт, проверки, графики, таблицы, сценарии, итоги, предупреждения, вывод); `NO_DATA`/`EXCLUDED` для пустых опциональных секций; `render_text` / `save_report` (utf-8-sig, atomic). Штамп версии из `version.VERSION_FULL`; метка `Q_mean → Qср`.
+- **`tests/test_report_service.py`** — 15 тестов: 13 секций и порядок, Qср/Cv/Cs, chart_count, пустой отчёт → «нет данных», include-фильтр сохраняет 13 слотов, warnings/conclusion, render/save.
+- **`gui/tabs/tab_report.py`** — вкладка «Отчёт»: чекбоксы Сценарии/Графики/Проверки, «Сформировать» в фоне (`ReportBuildWorker` QThread), предпросмотр, «Сохранить как…» в `reports/` рядом с `.hsp`, регистрация через `project_service.register_report`.
+- **`gui/tabs/tab_data.py`** — `TabData(QWidget)`: раздел «Данные и статистика» вынесен из `main_window.setup_data_tab` (виджеты-атрибуты, сигналы `load_requested`/`post_changed`/…); поведение не меняется.
+- **`i18n/ru.json` + `i18n/en.json`** — ключи `report_*`, `menu_report_engineering`, `sidebar_report`.
+
+### Изменено
+- **`gui/main_window.py`** — вкладка «Отчёт» на позиции 6 (навигация 23/23/23); пункт меню «Сформировать инженерный отчёт...» → `_open_report_tab`; импорт `from i18n import t`; `setup_data_tab` → `_wire_tab_data()` (алиасы виджетов + connect сигналов `TabData`).
+- **`core/services/__init__.py`** — экспортированы `Report`, `ReportSection`, `ReportService`.
+- **`build.py`** — `HIDDEN_IMPORTS` дополнен `core.domain*`, `core.services*`, `core.services.handlers*`, `gui.tabs*` (включая `gui.tabs.tab_data`).
+- **`build_nuitka.py`** — `--include-package` для `core.domain`, `core.services`, `core.services.handlers`, `gui.tabs`, `i18n`.
+- **`INSTRUCTION.md`** — список разделов обновлён: 23 пункта (Проект → Качество данных → Методики → Результаты → Сценарии → Отчёт → …).
+- **`gui/tabs/tab_report.py`** — новые `except Exception` заменены на конкретные типы (`KeyError`/`ValueError`/`TypeError`/`AttributeError`/`OSError` и т.д.); quality `analyze()` перенесён в воркер.
+- **`gui/tabs/tab_data_quality.py`, `gui/tabs/tab_scenarios.py`** — ruff-санитария (I001, F401, F821 `ServiceContainer` через `TYPE_CHECKING`, F541, F841, W292).
+
+### Исправлено
+- **`gui/tabs/tab_results.py`** — IndentationError (метод вне класса), null-safe конструктор `result_store`/`service_container`, провенанс без `method_type`, warnings из `getattr`; **`QSortOrder` → `Qt.SortOrder`** (импорт из PyQt6 падал, `MainWindow` не собирался, падал `test_cr7_*`).
+- **`gui/main_window.py`** — `results.add_result` → `results.register`.
+
+### Проверки (DoD этапа 7)
+- `python -m pytest tests -q` → **117 passed**.
+- Все корневые `test_*.py` (7 файлов) → **135 passed** — не деградировали.
+- ruff: тронутые файлы этапов 4–7 без новых замечаний (`main_window.py`/`build.py` delta=0 к HEAD).
+- nav: names=pages=colors=23; offscreen GUI smoke — OK (23 pages).
+- **Сборка**: `python build.py pyinstaller` → `dist/HydroSphere/HydroSphere.exe` (28.6 МБ) собран и **запускается**; `i18n/` и `gui/resources/` в `_internal`.
+- Ручная генерация отчёта из GUI на реальном проекте — за приёмкой пользователя.
+
+### Известные ограничения
+- `charts` в `_collect_kwargs` пока `[]` — можно дописать тайтлы активных графиков GUI.
+- 2 предсуществующих `except Exception` в `main_window` (~3192, ~3208) — по мере рефакторинга.
+- `icon.ico` в корне нет — сборка без иконки (есть `gui/resources/logo.png`).
+- `HydroSphere.spec` в корне отсутствует (сборка идёт через `build.py`).
+
+---
+
 ## v2026.09.21 — P0, этап 2: контроль качества данных
 
 ### Добавлено

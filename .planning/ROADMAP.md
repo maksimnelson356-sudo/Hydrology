@@ -470,21 +470,6 @@ smoke-тестами; каркас закоммичен.
 
 ---
 
-### Сводка этапов
-
-| Этап | Содержание | Ключевые артефакты | Оценка |
-|------|------------|--------------------|--------|
-| 0 | Оживить каркас, тесты, коммит | `models.py` (fix), `methodology_registry.py`, `scenario_service.py`, `tests/test_domain_services.py` | ~0.5 дня |
-| 1 | Проект и `.hsp` | `serialization.py`, `project_service.py`, `gui/tabs/tab_project.py`, `tests/test_project_service.py` | ~1–2 дня |
-| 2 | Контроль качества данных | `data_quality_service.py`, `gui/tabs/tab_data_quality.py`, `tests/test_data_quality_service.py` | ~1–2 дня |
-| 3 | Реестр методик + расчёт через сервис | `methodology_registry.py` (полный), `handlers/`, `bootstrap.py`, `tools/run_methodology.py`, `tests/test_methodology_service.py` | ~2–3 дня |
-| 4 | Результаты + Provenance | `result_store.py`, `gui/tabs/tab_results.py`, `tests/test_result_store.py` | ~1–2 дня |
-| 5 | Сценарии | `scenario_service.py` (полный), `gui/tabs/tab_scenarios.py`, `tests/test_scenario_service.py` | ~2 дня |
-| 6 | Инженерный отчёт | `report_service.py`, `gui/tabs/tab_report.py`, `tests/test_report_service.py` | ~2–3 дня |
-| 7 | Санитария GUI и сборки | `gui/tabs/tab_data.py`, воркеры, spec/build, документация | параллельно |
-
----
-
 ## 7. Definition of Done (общие правила для всех этапов)
 
 1. Код соответствует соглашениям репозитория (ruff, line-length 100, типизация, docstring'и).
@@ -579,3 +564,4 @@ smoke-тестами; каркас закоммичен.
 | 21.09.2026 | 1.2 | Этап 1 выполнен: проект (.hsp) с сохранением/открытием, раздел «Проект» в GUI (18 разделов) |
 | 21.09.2026 | 1.1 | Этап 0 выполнен: каркас домена и сервисов работает (коммиты `eb3b2b9`, `3790091`); добавлены реестр методик (12 методик), сервис сценариев и 28 тестов в `tests/` |
 
+---
