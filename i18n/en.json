@@ -140,6 +140,8 @@
     "btn_cancel": "Cancel",
 
     "menu_calibrate": "Calibrate parameters…",
+    "menu_load_contour": "Load basin contour (GeoJSON)…",
+    "sidebar_geo": "Morphometry",
     "calibration_title": "Parameter Calibration",
     "calibration_hint": "Metrics and bounds are explicit; optimization runs in the background (scipy.optimize). Result shows before/after metrics and a history entry; applying to a scenario is button-only.",
     "calibration_settings": "Settings",

@@ -83,6 +83,7 @@ from gui.plot_style import (
 )
 from gui.tabs.tab_data import TabData
 from gui.tabs.tab_data_quality import TabDataQuality
+from gui.tabs.tab_geo import TabGeo
 from gui.tabs.tab_methodology import MethodologyTab
 from gui.tabs.tab_project import ProjectTab
 from gui.tabs.tab_report import ReportTab
@@ -487,6 +488,11 @@ class MainWindow(QMainWindow):
         self.tab_report.status_message.connect(self._status_bar.showMessage)
         self.tab_report.error.connect(lambda msg: QMessageBox.critical(self, "Отчёт", msg))
 
+        # === Морфометрия (P1.6, решение 9.3 = (б)): контур GeoJSON ===
+        self.tab_geo = TabGeo()
+        self.tab_geo.status_message.connect(self._status_bar.showMessage)
+        self.tab_geo.error.connect(lambda msg: QMessageBox.critical(self, "Морфометрия", msg))
+
         menubar = self.menuBar()
         file_menu = menubar.addMenu("Файл данных")
         file_menu.addAction("Открыть данные...", self.load_data)
@@ -498,6 +504,10 @@ class MainWindow(QMainWindow):
         )
         file_menu.addAction(
             t("menu_calibrate", "Калибровка параметров..."), self.open_calibration
+        )
+        file_menu.addAction(
+            t("menu_load_contour", "Загрузить контур бассейна (GeoJSON)..."),
+            self.open_geo_contour,
         )
         file_menu.addAction("Создать шаблон", self.create_unified_template)
         file_menu.addAction(t("menu_save_report_excel", "Сохранить отчёт в Excel..."), self.save_report)
@@ -583,6 +593,7 @@ class MainWindow(QMainWindow):
             "Результаты",
             "Сценарии",
             "Отчёт",
+            "Морфометрия",
             "Данные и статистика",
             "Кривая обеспеченности",
             "Анализ трендов",
@@ -608,6 +619,7 @@ class MainWindow(QMainWindow):
             self.tab_results,
             self.tab_scenarios,
             self.tab_report,
+            self.tab_geo,
             self.tab_data, self.tab_graph, self.tab_trend, self.tab_viz,
             self.tab_kritsky,
             self.tab_work1, self.tab_work2, self.tab_work3, self.tab_work4,
@@ -619,10 +631,11 @@ class MainWindow(QMainWindow):
         self._nav_colors = [
             "#0D47A1",
             "#4A148C",
-            "#1565C0",  # Качество данных
+            "#1565C0",  # Методики
             "#1565C0",   # Результаты
             "#1565C0",   # Сценарии
             "#1565C0",   # Отчёт
+            "#00695C",   # Морфометрия
             "#1565C0", "#1565C0", "#1565C0", "#1565C0", "#1565C0",
             "#2E7D32", "#00695C", "#E65100", "#C62828",
             "#4527A0", "#00838F", "#6A1B9A", "#2E7D32",
@@ -1368,6 +1381,12 @@ class MainWindow(QMainWindow):
         dialog = ApiImportDialog(self)
         dialog.dataset_ready.connect(self._on_import_series_ready)
         dialog.exec()
+
+    def open_geo_contour(self):
+        """P1.6: переключить на «Морфометрию» и открыть диалог загрузки контура."""
+        idx = self._nav_names.index("Морфометрия")
+        self._nav_list.setCurrentRow(idx)
+        self.tab_geo._on_load_clicked()
 
     def open_calibration(self):
         """P1.5: калибровка параметров модели к текущему ряду (фоновый воркер)."""

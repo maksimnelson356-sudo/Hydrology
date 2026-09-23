@@ -23,6 +23,7 @@ core/stats/__init__.py
 - report_export — экспорт отчётов
 - critical_values — критические значения
 - short_series — восстановление коротких рядов (<6 лет)
+- geometry — площадь/периметр/центроид контура (P1.6)
 """
 
 __all__ = [
@@ -46,4 +47,5 @@ __all__ = [
     "report_export",
     "critical_values",
     "short_series",
+    "geometry",
 ]

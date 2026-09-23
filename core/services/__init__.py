@@ -11,6 +11,7 @@ Services:
 - ImportService: CSV/TSV/Excel time series import into Dataset (P1.1)
 - CalibrationService: scipy.optimize parameter fitting with metrics (P1.5)
 - ReservoirScenarioService: multi-year regulation as scenario runs (P1.7)
+- GeoService: GeoJSON basin contour morphometry (P1.6, decision 9.3 = (b))
 
 Services contain no mathematics: formulas stay in the calculation core
 (`core.stats`, `core.hydrorash`).
@@ -26,6 +27,7 @@ from .calibration_service import (
     CalibrationService,
 )
 from .data_quality_service import RECOMMENDATIONS, DataQualityService
+from .geo_service import BasinMorphometry, GeoService, GeoServiceError
 from .import_service import ColumnMapping, ImportPreview, ImportService, ImportServiceError
 from .methodology_registry import (
     DEFAULT_METHODOLOGIES,
@@ -54,7 +56,10 @@ from .validation_service import ValidationService
 
 __all__ = [
     "AVAILABLE_METRICS",
+    "BasinMorphometry",
     "DEFAULT_METHODOLOGIES",
+    "GeoService",
+    "GeoServiceError",
     "PROJECT_EXTENSION",
     "RECOMMENDATIONS",
     "Report",
