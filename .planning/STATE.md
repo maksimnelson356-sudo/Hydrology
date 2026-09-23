@@ -17,9 +17,9 @@
 | ROADMAP §6.2 P2.1–P2.5 | **готово, запушен** (`f9e48c2` docs) | — |
 | P2.1 Monte Carlo (10.1/10.2) | **готово, запушен** (`6ae65a0` feat + `a5c0096` docs) | `test_monte_carlo` (20) |
 | P2.2 чувствительность (tornado) | **готово, запушен** (`55bde3a` feat + `bdb9d81` docs) | `test_sensitivity_service` (18) |
-| P2.3 климат (delta-change) | **готово** | `test_climate_service` (17) |
-| P2.4 визуализация (fan/hist/tornado) | **готово** | helpers + GUI |
-| P2.5 Decision Support (10.3=а) | **готово** | `test_decision_support_service` (23) |
+| P2.3 климат (delta-change) | **готово, запушен** (`2c44287` feat + `8b4bf4a` docs) | `test_climate_service` (17) |
+| P2.4 визуализация (fan/hist/tornado) | **готово, запушен** (`2c44287` + `8b4bf4a`) | helpers + GUI |
+| P2.5 Decision Support (10.3=а) | **готово, запушен** (`2c44287` + `8b4bf4a`) | `test_decision_support_service` (23) |
 | мёрдж в main | **выполнен** (решение 8.2) | — |
 
 Итого: **313 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav **25/25/25**, GUI offscreen smoke OK (25 pages).
@@ -153,4 +153,4 @@
 - P1.6: DEM-растры (rasterio) — осознанно вне объёма (решение 9.3 = (б)); при необходимости — reopen 9.3 позже.
 - P2.1: demo model y=a·x+b — для smoke/знакомства; подключение к калиброванным моделям/P2.2 — позже.
 
-Обновлено: 2026-09-23 (P2.3–P2.5 климат/визуализация/DS + P2.2 + P2.1 + §6.2 + P1.6 + P1.7 + мёрдж 8.2; nav 25, 313+135; origin/main == origin/global-implementation)
+Обновлено: 2026-09-23 (P2.3–P2.5 климат/визуализация/DS запушены: feat `2c44287`, docs `8b4bf4a`; P2.2 + P2.1 + §6.2 + P1.6 + P1.7 + мёрдж 8.2; nav 25, 313+135; origin/main == origin/global-implementation == `8b4bf4a`)
