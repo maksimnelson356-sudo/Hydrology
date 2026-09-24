@@ -18,6 +18,7 @@ Services:
 - DecisionSupportService: P(exceed) + risk class on user Q_крит (P2.5, 10.3 (a))
 - BackwaterProfileService: multi-reach chained backwater profiles (P3.1)
 - RoutingService: Muskingum flood routing with peak metrics (P3.2)
+- InundationService: water-level to flooded area/volume estimates (P3.3)
 
 Services contain no mathematics: formulas stay in the calculation core
 (`core.stats`, `core.hydrorash`).
@@ -58,6 +59,16 @@ from .decision_support_service import (
 )
 from .geo_service import BasinMorphometry, GeoService, GeoServiceError
 from .import_service import ColumnMapping, ImportPreview, ImportService, ImportServiceError
+from .inundation_service import (
+    INUNDATION_PROVENANCE,
+    GeoJsonSource,
+    InundationError,
+    InundationRequest,
+    InundationResult,
+    InundationService,
+    StageAreaSource,
+    TrapezoidSource,
+)
 from .methodology_registry import (
     DEFAULT_METHODOLOGIES,
     MethodologyDescriptor,
@@ -115,6 +126,7 @@ __all__ = [
     "DEFAULT_RELATIVE_DELTA",
     "DEFAULT_RISK_CUTOFFS",
     "DISTRIBUTIONS",
+    "INUNDATION_PROVENANCE",
     "RISK_CLASSES",
     "ROUTING_PROVENANCE",
     "BackwaterProfileError",
@@ -131,8 +143,13 @@ __all__ = [
     "DecisionSupportService",
     "ThresholdAssessment",
     "DEFAULT_METHODOLOGIES",
+    "GeoJsonSource",
     "GeoService",
     "GeoServiceError",
+    "InundationError",
+    "InundationRequest",
+    "InundationResult",
+    "InundationService",
     "MonteCarloError",
     "MonteCarloRequest",
     "MonteCarloService",
@@ -143,7 +160,9 @@ __all__ = [
     "SensitivityRequest",
     "SensitivityResult",
     "SensitivityService",
+    "StageAreaSource",
     "SummaryStats",
+    "TrapezoidSource",
     "PROJECT_EXTENSION",
     "RECOMMENDATIONS",
     "Report",
