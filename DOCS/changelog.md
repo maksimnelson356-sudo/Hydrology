@@ -1,5 +1,38 @@
 # Changelog — HydroSphere
 
+## v2026.09.24 — P3.5: экспорт инженерных моделей (JSON + CSV)
+
+### Добавлено
+- **`core/services/model_export_types.py` / `model_export_parser.py` /
+  `model_export_service.py`** — typed exchange contracts, tolerant JSON import и atomic
+  UTF-8-SIG JSON/CSV export для reach chains, Muskingum hydrographs и WSE profiles.
+- **`gui/tabs/model_export_controls.py`** — reusable file-action control with typed error boundary.
+- **`tests/test_model_export_service.py` / `test_model_export_public_api.py` /
+  `test_work7_model_export.py` / `test_work9_model_export.py` /
+  `test_model_export_packaging.py`** — 19 targeted tests: roundtrip, pandas CSV, malformed JSON,
+  wrong shapes, public API, Work7/Work9 actions и packaging.
+
+### Изменено
+- **`gui/widget_work7.py`** — export button enabled after a valid Muskingum result; stale routing
+  data is cleared before every rebuild.
+- **`gui/widget_work9.py`** — export button for the existing multi-reach table; navigation remains 25.
+- **`i18n/ru.json` / `i18n/en.json`** — localized model-export labels and dialog title.
+- **`build.py` / `build_assets.py`** — P3.5 hidden imports and real ICO generation from
+  `gui/resources/logo.svg`; the invalid 18-byte `logo.png` placeholder is not used.
+- **Code/build commits** — `906f002`, `7974a8b`, `5b281e4`, `8f70a87`, `5090fec`, `388cb06`.
+
+### Проверки
+- Полный `python -m pytest -q` → **535 passed** (два существующих numpy warning).
+- P3.5 targeted → **19 passed**: service 15, public API 1, Work7 1, Work9 1, packaging 1.
+- Новые service/UI/test modules: Ruff, LSP и no-excuse чистые; Work7/Work9 — только baseline.
+- PyInstaller build завершён с icon; packaged `HydroSphere.exe` запущен и отвечает.
+- Native Work7/Work9 screenshots: русские labels читаемы, export controls видимы и не перекрывают
+  существующие элементы. Independent visual-review недоступен из-за provider-model конфигурации;
+  локальная native evidence и runtime tests зелёные.
+- Решение 11.3 закрыто как (а): собственный JSON + CSV; HEC-RAS-like export отложен.
+
+---
+
 ## v2026.09.24 — Release housekeeping после P3.4
 
 ### Исправлено
