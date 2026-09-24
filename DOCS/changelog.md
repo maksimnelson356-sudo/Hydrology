@@ -1,5 +1,26 @@
 # Changelog — HydroSphere
 
+## v2026.09.24 — P3.2: Muskingum-маршрутизация паводка
+
+### Добавлено
+- **`core/hydrorash/routing.py`** — `MuskingumError`, `muskingum_coefficients` и `muskingum_route`: C0/C1/C2, проверка `K ≥ dt`, `0 ≤ x ≤ 0.5`, неотрицательных коэффициентов и входного ряда; выходная серия, пик входа/выхода, аттенюация и запаздывание.
+- **`core/services/routing_service.py`** — `RoutingRequest` / `RoutingResult` / `RoutingService` / `RoutingError`, валидация, JSON-safe `to_dict()` и provenance `muskingum@1.0`; математика остаётся в core.
+- **`tests/test_routing_service.py`** — 22 теста: коэффициенты, стационарный режим, сохранение объёма ±1%, метрики пика, все ошибки, provenance, AST-guard, публичный export/build hidden-imports и два GUI-контракта Work7.
+- **GUI `gui/widget_work7.py`** — метод «Мускингум» с K/x/dt, входной и выходной гидрографы на одном временном шаге, коэффициенты, пики, ослабление/запаздывание, provenance и очистка старого графика при ошибке; nav остаётся 25.
+
+### Изменено
+- **`core/services/__init__.py`** — публичный экспорт `Routing*` и `ROUTING_PROVENANCE`.
+- **`build.py`** — hidden imports `core.hydrorash.routing` и `core.services.routing_service`.
+
+### Проверки (DoD P3.2)
+- `python -m pytest tests -q` → **348 passed** (было 326, +22).
+- Корневые `test_*.py` → **135 passed**; nav **25/25/25**; GUI smoke OK (`pages=25`, Work7 index 19).
+- Ruff: новые routing-файлы = 0; Work7 и build.py — только существующие baseline N802/N806/N803; LSP diagnostics чистые.
+- Native Windows UI проверен при 1200×700 и 1600×900 плюс error-state; кириллица, две кривые, легенда и сообщения читаемы, stale plot очищается.
+- Без новых runtime-зависимостей; решение **11.1 = (а) Muskingum** закрыто.
+
+---
+
 ## v2026.09.23 — P3.1: многопролётная кривая подпора
 
 ### Добавлено
