@@ -1,5 +1,43 @@
 # Changelog — HydroSphere
 
+## v2026.09.24 — P3.4: MC × гидравлика
+
+### Добавлено
+- **`core/services/hydraulic_uncertainty_service.py`** — `HydraulicUncertaintyService` поверх
+  `MonteCarloService.sample_parameters()`: один seed даёт детерминированные draws, которые
+  прогоняются через P3.1 backwater + P3.3 S(H) или P3.2 Muskingum; результат содержит
+  samples, p5/p50/p95, mean/std и provenance `hydraulic_uncertainty@1.0`.
+- **`tests/test_hydraulic_uncertainty_service.py`** — 11 тестов: backwater/routing quantiles,
+  seed determinism, JSON/provenance, unknown parameter, invalid draw wrapping, package/build
+  hidden imports, AST dependency guard и headless GUI render/clear contract.
+- **`gui/tabs/hydraulic_uncertainty_panel.py`** — PyQt6-панель с engine backwater/routing,
+  N/seed, редактируемыми uniform-границами, `QThread`-worker, таблицей метрик и
+  нормализованным графиком p5/p50/p95; запуск из `TabMonteCarlo` без новой navigation page.
+- **`gui/tabs/hydraulic_uncertainty_support.py` / `hydraulic_uncertainty_result_view.py` /
+  `gui/workers/hydraulic_uncertainty_worker.py`** — typed request parsing, result rendering и
+  worker вынесены из панели по ответственности; panel остаётся ниже 250 pure LOC.
+
+### Изменено
+- **`core/services/__init__.py`** — публичные hydraulic uncertainty symbols и provenance.
+- **`gui/tabs/tab_monte_carlo.py`** — discoverable launch button и signal forwarding в
+  `HydraulicUncertaintyPanel`; существующий P2.1/P2.2/P2.3/P2.5 workflow не изменён.
+- **`build.py`** — hidden imports `core.services.hydraulic_uncertainty_service`,
+  `gui.tabs.hydraulic_uncertainty_panel`, `hydraulic_uncertainty_support`,
+  `hydraulic_uncertainty_result_view` и `gui.workers.hydraulic_uncertainty_worker`.
+- **`DOCS/ROADMAP.md` / `.planning/ROADMAP.md` / `.planning/STATE.md`** — P3.4 отмечен выполненным.
+
+### Проверки (DoD P3.4)
+- `python -m pytest tests -q` → **378 passed** (11 новых P3.4; два существующих numpy warning).
+- Полный `python -m pytest -q` → **513 passed**; корневые regression-тесты → **135 passed**.
+- Targeted P3.4 → **11 passed**; Ruff/no-excuse/LSP для новых P3.4-модулей чистые;
+  `tab_monte_carlo.py` сохраняет pre-existing oversized-module/broad-except baseline, не относящийся к P3.4.
+- Native offscreen QA: initial/backwater/routing/engine-clear/launch states; QThread worker smoke;
+  chart height/readability и stale-plot clearing проверены. Offscreen QPA не содержит кириллических
+  шрифтов, поэтому визуальные screenshots содержат квадратные placeholders; это ограничение capture-среды.
+- Без новых runtime-зависимостей; P2/P3 математика не дублировалась. P3.5 остаётся следующим этапом.
+
+---
+
 ## v2026.09.24 — P3.3: затопление по уровню
 
 ### Добавлено

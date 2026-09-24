@@ -1,6 +1,6 @@
 # Состояние работы
 
-## Текущий этап: P0–P2.5 и P3.1–P3.3 выполнены и запушены; P3.4–P3.5 не начаты
+## Текущий этап: P0–P2.5 и P3.1–P3.3 выполнены и запушены; P3.4 реализован локально; P3.5 не начат
 
 ### Выполненные этапы ROADMAP
 
@@ -24,9 +24,10 @@
 | **P3.1 многопролётная ГВП** | **готово, запушен** (`bf2feb4` feat + `5c93459` docs) | `test_backwater_profile_service` (13) |
 | **P3.2 Muskingum-маршрутизация (11.1=а)** | **готово, запушен** (`d108ef7`/`ce33f55`/`5dc3f9f` feat + `96e08b9`/`953fd60` docs) | `test_routing_service` (22) |
 | **P3.3 Затопление H→S,V (11.2=а)** | **готово, запушен** (`98a8664`/`5b55f17`/`f2c1458` feat + `27ddf36`/`a3a0940` docs) | `test_inundation_service` (19) |
+| **P3.4 MC × гидравлика** | **готово локально, ожидает commit/push** (`hydraulic_uncertainty@1.0`) | `test_hydraulic_uncertainty_service` (11) |
 | мёрдж в main | **выполнен** (решение 8.2) | — |
 
-Итого: **367 passed** (`tests/`), корневые **135 passed**, новые inundation-файлы ruff/no-excuse/LSP чистые (Work9/build.py — существующие baseline), nav **25/25/25**, Work9 4 внутренние вкладки; native valid/GeoJSON/error states проверены при 1200×700 и 1600×900.
+Итого: **378 passed** (`tests/`), корневые **135 passed** (полный набор **513 passed**), новые P3.4-файлы ruff/LSP чистые (build.py содержит существующие baseline N806/F841), nav **25/25/25**; native P3.4 initial/backwater/routing/clear-state/launch captures и QThread worker smoke проверены.
 
 ### P1.6 — что сделано (решение 9.3 = (б) GeoJSON)
 
@@ -131,6 +132,33 @@
 - Без новых runtime-зависимостей и DEM; решение **11.2=(а) закрыто**, GeoJSON — второй источник; 11.3 остаётся P3.5.
 - Push: feature/docs tip `a3a0940` отправлен в `origin/global-implementation` и `origin/main`; divergence **0/0**.
 
+### P3.4 — что сделано (MC × гидравлика)
+
+1. **`core/services/hydraulic_uncertainty_service.py`** — `HydraulicUncertaintyService` использует
+   `MonteCarloService.sample_parameters()` и прогоняет каждый draw через P3.1/P3.3 или P3.2;
+   allowed parameters, typed errors, JSON-safe result и `hydraulic_uncertainty@1.0`.
+2. **Backwater output** — `max_depth_m`, `flooded_area_m2`, `flooded_volume_m3`; **routing output** —
+   `peak_in_m3s`, `peak_out_m3s`, `peak_attenuation_m3s`, `peak_lag_steps`; p5/p50/p95/mean/std.
+3. **`gui/tabs/hydraulic_uncertainty_panel.py`** — engine, N, seed, uniform parameter table,
+   quantile table/chart; request parsing, result rendering и `QThread` worker вынесены в
+   `hydraulic_uncertainty_support.py`, `hydraulic_uncertainty_result_view.py` и
+   `gui/workers/hydraulic_uncertainty_worker.py`; stale output очищается при смене engine.
+4. **`gui/tabs/tab_monte_carlo.py`** — launch button без новой navigation page; сигналы панели
+   перенаправляются в существующий tab status/error.
+5. **`core/services/__init__.py` / `build.py`** — public exports и hidden imports.
+
+### Верификация DoD P3.4 (2026-09-24)
+
+- `python -m pytest tests -q` → **378 passed**; полный `python -m pytest -q` → **513 passed**;
+  корневые regression-тесты → **135 passed**; targeted P3.4 → **11 passed**.
+- P3.4 service/panel/export/test modules: Ruff, no-excuse и LSP чистые; `tab_monte_carlo.py`
+  сохраняет pre-existing oversized-module/broad-except baseline; `build.py` сообщает только
+  существующие baseline N806/F841; новых runtime-зависимостей нет.
+- Native offscreen captures: initial, backwater result, routing result, engine-change clear,
+  Monte Carlo launch; QThread worker smoke прошёл. Offscreen QPA не содержит кириллических шрифтов,
+  поэтому capture показывает square placeholders только вместо русских glyphs.
+- P3.4 пока не коммитится и не пушится; P3.5 остаётся следующим этапом.
+
 ### P1.7 — что сделано
 
 1. **domain** — `Scenario.scenario_type` (`generic`/`reservoir`), сериализация в `.hsp`.
@@ -192,7 +220,7 @@
 
 - 2 предсуществующих `except Exception` в `main_window` — по мере рефакторинга.
 - Ручной GUI / приёмка — за пользователем.
-- **§6.2 P2, P3.1–P3.3 закрыты; P3.3 запушен.** Дальше — **P3.4 → P3.5** (решения 11.1=(а)/11.2=(а) закрыты; 11.3 — P3.5).
+- **§6.2 P2, P3.1–P3.4 закрыты; P3.4 пока локально, без commit/push.** Дальше — **P3.5** (решения 11.1=(а)/11.2=(а) закрыты; 11.3 — P3.5).
 
 ### Примечания
 
@@ -203,4 +231,4 @@
 - P1.6: DEM-растры (rasterio) — осознанно вне объёма (решение 9.3 = (б)); при необходимости — reopen 9.3 позже.
 - P2.1: demo model y=a·x+b — для smoke/знакомства; подключение к калиброванным моделям/P2.2 — позже.
 
-Обновлено: 2026-09-24 (P3.3 запушен: feat `98a8664`/`5b55f17`/`f2c1458`, docs `27ddf36`/`a3a0940`; 367+135, nav 25, Work9 4 tabs, native inundation QA, origin/main == origin/global-implementation 0/0; решение 11.2=(а) закрыто)
+Обновлено: 2026-09-24 (P3.4 реализован локально: `hydraulic_uncertainty@1.0`, QThread panel, 378+135=513 tests, native offscreen QA; P3.3 остаётся запушенным, P3.4 ожидает отдельного commit/push; решение 11.2=(а) закрыто)

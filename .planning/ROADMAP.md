@@ -5,11 +5,11 @@
 > с критериями приёмки и открытые решения. Расчётное ядро не переписывается — над ним
 > надстраивается сервисный слой и рабочее место инженера.
 >
-> **Статус:** ТЗ, версия 2.8 · **Дата:** 24.09.2026 · **Ветка:** `global-implementation`
+> **Статус:** ТЗ, версия 2.9 · **Дата:** 24.09.2026 · **Ветка:** `global-implementation`
 > **P0 (этапы 0–7) выполнен и запушен** (`origin/global-implementation`, HEAD `6244444`).
 > **P1.1–P1.7 выполнены** (решение 9.3=(б) закрыто 23.09.2026), мёрдж в `main` выполнен (origin/main == origin/global-implementation).
 > **P2.1–P2.5 выполнены** (решения 10.1(a)/10.2(a)/**10.3(a)**); §6.2 P2 закрыт.
-> **§6.3 P3**: P3.1–P3.3 выполнены (`backwater_profile@1.0`, `muskingum@1.0`, `inundation@1.0`); P3.4–P3.5 не начаты; решения 11.1=(а)/11.2=(а) закрыты, 11.3 открыто.
+> **§6.3 P3**: P3.1–P3.4 выполнены (`backwater_profile@1.0`, `muskingum@1.0`, `inundation@1.0`, `hydraulic_uncertainty@1.0`); P3.5 не начат; решения 11.1=(а)/11.2=(а) закрыты, 11.3 открыто.
 
 ---
 
@@ -910,19 +910,31 @@ MC — фундамент неопределённостей; DS опирает�
 
 **Цель:** P2.1 (MC) → P3.1/P3.2: распределения глубин/пиков на выходе вместо точечных.
 
+**Статус:** выполнен 24.09.2026; orchestration-сервис `hydraulic_uncertainty@1.0`, GUI-панель запускается из существующей вкладки Monte Carlo, новая navigation page не добавляется.
+
 **Задачи:**
 
-1. `monte_carlo_service` уже generic по callable — переиспользовать: параметры пролёта/Muskingum
-   (K, x, n, H_downstream) как input specs; целевая функция — сервис P3.1/P3.2.
-2. GUI: в `tab_monte_carlo` опциональный «движок» = backwater/routing (выпадающий список demo-model).
-3. Тесты: seedable determinism на P3-цели; сводка p5/p50/p95 на глубинах/пиках.
+1. `core/services/hydraulic_uncertainty_service.py` — переиспользовать
+   `MonteCarloService.sample_parameters()` и вызвать P3.1/P3.2/P3.3 для каждого draw;
+   backwater возвращает `max_depth_m`, `flooded_area_m2`, `flooded_volume_m3`, routing —
+   `peak_in_m3s`, `peak_out_m3s`, `peak_attenuation_m3s`, `peak_lag_steps`.
+2. Разрешены только hydraulic-параметры (`Q`, `H_downstream`, `B_scale`, `m_scale`, `n_scale`,
+   `slope_scale` для backwater; `Q_scale`, `K`, `x`, `dt` для routing); неизвестное имя и
+   ошибка отдельного draw возвращаются как типизированная `HydraulicUncertaintyError`.
+3. GUI `gui/tabs/hydraulic_uncertainty_panel.py`: engine, N, seed, редактируемые uniform-границы,
+   `QThread`-worker, таблица p5/p50/p95/mean/std и график; запуск из `tab_monte_carlo` без
+   новой navigation page.
+4. Provenance `hydraulic_uncertainty@1.0`, JSON-safe `to_dict()`, public exports и PyInstaller
+   hidden imports; без изменения математики P2/P3.
 
 **Критерии приёмки:**
 
-- Один и тот же seed → бит-в-бит те же квантили.
-- Без изменения алгоритмов P2 (только wiring).
+- Один и тот же seed → бит-в-бит те же samples и квантили.
+- p5 ≤ p50 ≤ p95; для backwater и routing доступны соответствующие hydraulic metrics.
+- GUI не блокирует интерфейс: тяжёлый прогон выполняется в QThread.
+- Без изменения алгоритмов P2 (только wiring), без новых runtime-зависимостей.
 
-**Как проверяем:** pytest + прогон в GUI.
+**Как проверяем:** `tests/test_hydraulic_uncertainty_service.py`, полный pytest, Ruff/LSP и native GUI smoke.
 
 ---
 
@@ -954,7 +966,7 @@ MC — фундамент неопределённостей; DS опирает�
 | P3.1 | Многопролётная кривая подпора — **выполнено** | `backwater_profile_service`, work9 GUI, `hydraulics_profile` | ~2–3 дня |
 | P3.2 | Muskingum-маршрутизация — **выполнено** | `routing.py` + `routing_service`, GUI Work7, `muskingum@1.0` | ~2–3 дня |
 | P3.3 | Затопление H → S,V — **выполнено** | `inundation`, `inundation_service`, Work9 GUI, `inundation@1.0` | ~2 дня |
-| P3.4 | MC × гидравлика | wiring в `tab_monte_carlo` | ~1–2 дня |
+| P3.4 | MC × гидравлика — **выполнено** | `hydraulic_uncertainty_service`, `hydraulic_uncertainty_panel`, wiring в `tab_monte_carlo`, `hydraulic_uncertainty@1.0` | ~1–2 дня |
 | P3.5 | Экспорт инженерных моделей | `model_export_service`, CSV/JSON | ~2 дня |
 
 **Порядок (рекомендуемый):** P3.1 → P3.2 → P3.3 → P3.4 → P3.5.
@@ -1071,6 +1083,7 @@ MC — фундамент неопределённостей; DS опирает�
 
 | Дата | Версия | Изменение |
 |------|--------|-----------|
+| 24.09.2026 | 2.9 | **P3.4 выполнен**: `hydraulic_uncertainty_service` (`hydraulic_uncertainty@1.0`) propagates seedable MC draws through P3.1/P3.2/P3.3; `hydraulic_uncertainty_panel` + QThread launch from `tab_monte_carlo`; public exports + PyInstaller hidden imports; **378 tests** + 135 root; native offscreen QA for backwater/routing/clear-state |
 | 24.09.2026 | 2.8 | **P3.3 выполнен; решение 11.2=(а) закрыто**: `inundation.py` (S(H), интерполяция, объём, trapezoid), `inundation_service` (`inundation@1.0`, StageArea/Trapezoid/GeoJSON), Work9 internal tab «Затопление H → S,V», public exports + PyInstaller hidden imports; **367 passed** + 135 root; nav 25; native valid/GeoJSON/error QA |
 | 24.09.2026 | 2.7 | **P3.2 выполнен; решение 11.1=(а) закрыто**: `routing.py` (C0/C1/C2, MuskingumError, метрики пика), `routing_service` (`muskingum@1.0`), GUI Work7 (вход→выход, K/x/dt, очистка stale plot при ошибке), public exports + PyInstaller hidden imports; **348 passed** + 135 root; nav 25; native GUI 1200×700/1600×900 |
 | 23.09.2026 | 2.6 | **P3.1 выполнен**: `hydraulics_profile` (`Reach` + `route_backwater_profile`), `backwater_profile_service` (provenance `backwater_profile@1.0`), GUI multi-reach в work9 (таблица + WSE), 13 тестов (1 пролёт ≡ core бит-в-бит); **326 passed** + 135 root; nav 25; ядро `backwater.py` не тронуто |
