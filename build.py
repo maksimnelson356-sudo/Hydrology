@@ -49,8 +49,7 @@ HIDDEN_IMPORTS = [
     "core.hydrorash.reservoir_regulation", "core.hydrorash.sedimentation",
     "core.hydrorash.ecological_flow",
     "core.short_series", "core.gts_reference",
-    "core.domain", "core.domain.models", "core.domain.enums",
-    "core.domain.serialization",
+    "core.domain", "core.domain.models", "core.domain.serialization",
     "core.services", "core.services.bootstrap", "core.services.calculation_service",
     "core.services.api_source",
     "core.services.calibration_service",
@@ -121,11 +120,13 @@ def get_pyinstaller_args():
             args.append(f"--add-data={src}{os.pathsep}{dst}")
 
     # Icon
-    if os.path.exists("icon.ico"):
-        args.append("--icon=icon.ico")
-        print("Icon added")
+    icon_candidates = ("icon.ico", "gui/resources/logo.png")
+    icon_path = next((path for path in icon_candidates if os.path.exists(path)), None)
+    if icon_path is not None:
+        args.append(f"--icon={icon_path}")
+        print(f"Icon added: {icon_path}")
     else:
-        print("Warning: icon.ico not found, build without icon")
+        print("No application icon found; building without icon")
 
     # Code signing
     CODESIGN_CERT_THUMBPRINT = os.environ.get("CODESIGN_CERT_THUMBPRINT", "")
