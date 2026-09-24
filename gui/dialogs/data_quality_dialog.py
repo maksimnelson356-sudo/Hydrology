@@ -17,7 +17,6 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QDialog,
-    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -25,6 +24,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressDialog,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -32,8 +32,9 @@ from PyQt6.QtWidgets import (
 )
 
 from core.domain.models import DataQualityReport, Dataset
-from core.domain.models import ValidationSeverity
+from gui.dialogs.data_quality_summary import render_summary
 from gui.workers import DataQualityWorker
+from i18n import t
 
 # Цвета severity (в стиле gui/plot_style.COLORS)
 _SEVERITY_COLORS = {
@@ -41,6 +42,12 @@ _SEVERITY_COLORS = {
     "error": "#E65100",
     "warning": "#F9A825",
     "info": "#1565C0",
+}
+_SEVERITY_LABELS = {
+    "critical": "Критично",
+    "error": "Ошибка",
+    "warning": "Предупреждение",
+    "info": "Информация",
 }
 
 
@@ -76,14 +83,17 @@ class DataQualityDialog(QDialog):
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
 
-        title = QLabel("Качество данных и рекомендации")
+        title = QLabel(t("quality_dialog_title", "Качество данных и рекомендации"))
         title.setStyleSheet("font-size: 15px; font-weight: bold; color: #0D47A1;")
         layout.addWidget(title)
 
         hint = QLabel(
-            "Данные не изменяются автоматически: каждая проблема сопровождается "
-            "объяснением и доступными действиями. Исправление выполняется только "
-            "по явному выбору пользователя."
+            t(
+                "quality_dialog_hint",
+                "Данные не изменяются автоматически: каждая проблема сопровождается "
+                "объяснением и доступными действиями. Исправление выполняется только "
+                "по явному выбору пользователя.",
+            )
         )
         hint.setWordWrap(True)
         hint.setStyleSheet(
@@ -92,17 +102,38 @@ class DataQualityDialog(QDialog):
         )
         layout.addWidget(hint)
 
+        guide_group = QGroupBox(t("quality_usage_title", "Как пользоваться"))
+        guide_layout = QVBoxLayout(guide_group)
+        guide = QLabel(
+            t(
+                "quality_usage_text",
+                "1. Загрузите ряд в разделе «Данные и статистика».\n"
+                "2. Нажмите «Проверить качество» и дождитесь отчёта.\n"
+                "3. Сначала устраните блокирующие проблемы: пропуски и отрицательные значения.\n"
+                "4. Запускайте только нужное действие — исходные данные не изменяются автоматически.\n"
+                "5. После исправлений повторите проверку.",
+            )
+        )
+        guide.setWordWrap(True)
+        guide.setStyleSheet("color: #546E7A; font-size: 11px;")
+        guide_layout.addWidget(guide)
+        layout.addWidget(guide_group)
+
         # Сводка: score / grade / краткие метрики
-        summary_group = QGroupBox("Сводка")
+        summary_group = QGroupBox(t("quality_summary", "Сводка"))
         self._summary_grid = QGridLayout(summary_group)
         layout.addWidget(summary_group)
 
         # Таблица проблем
-        issues_group = QGroupBox("Обнаруженные проблемы")
+        issues_group = QGroupBox(t("quality_detected_issues", "Обнаруженные проблемы"))
         issues_layout = QVBoxLayout(issues_group)
         self._issues_table = QTableWidget(0, 3)
         self._issues_table.setHorizontalHeaderLabels(
-            ["Серьёзность", "Что обнаружено", "Почему это важно / что делать"]
+            [
+                t("quality_severity", "Серьёзность"),
+                t("quality_found", "Что обнаружено"),
+                t("quality_why_action", "Почему это важно / что делать"),
+            ]
         )
         self._issues_table.horizontalHeader().setStretchLastSection(True)
         self._issues_table.setColumnWidth(0, 90)
@@ -114,13 +145,14 @@ class DataQualityDialog(QDialog):
         layout.addWidget(issues_group, 1)
 
         # Рекомендации с кнопками действий
-        self._recommendations_group = QGroupBox("Рекомендуемые действия")
+        self._recommendations_group = QGroupBox(t("quality_actions", "Рекомендуемые действия"))
         self._recommendations_layout = QVBoxLayout(self._recommendations_group)
+        self._recommendations_layout.setSpacing(8)
         layout.addWidget(self._recommendations_group, 1)
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)
-        self._btn_close = QPushButton("Закрыть")
+        self._btn_close = QPushButton(t("quality_close", "Закрыть"))
         self._btn_close.clicked.connect(self.accept)
         buttons.addWidget(self._btn_close)
         layout.addLayout(buttons)
@@ -129,7 +161,9 @@ class DataQualityDialog(QDialog):
     # Анализ (в фоне)
     # ------------------------------------------------------------------
     def _run_analysis(self, methodology_id: str | None, parameters: dict[str, Any] | None) -> None:
-        self._progress = QProgressDialog("Оценка качества данных...", None, 0, 100, self)
+        self._progress = QProgressDialog(
+            t("quality_progress", "Оценка качества данных..."), None, 0, 100, self
+        )
         self._progress.setWindowModality(Qt.WindowModality.WindowModal)
         self._progress.setMinimumDuration(0)
         self._progress.setValue(5)
@@ -168,7 +202,7 @@ class DataQualityDialog(QDialog):
         if self._progress is not None:
             self._progress.close()
             self._progress = None
-        QMessageBox.critical(self, "Ошибка оценки качества", message)
+        QMessageBox.critical(self, t("quality_error_title", "Ошибка оценки качества"), message)
         self.reject()
 
     def _on_worker_done(self, result: dict) -> None:
@@ -193,46 +227,16 @@ class DataQualityDialog(QDialog):
         report = self._report
 
         # --- Сводка ---------------------------------------------------
-        # Очищаем сводку (кроме самого layout)
-        while self._summary_grid.count():
-            item = self._summary_grid.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-        self._add_summary_cell(
-            0, 0, "Оценка качества",
-            f"{report.quality_grade} ({report.quality_score:.2f} / 1.0)",
-        )
-        self._add_summary_cell(
-            0, 1, "Комплектность ряда",
-            f"{report.completeness_ratio * 100:.0f} %",
-        )
-        self._add_summary_cell(1, 0, "Точек / пропусков",
-                               f"{report.n_points} / {report.n_missing}")
-        self._add_summary_cell(1, 1, "Выбросы (IQR)", str(report.n_outliers))
-        self._add_summary_cell(2, 0, "Однородность",
-                               "пройдена" if report.homogeneity_passed else "нарушена",
-                               ok=report.homogeneity_passed)
-        self._add_summary_cell(2, 1, "Стационарность",
-                               "пройдена" if report.stationarity_passed else "нарушена",
-                               ok=report.stationarity_passed)
-        stats = report.statistics or {}
-        if stats:
-            self._add_summary_cell(
-                3, 0, "Среднее / Cv",
-                f"{stats.get('mean', float('nan')):.2f} / {stats.get('cv', float('nan')):.3f}",
-            )
-            self._add_summary_cell(
-                3, 1, "Min / Max",
-                f"{stats.get('min', float('nan')):.1f} / {stats.get('max', float('nan')):.1f}",
-            )
+        render_summary(self._summary_grid, report)
 
         # --- Проблемы --------------------------------------------------
         self._issues_table.setRowCount(0)
         for issue in report.issues:
             row_idx = self._issues_table.rowCount()
             self._issues_table.insertRow(row_idx)
-            severity_item = QTableWidgetItem(issue.severity.value)
+            severity_item = QTableWidgetItem(
+                _SEVERITY_LABELS.get(issue.severity.value, issue.severity.value)
+            )
             color = QColor(_SEVERITY_COLORS.get(issue.severity.value, "#1565C0"))
             severity_item.setForeground(color)
             font = severity_item.font()
@@ -242,50 +246,36 @@ class DataQualityDialog(QDialog):
             self._issues_table.setItem(row_idx, 1, QTableWidgetItem(issue.message))
             why = issue.details.get("why_it_matters", "")
             actions = issue.details.get("recommended_actions", [])
-            action_text = "; ".join(a.get("title", "") for a in actions)
+            action_text = "; ".join(
+                str(action.get("description", "")) for action in actions
+            )
             details_text = why + (f" → {action_text}" if action_text else "")
             self._issues_table.setItem(row_idx, 2, QTableWidgetItem(details_text))
         self._issues_table.resizeRowsToContents()
 
         # --- Рекомендации ---------------------------------------------
-        # Очищаем предыдущие кнопки
         while self._recommendations_layout.count():
             item = self._recommendations_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
-        seen: set[tuple[str, str]] = set()
+        seen: set[str] = set()
         for rec in self._recommendations:
-            code = rec.get("code", "")
-            title = rec.get("title", "")
-            key = (code, title)
-            if code in ("none", "") or key in seen:
+            code = str(rec.get("code", ""))
+            description = str(rec.get("description", "")).strip()
+            if not code or code in seen or not description:
                 continue
-            seen.add(key)
-            btn = QPushButton(f"→ {title}")
-            btn.setToolTip(rec.get("description", ""))
+            seen.add(code)
+            btn = QPushButton(f"→ {description}")
+            btn.setToolTip(description)
+            btn.setMinimumHeight(36)
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             btn.clicked.connect(lambda _, c=code, ctx=rec: self._on_action(c, ctx))
             self._recommendations_layout.addWidget(btn)
         if self._recommendations_layout.count() == 0:
-            self._recommendations_layout.addWidget(QLabel("Проблем не обнаружено — данные готовы к расчётам."))
-
-    def _add_summary_cell(self, row: int, col: int, label: str, value: str, ok: bool | None = None) -> None:
-        box = QFrame()
-        box.setFrameShape(QFrame.Shape.StyledPanel)
-        box.setStyleSheet("QFrame { background: #F5F7FA; border-radius: 4px; }")
-        inner = QVBoxLayout(box)
-        inner.setContentsMargins(8, 4, 8, 4)
-        lbl = QLabel(label)
-        lbl.setStyleSheet("color: #666; font-size: 11px;")
-        val = QLabel(value)
-        val.setStyleSheet("font-weight: bold; font-size: 13px;")
-        if ok is True:
-            val.setStyleSheet("font-weight: bold; font-size: 13px; color: #2E7D32;")
-        elif ok is False:
-            val.setStyleSheet("font-weight: bold; font-size: 13px; color: #C62828;")
-        inner.addWidget(lbl)
-        inner.addWidget(val)
-        self._summary_grid.addWidget(box, row, col)
+            self._recommendations_layout.addWidget(
+                QLabel(t("quality_no_issues", "Проблем не обнаружено — данные готовы к расчётам."))
+            )
 
     def _on_action(self, code: str, context: dict) -> None:
         """Передать выбранное действие в MainWindow (данные не меняются молча)."""
