@@ -1,6 +1,6 @@
 # Состояние работы
 
-## Текущий этап: P0–P2.5 и P3.1–P3.4 выполнены и запушены; P3.5 не начат
+## Текущий этап: P0–P2.5 и P3.1–P3.4 выполнены и запушены; P3.5 реализован атомарными commits `906f002`..`388cb06`
 
 ### Выполненные этапы ROADMAP
 
@@ -25,9 +25,10 @@
 | **P3.2 Muskingum-маршрутизация (11.1=а)** | **готово, запушен** (`d108ef7`/`ce33f55`/`5dc3f9f` feat + `96e08b9`/`953fd60` docs) | `test_routing_service` (22) |
 | **P3.3 Затопление H→S,V (11.2=а)** | **готово, запушен** (`98a8664`/`5b55f17`/`f2c1458` feat + `27ddf36`/`a3a0940` docs) | `test_inundation_service` (19) |
 | **P3.4 MC × гидравлика** | **готово, запушено** (`b7e8239`, `8a452cc`, `401708a`, `5fae683`, `3fef7ac`, `eec10f0`) | `test_hydraulic_uncertainty_service` (11) |
+| **P3.5 экспорт инженерных моделей** | **готово** (`906f002`, `7974a8b`, `5b281e4`, `8f70a87`, `5090fec`, `388cb06`; решение 11.3=(а): JSON + CSV) | P3.5 targeted: 19 tests |
 | мёрдж в main | **выполнен** (решение 8.2) | — |
 
-Итого: **379 passed** (`tests/`), корневые **135 passed** (полный набор **514 passed**), новые P3.4-файлы ruff/LSP чистые (build.py содержит существующие baseline N806/F841), nav **25/25/25**; native P3.4 initial/backwater/routing/clear-state/launch captures и QThread worker smoke проверены; PyInstaller package `dist/HydroSphere/HydroSphere.exe` собран и запущен.
+Итого: **400 passed** (`tests/`), корневые **135 passed** (полный набор **535 passed**), новые P3.4/P3.5-файлы ruff/LSP/no-excuse чистые (build.py и Work7/Work9 сохраняют существующие baseline), nav **25/25/25**; native P3.4/P3.5 captures и packaged PyInstaller smoke проверены.
 
 ### P1.6 — что сделано (решение 9.3 = (б) GeoJSON)
 
@@ -159,6 +160,30 @@
   поэтому capture показывает square placeholders только вместо русских glyphs.
 - P3.4 запушен в `origin/global-implementation`; PyInstaller package собран, `HydroSphere.exe` запущен и проверен на main page и вкладке «Качество данных». P3.5 остаётся следующим этапом.
 
+### P3.5 — что сделано (решение 11.3 = (а), JSON + CSV)
+
+1. **`core/services/model_export_types.py` / `model_export_parser.py` /
+   `model_export_service.py`** — typed immutable contracts, tolerant JSON boundary и atomic
+   UTF-8-SIG JSON/CSV export для reaches, Muskingum hydrograph и WSE profile; дополнительных
+   runtime-зависимостей нет.
+2. **GUI** — reusable `gui/tabs/model_export_controls.py`; кнопки экспорта добавлены в существующие
+   Work7 routing block и Work9 multi-reach block. Новая navigation page не создаётся; ru/en i18n
+   обновлены.
+3. **Packaging** — `build.py` включает service и UI helper; `build_assets.py` генерирует реальный
+   ICO из валидного `gui/resources/logo.svg` (18-byte placeholder `logo.png` больше не используется).
+
+### Верификация DoD P3.5 (2026-09-24)
+
+- `python -m pytest -q` → **535 passed** (два существующих numpy warning).
+- P3.5 targeted → **19 passed**: service 15, public API 1, Work7 1, Work9 1, packaging 1.
+- Новые service/UI/test modules: Ruff, LSP и no-excuse чистые; Work7/Work9 имеют только
+  pre-existing baseline notices, новых P3.5 lint errors нет.
+- PyInstaller build завершён с icon; `dist/HydroSphere/HydroSphere.exe` запущен и отвечает.
+- Native screenshots Work7/Work9 показывают читаемые русские labels, доступные export controls
+  без clipping/overlap. Два independent visual-review не запустились из-за provider-model
+  конфигурации; локальная native evidence и runtime tests зелёные.
+- Code/build commits P3.5: `906f002`, `7974a8b`, `5b281e4`, `8f70a87`, `5090fec`, `388cb06`.
+
 ### P1.7 — что сделано
 
 1. **domain** — `Scenario.scenario_type` (`generic`/`reservoir`), сериализация в `.hsp`.
@@ -220,7 +245,7 @@
 
 - 2 предсуществующих `except Exception` в `main_window` — по мере рефакторинга.
 - Ручной GUI / приёмка — за пользователем.
-- **§6.2 P2, P3.1–P3.4 закрыты и запушены.** Дальше — **P3.5** (решения 11.1=(а)/11.2=(а) закрыты; 11.3 — P3.5).
+- **§6.2 P2, P3.1–P3.4 закрыты и запушены; P3.5 полностью реализован.** Решения 11.1/11.2/11.3 закрыты.
 
 ### Примечания
 
@@ -231,4 +256,4 @@
 - P1.6: DEM-растры (rasterio) — осознанно вне объёма (решение 9.3 = (б)); при необходимости — reopen 9.3 позже.
 - P2.1: demo model y=a·x+b — для smoke/знакомства; подключение к калиброванным моделям/P2.2 — позже.
 
-Обновлено: 2026-09-24 (P3.4 запушен: `hydraulic_uncertainty@1.0`, QThread panel, 379+135=514 tests, native QA и PyInstaller smoke; решение 11.2=(а) закрыто; следующий этап — P3.5)
+Обновлено: 2026-09-24 (P3.4 запушен; P3.5 JSON+CSV реализован атомарными commits `906f002`..`388cb06`: 400+135=535 tests, native Work7/Work9 QA и PyInstaller smoke; решение 11.3=(а) закрыто)
