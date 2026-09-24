@@ -5,6 +5,7 @@ gui/widget_work9.py
 
 import os
 import sys
+from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -45,8 +46,15 @@ from core.services.backwater_profile_service import (
     BackwaterProfileService,
     ReachSpec,
 )
+from core.services.model_export_service import (
+    ModelExportError,
+    ReachExportRequest,
+    export_reaches,
+)
 from gui.plot_style import auto_resize_table
+from gui.tabs.model_export_controls import ModelExportButton
 from gui.tabs.tab_inundation import InundationTab
+from i18n import t
 
 
 class Work9Widget(QWidget):
@@ -201,6 +209,14 @@ class Work9Widget(QWidget):
         )
         btn_multi.clicked.connect(self.calculate_backwater_profile)
         multi_lay.addWidget(btn_multi)
+        self.btn_export_model = ModelExportButton(
+            t("model_export_reaches", "Экспорт пролётов (JSON + CSV)"),
+            t("model_export_reaches_title", "Экспорт модели пролётов"),
+            "hydrosphere_reaches.json",
+            self._export_reach_model,
+            self,
+        )
+        multi_lay.addWidget(self.btn_export_model)
         lay.addWidget(multi_grp)
 
         btn = QPushButton("Рассчитать ГВП")
@@ -343,6 +359,24 @@ class Work9Widget(QWidget):
             except ValueError as error:
                 raise ValueError(f"Строка {row + 1}: {error}") from error
         return specs
+
+    def export_reach_model(self, target: Path | None = None) -> Path | None:
+        """Export the configured reach table as JSON and CSV."""
+        if target is None:
+            target = self.btn_export_model.choose_target()
+        if target is None:
+            return None
+        if not self.btn_export_model.export_to(target):
+            return None
+        return target.with_suffix(".json")
+
+    def _export_reach_model(self, target: Path) -> None:
+        """Serialize the current reach table through the P3.5 service."""
+        try:
+            reaches = tuple(self._reaches_from_table())
+        except ValueError as error:
+            raise ModelExportError(str(error), target) from error
+        export_reaches(ReachExportRequest(reaches=reaches, target=target))
 
     def calculate_backwater_profile(self):
         """Multi-reach chained backwater (P3.1): service → plot + text."""
