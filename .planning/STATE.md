@@ -1,6 +1,6 @@
 # Состояние работы
 
-## Текущий этап: P0–P2.5 запушены; §6.3 расписана; **P3.1 выполнен и запушен**; P3.2–P3.5 не начаты
+## Текущий этап: P0–P2.5 и P3.1 запушены; **P3.2 выполнен, ожидает commit/push**; P3.3–P3.5 не начаты
 
 ### Выполненные этапы ROADMAP
 
@@ -22,9 +22,10 @@
 | P2.4 визуализация (fan/hist/tornado) | **готово, запушен** (`2c44287` + `8b4bf4a`) | helpers + GUI |
 | P2.5 Decision Support (10.3=а) | **готово, запушен** (`2c44287` + `8b4bf4a`) | `test_decision_support_service` (23) |
 | **P3.1 многопролётная ГВП** | **готово, запушен** (`bf2feb4` feat + `5c93459` docs) | `test_backwater_profile_service` (13) |
+| **P3.2 Muskingum-маршрутизация (11.1=а)** | **готово, ожидает commit/push** | `test_routing_service` (22) |
 | мёрдж в main | **выполнен** (решение 8.2) | — |
 
-Итого: **326 passed** (`tests/`), корневые **135 passed**, ruff по тронутым файлам чист (новые = 0; `main_window.py` 36/36 delta=0, `build.py` 7/7 delta=0), nav **25/25/25**, GUI offscreen smoke OK (25 pages).
+Итого: **348 passed** (`tests/`), корневые **135 passed**, ruff по новым routing-файлам чист (Work7/build.py — существующие baseline), nav **25/25/25**, GUI smoke OK; native Work7 valid/error states проверены при 1200×700 и 1600×900.
 
 ### P1.6 — что сделано (решение 9.3 = (б) GeoJSON)
 
@@ -97,6 +98,21 @@
 - ruff: новые = 0; build 7/7, main_window 36/36 delta=0; widget_work9 — без новых (бейзлайн N806/N802 сохранён).
 - 1 пролёт: числа бит-в-бит == `backwater_curve_step`; без новых runtime-зависимостей; решение 11.x не закрывалось (11.2/11.3 — P3.3/P3.5).
 
+### P3.2 — что сделано (решение 11.1 = (а) Muskingum)
+
+1. **`core/hydrorash/routing.py`** — `MuskingumError`, C0/C1/C2, проверки dt/K/x и коэффициентов, входного ряда и O0; выход `outflow`, пики входа/выхода, аттенюация и lag.
+2. **`core/services/routing_service.py`** — `RoutingRequest` / `RoutingResult` / `RoutingService` / `RoutingError`, JSON-safe `to_dict()`, provenance `muskingum@1.0`; математика только в core.
+3. **`tests/test_routing_service.py`** — 22: коэффициенты, constant→steady, объём ±1%, метрики, validation, provenance, AST, public export/build hidden-imports; GUI-контракты `dt` и очистки stale plot.
+4. **GUI `widget_work7.py`** — Muskingum в существующей вкладке гидрографов: K/x/dt, вход→выход на одном временном шаге, коэффициенты/пики/ослабление/lag/provenance; nav = 25.
+5. **exports/build** — `core.services` публикует `Routing*`; PyInstaller hidden imports включают routing core/service.
+
+### Верификация DoD P3.2 (2026-09-24)
+
+- `pytest tests -q` → **348** (+22); root → **135**; nav **25/25/25**, Work7 index 19; GUI smoke OK.
+- Targeted routing → **22 passed**; новые routing-файлы ruff = 0; Work7/build.py — только существующие baseline; LSP clean.
+- Volume ±1%; constant→steady; C0/C1/C2∈[0,1]; native valid/error states при 1200×700 и 1600×900; без новых runtime-зависимостей.
+- Решение **11.1=(а) закрыто**; 11.2/11.3 остаются P3.3/P3.5. Два независимых visual-review не запустились из-за provider-model конфигурации; локальная native-screen проверка и regression-тесты зелёные.
+
 ### P1.7 — что сделано
 
 1. **domain** — `Scenario.scenario_type` (`generic`/`reservoir`), сериализация в `.hsp`.
@@ -158,7 +174,7 @@
 
 - 2 предсуществующих `except Exception` в `main_window` — по мере рефакторинга.
 - Ручной GUI / приёмка — за пользователем.
-- **§6.2 P2 закрыт; P3.1 запушен.** Дальше — **P3.2 → P3.5** (решения 11.1–11.3; 11.1 — при P3.2, 11.2 — P3.3, 11.3 — P3.5).
+- **§6.2 P2 и P3.1 закрыты; P3.2 выполнен и ожидает commit/push.** Дальше — **P3.3 → P3.5** (решение 11.1=(а) закрыто; 11.2 — P3.3, 11.3 — P3.5).
 
 ### Примечания
 
@@ -169,4 +185,4 @@
 - P1.6: DEM-растры (rasterio) — осознанно вне объёма (решение 9.3 = (б)); при необходимости — reopen 9.3 позже.
 - P2.1: demo model y=a·x+b — для smoke/знакомства; подключение к калиброванным моделям/P2.2 — позже.
 
-Обновлено: 2026-09-23 (P3.1 запушен: feat `bf2feb4`, docs `5c93459`; 326+135, nav 25, smoke OK, origin/main == origin/global-implementation 0/0; §6.3 расписана `c6506e3`)
+Обновлено: 2026-09-24 (P3.1 запушен: feat `bf2feb4`, docs `5c93459`; P3.2 Muskingum выполнен и ожидает commit/push; 348+135, nav 25, native GUI valid/error QA; решение 11.1=(а) закрыто)
