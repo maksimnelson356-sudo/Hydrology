@@ -1,5 +1,14 @@
 # Changelog — HydroSphere
 
+## v2026.09.24 — Release housekeeping после P3.4
+
+### Исправлено
+- **`build.py`** — удалён несуществующий hidden import `core.domain.enums`; PyInstaller использует
+  `gui/resources/logo.png`, когда `icon.ico` отсутствует, поэтому packaged build не содержит stale warning.
+- **Состояние roadmap** — P3.4 отмечен как запушенный, полный regression suite зафиксирован at **514 passed**.
+
+---
+
 ## v2026.09.24 — Data Quality: русский интерфейс и инструкция
 
 ### Добавлено
@@ -21,7 +30,9 @@
 - **`build.py`** — hidden import для нового renderer-модуля.
 
 ### Проверки
-- Data Quality GUI/service tests проходят; полный regression suite и native offscreen QA выполняются после UI-изменений.
+- Data Quality GUI/service tests проходят; полный regression suite — **514 passed**.
+- Native Windows QA: вкладка «Качество данных» отрисовывается без clipping/overlap, кириллица читаема.
+- PyInstaller package собран; `dist/HydroSphere/HydroSphere.exe` запущен и отвечает.
 
 ---
 
@@ -52,14 +63,16 @@
 - **`DOCS/ROADMAP.md` / `.planning/ROADMAP.md` / `.planning/STATE.md`** — P3.4 отмечен выполненным.
 
 ### Проверки (DoD P3.4)
-- `python -m pytest tests -q` → **378 passed** (11 новых P3.4; два существующих numpy warning).
-- Полный `python -m pytest -q` → **513 passed**; корневые regression-тесты → **135 passed**.
+- `python -m pytest tests -q` → **379 passed** (11 новых P3.4; два существующих numpy warning).
+- Полный `python -m pytest -q` → **514 passed**; корневые regression-тесты → **135 passed**.
 - Targeted P3.4 → **11 passed**; Ruff/no-excuse/LSP для новых P3.4-модулей чистые;
   `tab_monte_carlo.py` сохраняет pre-existing oversized-module/broad-except baseline, не относящийся к P3.4.
-- Native offscreen QA: initial/backwater/routing/engine-clear/launch states; QThread worker smoke;
-  chart height/readability и stale-plot clearing проверены. Offscreen QPA не содержит кириллических
-  шрифтов, поэтому визуальные screenshots содержат квадратные placeholders; это ограничение capture-среды.
-- Без новых runtime-зависимостей; P2/P3 математика не дублировалась. P3.5 остаётся следующим этапом.
+- Native QA: initial/backwater/routing/engine-clear/launch states; QThread worker smoke;
+  chart height/readability и stale-plot clearing проверены.
+- PyInstaller package `dist/HydroSphere/HydroSphere.exe` собран, запущен и отвечает; native captures
+  главного окна и вкладки «Качество данных» проверены.
+- Без новых runtime-зависимостей; P2/P3 математика не дублировалась. P3.4 запушен в
+  `origin/global-implementation`; P3.5 остаётся следующим этапом.
 
 ---
 
