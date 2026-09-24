@@ -68,6 +68,7 @@ from gui.plot_style import (
     draw_histogram_quantiles,
     draw_tornado_hbars,
 )
+from gui.tabs.hydraulic_uncertainty_panel import HydraulicUncertaintyPanel
 
 HINT_STYLE = (
     "color: #666; font-style: italic; padding: 8px; background: #f0f0f0; border-radius: 4px;"
@@ -150,6 +151,7 @@ class TabMonteCarlo(QWidget):
         self._sensitivity_result: Any = None
         self._climate_result: dict[int, float] | None = None
         self._ds_result: Any = None
+        self._hydraulic_panel: HydraulicUncertaintyPanel | None = None
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -266,6 +268,10 @@ class TabMonteCarlo(QWidget):
         self.btn_run.setStyleSheet(RUN_STYLE)
         self.btn_run.clicked.connect(self._on_run_clicked)
         controls.addWidget(self.btn_run)
+        self.btn_hydraulic = QPushButton("Гидравлический Monte Carlo (P3.4)")
+        self.btn_hydraulic.setStyleSheet(RUN_STYLE)
+        self.btn_hydraulic.clicked.connect(self._open_hydraulic_panel)
+        controls.addWidget(self.btn_hydraulic)
         controls.addStretch()
         layout.addLayout(controls)
 
@@ -414,6 +420,19 @@ class TabMonteCarlo(QWidget):
         self.lbl_ds.setWordWrap(True)
         ds_layout.addWidget(self.lbl_ds)
         layout.addWidget(ds_box, stretch=1)
+
+    # ------------------------------------------------------------------
+    # P3.4 hydraulic uncertainty
+    # ------------------------------------------------------------------
+    def _open_hydraulic_panel(self) -> None:
+        """Open the seedable P3.4 panel without adding a navigation page."""
+        if self._hydraulic_panel is None:
+            self._hydraulic_panel = HydraulicUncertaintyPanel()
+            self._hydraulic_panel.status_message.connect(self.status_message)
+            self._hydraulic_panel.error.connect(self.error)
+        self._hydraulic_panel.show()
+        self._hydraulic_panel.raise_()
+        self._hydraulic_panel.activateWindow()
 
     # ------------------------------------------------------------------
     # P2.3 climate
