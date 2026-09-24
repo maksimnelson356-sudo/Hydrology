@@ -11,6 +11,8 @@ import os
 import subprocess
 import sys
 
+from build_assets import resolve_icon_path
+
 # Название приложения
 APP_NAME = "HydroSphere"
 SCRIPT = os.path.join("gui", "main_window.py")
@@ -120,8 +122,7 @@ def get_pyinstaller_args():
             args.append(f"--add-data={src}{os.pathsep}{dst}")
 
     # Icon
-    icon_candidates = ("icon.ico", "gui/resources/logo.png")
-    icon_path = next((path for path in icon_candidates if os.path.exists(path)), None)
+    icon_path = resolve_icon_path()
     if icon_path is not None:
         args.append(f"--icon={icon_path}")
         print(f"Icon added: {icon_path}")

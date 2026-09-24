@@ -40,21 +40,28 @@ def test_hidden_imports_reference_existing_project_modules() -> None:
     assert missing == []
 
 
-def test_pyinstaller_uses_logo_when_icon_is_absent(
+def test_pyinstaller_generates_icon_from_svg_when_icon_is_absent(
     tmp_path: Path,
     monkeypatch,
     capsys,
 ) -> None:
-    # Given: a checkout without icon.ico but with the bundled PNG logo.
+    # Given: a checkout without icon.ico but with the valid SVG logo.
     monkeypatch.chdir(tmp_path)
-    logo_path = tmp_path / "gui" / "resources" / "logo.png"
+    logo_path = tmp_path / "gui" / "resources" / "logo.svg"
     logo_path.parent.mkdir(parents=True)
-    logo_path.write_bytes(b"test-logo")
+    logo_path.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128">'
+        '<rect width="128" height="128" fill="#1565C0"/></svg>',
+        encoding="utf-8",
+    )
 
     # When: PyInstaller arguments are assembled.
     args = build.get_pyinstaller_args()
     output = capsys.readouterr().out
 
-    # Then: the existing asset is used and no missing-icon warning is emitted.
-    assert "--icon=gui/resources/logo.png" in args
+    # Then: a real ICO is generated and no missing-icon warning is emitted.
+    icon_arg = next(arg for arg in args if arg.startswith("--icon="))
+    icon_path = Path(icon_arg.removeprefix("--icon="))
+    assert icon_path.suffix == ".ico"
+    assert icon_path.exists()
     assert "Warning: icon.ico not found" not in output
