@@ -58,6 +58,16 @@ from .decision_support_service import (
     ThresholdAssessment,
 )
 from .geo_service import BasinMorphometry, GeoService, GeoServiceError
+from .hydraulic_uncertainty_service import (
+    HYDRAULIC_UNCERTAINTY_PROVENANCE,
+    BackwaterMonteCarloBaseline,
+    HydraulicBaseline,
+    HydraulicUncertaintyError,
+    HydraulicUncertaintyRequest,
+    HydraulicUncertaintyResult,
+    HydraulicUncertaintyService,
+    RoutingMonteCarloBaseline,
+)
 from .import_service import ColumnMapping, ImportPreview, ImportService, ImportServiceError
 from .inundation_service import (
     INUNDATION_PROVENANCE,
@@ -126,6 +136,7 @@ __all__ = [
     "DEFAULT_RELATIVE_DELTA",
     "DEFAULT_RISK_CUTOFFS",
     "DISTRIBUTIONS",
+    "HYDRAULIC_UNCERTAINTY_PROVENANCE",
     "INUNDATION_PROVENANCE",
     "RISK_CLASSES",
     "ROUTING_PROVENANCE",
@@ -133,6 +144,7 @@ __all__ = [
     "BackwaterProfileRequest",
     "BackwaterProfileResult",
     "BackwaterProfileService",
+    "BackwaterMonteCarloBaseline",
     "BasinMorphometry",
     "ClimateError",
     "ClimateScenario",
@@ -150,6 +162,11 @@ __all__ = [
     "InundationRequest",
     "InundationResult",
     "InundationService",
+    "HydraulicBaseline",
+    "HydraulicUncertaintyError",
+    "HydraulicUncertaintyRequest",
+    "HydraulicUncertaintyResult",
+    "HydraulicUncertaintyService",
     "MonteCarloError",
     "MonteCarloRequest",
     "MonteCarloService",
@@ -200,6 +217,7 @@ __all__ = [
     "RoutingRequest",
     "RoutingResult",
     "RoutingService",
+    "RoutingMonteCarloBaseline",
     "ReservoirScenarioError",
     "ReservoirScenarioService",
     "ScenarioNotFoundError",
