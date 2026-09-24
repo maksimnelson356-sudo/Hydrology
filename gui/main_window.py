@@ -593,6 +593,7 @@ class MainWindow(QMainWindow):
         self.tab_short = ShortWidget()
         self.tab_data_quality = TabDataQuality()
         # Connect data quality tab signals to action methods
+        self.tab_data_quality.check_requested.connect(self.show_data_quality)
         self.tab_data_quality.fill_missing_requested.connect(self.fill_missing_data)
         self.tab_data_quality.fill_missing_with_correlation_requested.connect(self.fill_missing_with_correlation)
         self.tab_data_quality.check_homogeneity_requested.connect(self.check_homogeneity)
@@ -1716,8 +1717,15 @@ class MainWindow(QMainWindow):
                 ),
                 "",
             ]
+            severity_names = {
+                "critical": "критично",
+                "error": "ошибка",
+                "warning": "предупреждение",
+                "info": "информация",
+            }
             for issue in gate.decision.blocking[:8]:
-                lines.append(f"• [{issue.severity.value}] {issue.message}")
+                severity = severity_names.get(issue.severity.value, issue.severity.value)
+                lines.append(f"• [{severity}] {issue.message}")
             if len(gate.decision.blocking) > 8:
                 lines.append(
                     f"… и ещё {len(gate.decision.blocking) - 8}"
@@ -1785,6 +1793,7 @@ class MainWindow(QMainWindow):
 
     def _on_quality_report_ready(self, report, payload):
         """Зарегистрировать отчёт о качестве в проекте (если проект открыт)."""
+        self.tab_data_quality.update_report(report)
         try:
             if getattr(self.project_service, "path", None) is not None:
                 self.project_service.register_report(payload)
@@ -1802,7 +1811,7 @@ class MainWindow(QMainWindow):
                 self.fill_missing_data()
             elif code == "fill_correlation":
                 self.fill_missing_with_correlation()
-            elif code == "homogeneity_report":
+            elif code in {"homogeneity_report", "homogeneity_investigate", "homogeneity_split"}:
                 self.check_homogeneity()
             elif code == "outliers_review":
                 self.detect_outliers()
