@@ -5,6 +5,7 @@ gui/widget_work7.py
 
 import os
 import sys
+from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -42,7 +43,14 @@ from core.hydrorash.snowmelt import (
     MELT_COEFFICIENTS,
     snowmelt_degree_day,
 )
+from core.services.model_export_service import (
+    HydrographExportRequest,
+    ModelExportError,
+    export_hydrograph,
+)
 from core.services.routing_service import RoutingError, RoutingRequest, RoutingService
+from gui.tabs.model_export_controls import ModelExportButton
+from i18n import t
 
 
 class Work7Widget(QWidget):
@@ -50,6 +58,7 @@ class Work7Widget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._last_routing_series: tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...]] | None = None
         self.initUI()
 
     def initUI(self):
@@ -191,6 +200,15 @@ class Work7Widget(QWidget):
         btn.setStyleSheet("QPushButton { background: #388E3C; color: white; font-weight: bold; }")
         btn.clicked.connect(self.build_hydrograph)
         btn_row.addWidget(btn)
+        self.btn_export_model = ModelExportButton(
+            t("model_export_routing", "Экспорт маршрутизации (JSON + CSV)"),
+            t("model_export_routing_title", "Экспорт модели маршрутизации"),
+            "hydrosphere_routing.json",
+            self._export_routing_model,
+            self,
+        )
+        self.btn_export_model.setEnabled(False)
+        btn_row.addWidget(self.btn_export_model)
         lay.addLayout(btn_row)
 
         self.hg_figure = Figure(figsize=(10, 4))
@@ -301,6 +319,8 @@ class Work7Widget(QWidget):
         self.canvas.draw()
 
     def build_hydrograph(self):
+        self._last_routing_series = None
+        self.btn_export_model.setEnabled(False)
         Qpeak = self.hg_Qpeak.value()
         Tpeak = self.hg_Tpeak.value()
         Tbase = self.hg_Tbase.value()
@@ -332,6 +352,12 @@ class Work7Widget(QWidget):
                 )
                 outflow = result.outflow
                 coeffs = result.coefficients
+                self._last_routing_series = (
+                    tuple(float(value) for value in hg['t_hours']),
+                    tuple(float(value) for value in inflow),
+                    tuple(float(value) for value in outflow),
+                )
+                self.btn_export_model.setEnabled(True)
 
                 self.hg_result.clear()
                 self.hg_result.append(f"Мускингум: K={k} ч, x={x}, dt={dt} ч")
@@ -400,6 +426,30 @@ class Work7Widget(QWidget):
         ax.axhline(y=Qpeak, color='#F44336', linestyle='--', alpha=0.5, label=f"Qпик = {Qpeak}")
         ax.legend()
         self.hg_canvas.draw()
+
+    def export_hydrograph_model(self, target: Path | None = None) -> Path | None:
+        """Export the last Muskingum result as JSON and CSV."""
+        if target is None:
+            target = self.btn_export_model.choose_target()
+        if target is None:
+            return None
+        if not self.btn_export_model.export_to(target):
+            return None
+        return target.with_suffix(".json")
+
+    def _export_routing_model(self, target: Path) -> None:
+        """Serialize the cached routing series through the P3.5 service."""
+        if self._last_routing_series is None:
+            raise ModelExportError("Сначала постройте маршрутизацию Мускингума")
+        times_hours, inflow, outflow = self._last_routing_series
+        export_hydrograph(
+            HydrographExportRequest(
+                times_hours=times_hours,
+                inflow=inflow,
+                outflow=outflow,
+                target=target,
+            )
+        )
 
     def calculate_snowmelt(self):
         zone = self.sm_zone.currentData()
