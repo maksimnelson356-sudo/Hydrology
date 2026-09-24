@@ -209,5 +209,10 @@
     "quality_min_max": "Min / Max",
     "quality_close": "Close",
     "quality_progress": "Assessing data quality...",
-    "quality_error_title": "Data quality assessment error"
+    "quality_error_title": "Data quality assessment error",
+    "model_export_routing": "Export routing model (JSON + CSV)",
+    "model_export_routing_title": "Export routing model",
+    "model_export_reaches": "Export reaches (JSON + CSV)",
+    "model_export_reaches_title": "Export reach model",
+    "model_export_error_title": "Model export error"
 }

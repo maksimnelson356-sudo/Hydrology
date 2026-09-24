@@ -209,5 +209,10 @@
     "quality_min_max": "Мин. / Макс.",
     "quality_close": "Закрыть",
     "quality_progress": "Оценка качества данных...",
-    "quality_error_title": "Ошибка оценки качества"
+    "quality_error_title": "Ошибка оценки качества",
+    "model_export_routing": "Экспорт маршрутизации (JSON + CSV)",
+    "model_export_routing_title": "Экспорт модели маршрутизации",
+    "model_export_reaches": "Экспорт пролётов (JSON + CSV)",
+    "model_export_reaches_title": "Экспорт модели пролётов",
+    "model_export_error_title": "Ошибка экспорта модели"
 }
