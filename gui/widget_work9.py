@@ -46,6 +46,7 @@ from core.services.backwater_profile_service import (
     ReachSpec,
 )
 from gui.plot_style import auto_resize_table
+from gui.tabs.tab_inundation import InundationTab
 
 
 class Work9Widget(QWidget):
@@ -74,6 +75,7 @@ class Work9Widget(QWidget):
         """)
         tabs.addTab(self._create_spillway_tab(), "Пропускная способность ППУ")
         tabs.addTab(self._create_backwater_tab(), "Кривые подпора (ГВП)")
+        tabs.addTab(InundationTab(), "Затопление H → S,V")
         tabs.addTab(self._create_regulation_tab(), "Регулирование стока")
         layout.addWidget(tabs)
 
