@@ -46,7 +46,7 @@ RECOMMENDATIONS: dict[str, dict[str, Any]] = {
         ],
     },
     "ZERO_VALUES": {
-        "description": "Нулевые значения могут указывать на отсутствие стока или ошибки измерений в_period низкой воды.",
+        "description": "Нулевые значения могут указывать на отсутствие стока или ошибки измерений в период низкой воды.",
         "actions": [
             {"code": "zero_check_measurement", "description": "Проверить измерения на наличие ошибок регистрации нулевого стока"},
             {"code": "zero_investigate_cause", "description": "Исследовать причины нулевого стока (запоры, засуха)"},
@@ -63,14 +63,14 @@ RECOMMENDATIONS: dict[str, dict[str, Any]] = {
         "description": "Слишком короткий ряд не позволяет надёжно оценить параметры распределения и проверить однородность.",
         "actions": [
             {"code": "data_extend_measurement", "description": "Продлить ряд за счёт архивных данных или прямых измерений"},
-            {"code": "data_use_synthetic", "description": "Использовать синтетический ряд,Generated аналогичными бассейнами"},
+            {"code": "data_use_synthetic", "description": "Использовать синтетический ряд, полученный по аналогичным бассейнам"},
         ],
     },
     "METHODOLOGY_MIN_POINTS": {
         "description": "Ряд короче минимально допустимого для выбранной методики, что делает расчёты неприменимыми.",
         "actions": [
             {"code": "data_extend_measurement", "description": "Продлить ряд за счёт архивных данных или прямых измерений"},
-            {"code": "data_use_synthetic", "description": "Использовать синтетический ряд,Generated аналогичными бассейнами"},
+            {"code": "data_use_synthetic", "description": "Использовать синтетический ряд, полученный по аналогичным бассейнам"},
         ],
     },
     "DATA_EMPTY": {
@@ -129,7 +129,7 @@ class DataQualityService:
                 issues=[
                     ValidationIssue(
                         code="DATA_EMPTY",
-                        message="Dataset contains no data points.",
+                        message="Набор данных не содержит точек.",
                         severity=ValidationSeverity.ERROR,
                         details=RECOMMENDATIONS["DATA_EMPTY"],
                     )
@@ -180,7 +180,7 @@ class DataQualityService:
             issues.append(
                 ValidationIssue(
                     code="INSUFFICIENT_DATA",
-                    message=f"Dataset too short: {n_points} points, minimum recommended is 10.",
+                    message=f"Ряд слишком короткий: {n_points} точек, рекомендуется не менее 10.",
                     severity=ValidationSeverity.ERROR,
                     field="data",
                     details={
@@ -244,7 +244,7 @@ class DataQualityService:
             issues.append(
                 ValidationIssue(
                     code="DATA_GAPS",
-                    message=f"Dataset missing {n_missing} year(s) in range [{min_year}, {max_year}].",
+                    message=f"В ряду отсутствуют данные за {n_missing} год(а) в диапазоне [{min_year}, {max_year}].",
                     severity=ValidationSeverity.WARNING if n_missing < n_expected * 0.1 else ValidationSeverity.ERROR,
                     field="data",
                     details={
@@ -260,7 +260,7 @@ class DataQualityService:
             issues.append(
                 ValidationIssue(
                     code="OUTLIERS_DETECTED",
-                    message=f"Detected {n_outliers} potential outlier(s) using Dixon's criteria.",
+                    message=f"Обнаружено потенциальных выбросов: {n_outliers} (критерий Диксона).",
                     severity=ValidationSeverity.WARNING,
                     field="data",
                     details={
@@ -276,7 +276,7 @@ class DataQualityService:
             issues.append(
                 ValidationIssue(
                     code="DATA_HOMOGENEITY_FAILED",
-                    message="Dataset failed homogeneity test (СП 33-101-2003, Приложение А).",
+                    message="Ряд не прошёл проверку однородности (СП 33-101-2003, Приложение А).",
                     severity=ValidationSeverity.ERROR,
                     field="data",
                     details={
@@ -291,7 +291,7 @@ class DataQualityService:
             issues.append(
                 ValidationIssue(
                     code="DATA_STATIONARITY_FAILED",
-                    message="Dataset failed stationarity test (indicating possible trend or shift).",
+                    message="Ряд не прошёл проверку стационарности: возможны тренд или сдвиг.",
                     severity=ValidationSeverity.WARNING,
                     field="data",
                     details={
@@ -307,7 +307,7 @@ class DataQualityService:
             issues.append(
                 ValidationIssue(
                     code="ZERO_VALUES",
-                    message="Dataset contains zero value(s).",
+                    message="В ряду обнаружены нулевые значения.",
                     severity=ValidationSeverity.WARNING,
                     field="data",
                     details={
@@ -323,7 +323,7 @@ class DataQualityService:
             issues.append(
                 ValidationIssue(
                     code="NEGATIVE_VALUES",
-                    message="Dataset contains negative value(s).",
+                    message="В ряду обнаружены отрицательные значения.",
                     severity=ValidationSeverity.ERROR,  # negative values are physically impossible
                     field="data",
                     details={
