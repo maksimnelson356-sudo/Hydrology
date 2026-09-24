@@ -1,6 +1,6 @@
 # Состояние работы
 
-## Текущий этап: P0–P2.5 и P3.1 запушены; **P3.2 выполнен, ожидает commit/push**; P3.3–P3.5 не начаты
+## Текущий этап: P0–P2.5, P3.1 и **P3.2 выполнены и запушены**; P3.3–P3.5 не начаты
 
 ### Выполненные этапы ROADMAP
 
@@ -22,7 +22,7 @@
 | P2.4 визуализация (fan/hist/tornado) | **готово, запушен** (`2c44287` + `8b4bf4a`) | helpers + GUI |
 | P2.5 Decision Support (10.3=а) | **готово, запушен** (`2c44287` + `8b4bf4a`) | `test_decision_support_service` (23) |
 | **P3.1 многопролётная ГВП** | **готово, запушен** (`bf2feb4` feat + `5c93459` docs) | `test_backwater_profile_service` (13) |
-| **P3.2 Muskingum-маршрутизация (11.1=а)** | **готово, ожидает commit/push** | `test_routing_service` (22) |
+| **P3.2 Muskingum-маршрутизация (11.1=а)** | **готово, запушен** (`d108ef7`/`ce33f55`/`5dc3f9f` feat + `96e08b9`/`953fd60` docs) | `test_routing_service` (22) |
 | мёрдж в main | **выполнен** (решение 8.2) | — |
 
 Итого: **348 passed** (`tests/`), корневые **135 passed**, ruff по новым routing-файлам чист (Work7/build.py — существующие baseline), nav **25/25/25**, GUI smoke OK; native Work7 valid/error states проверены при 1200×700 и 1600×900.
@@ -112,6 +112,7 @@
 - Targeted routing → **22 passed**; новые routing-файлы ruff = 0; Work7/build.py — только существующие baseline; LSP clean.
 - Volume ±1%; constant→steady; C0/C1/C2∈[0,1]; native valid/error states при 1200×700 и 1600×900; без новых runtime-зависимостей.
 - Решение **11.1=(а) закрыто**; 11.2/11.3 остаются P3.3/P3.5. Два независимых visual-review не запустились из-за provider-model конфигурации; локальная native-screen проверка и regression-тесты зелёные.
+- Push: feature/docs tip `953fd60` отправлен в `origin/global-implementation` и `origin/main`; divergence **0/0**.
 
 ### P1.7 — что сделано
 
@@ -174,7 +175,7 @@
 
 - 2 предсуществующих `except Exception` в `main_window` — по мере рефакторинга.
 - Ручной GUI / приёмка — за пользователем.
-- **§6.2 P2 и P3.1 закрыты; P3.2 выполнен и ожидает commit/push.** Дальше — **P3.3 → P3.5** (решение 11.1=(а) закрыто; 11.2 — P3.3, 11.3 — P3.5).
+- **§6.2 P2, P3.1 и P3.2 закрыты; P3.2 запушен.** Дальше — **P3.3 → P3.5** (решение 11.1=(а) закрыто; 11.2 — P3.3, 11.3 — P3.5).
 
 ### Примечания
 
@@ -185,4 +186,4 @@
 - P1.6: DEM-растры (rasterio) — осознанно вне объёма (решение 9.3 = (б)); при необходимости — reopen 9.3 позже.
 - P2.1: demo model y=a·x+b — для smoke/знакомства; подключение к калиброванным моделям/P2.2 — позже.
 
-Обновлено: 2026-09-24 (P3.1 запушен: feat `bf2feb4`, docs `5c93459`; P3.2 Muskingum выполнен и ожидает commit/push; 348+135, nav 25, native GUI valid/error QA; решение 11.1=(а) закрыто)
+Обновлено: 2026-09-24 (P3.2 запушен: feat `d108ef7`/`ce33f55`/`5dc3f9f`, docs `96e08b9`/`953fd60`; 348+135, nav 25, native GUI valid/error QA, origin/main == origin/global-implementation 0/0; решение 11.1=(а) закрыто)
