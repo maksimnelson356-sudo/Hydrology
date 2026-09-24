@@ -1,5 +1,30 @@
 # Changelog — HydroSphere
 
+## v2026.09.24 — Data Quality: русский интерфейс и инструкция
+
+### Добавлено
+- **`gui/tabs/tab_data_quality.py`** — русская вкладка качества, пошаговая инструкция,
+  кнопка повторной проверки и вертикальный список действий без слияния кнопок.
+- **`gui/dialogs/data_quality_summary.py`** — отдельный рендерер сводки диалога качества.
+- **`DOCS/data_quality_guide.md`** — пользовательская инструкция: загрузка ряда, запуск проверки,
+  чтение метрик, безопасное применение действий и повторная проверка.
+- **`tests/test_data_quality_gui.py`** — headless-проверки русских labels, guide и вертикальной геометрии действий.
+
+### Изменено
+- **`core/services/data_quality_service.py`** — сообщения отчёта и рекомендации приведены к русскому языку;
+  исправлены опечатки в описаниях действий.
+- **`gui/dialogs/data_quality_dialog.py`** — русские подписи, локализованные severity, actionable
+  descriptions и безопасная компоновка кнопок рекомендаций.
+- **`gui/main_window.py`** — вкладка качества получает отчёт после проверки и может запускать проверку;
+  quality gate использует русские severity.
+- **`i18n/ru.json` / `i18n/en.json`** — ключи интерфейса и инструкции Data Quality.
+- **`build.py`** — hidden import для нового renderer-модуля.
+
+### Проверки
+- Data Quality GUI/service tests проходят; полный regression suite и native offscreen QA выполняются после UI-изменений.
+
+---
+
 ## v2026.09.24 — P3.4: MC × гидравлика
 
 ### Добавлено
