@@ -80,7 +80,7 @@ HIDDEN_IMPORTS = [
     "gui.plot_style", "gui.update_dialog",
     "gui.controller", "gui.controller.data_controller",
     "gui.controller.plot_controller", "gui.controller.widget_factory",
-    "gui.dialogs", "gui.dialogs.data_quality_dialog", "gui.dialogs.import_dialog",
+    "gui.dialogs", "gui.dialogs.data_quality_dialog", "gui.dialogs.data_quality_summary", "gui.dialogs.import_dialog",
     "gui.dialogs.api_import_dialog",
     "gui.dialogs.calibration_dialog",
     "gui.tabs", "gui.tabs.tab_project", "gui.tabs.tab_methodology",
