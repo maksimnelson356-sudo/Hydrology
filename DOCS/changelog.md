@@ -1,5 +1,26 @@
 # Changelog — HydroSphere
 
+## v2026.09.24 — P3.3: затопление по уровню
+
+### Добавлено
+- **`core/hydrorash/inundation.py`** — `StageAreaPoint` / `InundationEstimate`: строгая кривая `S(H)`, линейная интерполяция, трапецеидальное интегрирование объёма, ограничение уровня выше максимума с warning; аналитический trapezoid-профиль `A=B·H+m·H²`, `V=B·H²/2+m·H³/3`.
+- **`core/services/inundation_service.py`** — `StageAreaSource` / `TrapezoidSource` / `GeoJsonSource`, `InundationRequest` / `InundationResult` / `InundationService`, JSON-safe `to_dict()` и provenance `inundation@1.0`; GeoJSON-контуры используют существующий `GeoService`.
+- **`tests/test_inundation_service.py`** — 19 тестов: интерполяция/интеграл, монотонность, clamp+warning, analytic trapezoid, GeoJSON `elevation/elevation_m`, ошибки, provenance/round-trip, public export/build и GUI-контракты.
+- **GUI `gui/tabs/tab_inundation.py` + Work9** — внутренняя вкладка «Затопление H → S,V»: редактируемая таблица `S(H)`, trapezoid/GeoJSON источники, расчёт площади/объёма, график `S(H)`, provenance и очистка stale output при смене источника/ошибке; nav остаётся 25.
+
+### Изменено
+- **`core/services/__init__.py`** — публичный экспорт `Inundation*`, источников и `INUNDATION_PROVENANCE`.
+- **`build.py`** — hidden imports `core.hydrorash.inundation`, `core.services.inundation_service`, `gui.tabs.tab_inundation`.
+
+### Проверки (DoD P3.3)
+- `python -m pytest tests -q` → **367 passed** (было 348, +19; два существующих numpy warning).
+- Корневые `test_*.py` → **135 passed**; nav **25/25/25**; Work9 содержит 4 внутренние вкладки; GUI smoke OK.
+- Ruff/LSP: новые файлы чистые; Work9/build.py — только существующие baseline; no-excuse audit для новых файлов чистый.
+- Native Windows UI проверен для `S(H)`, trapezoid, пустого GeoJSON и error-state при 1200×700/1600×900; переключение источника очищает старый график.
+- Без новых runtime-зависимостей и DEM; решение **11.2=(а) S(H)/таблица**, GeoJSON — совместимый второй источник.
+
+---
+
 ## v2026.09.24 — P3.2: Muskingum-маршрутизация паводка
 
 ### Добавлено
