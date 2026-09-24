@@ -17,6 +17,7 @@ Services:
 - ClimateService: multiplicative/additive delta-change on series (P2.3)
 - DecisionSupportService: P(exceed) + risk class on user Q_крит (P2.5, 10.3 (a))
 - BackwaterProfileService: multi-reach chained backwater profiles (P3.1)
+- RoutingService: Muskingum flood routing with peak metrics (P3.2)
 
 Services contain no mathematics: formulas stay in the calculation core
 (`core.stats`, `core.hydrorash`).
@@ -88,6 +89,13 @@ from .reservoir_scenario_service import (
     ReservoirScenarioService,
 )
 from .result_store import ProvenanceStep, ResultStore, provenance_chain
+from .routing_service import (
+    ROUTING_PROVENANCE,
+    RoutingError,
+    RoutingRequest,
+    RoutingResult,
+    RoutingService,
+)
 from .scenario_service import ScenarioNotFoundError, ScenarioService
 from .sensitivity_service import (
     DEFAULT_RELATIVE_DELTA,
@@ -108,6 +116,7 @@ __all__ = [
     "DEFAULT_RISK_CUTOFFS",
     "DISTRIBUTIONS",
     "RISK_CLASSES",
+    "ROUTING_PROVENANCE",
     "BackwaterProfileError",
     "BackwaterProfileRequest",
     "BackwaterProfileResult",
@@ -168,6 +177,10 @@ __all__ = [
     "RESERVOIR_METHODOLOGY",
     "RESERVOIR_SCENARIO_TYPE",
     "ResultStore",
+    "RoutingError",
+    "RoutingRequest",
+    "RoutingResult",
+    "RoutingService",
     "ReservoirScenarioError",
     "ReservoirScenarioService",
     "ScenarioNotFoundError",
