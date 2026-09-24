@@ -1,6 +1,6 @@
 # Состояние работы
 
-## Текущий этап: P0–P2.5, P3.1 и **P3.2 выполнены и запушены**; P3.3–P3.5 не начаты
+## Текущий этап: P0–P2.5, P3.1 и P3.2 запушены; **P3.3 выполнен в рабочем дереве**; P3.4–P3.5 не начаты
 
 ### Выполненные этапы ROADMAP
 
@@ -23,9 +23,10 @@
 | P2.5 Decision Support (10.3=а) | **готово, запушен** (`2c44287` + `8b4bf4a`) | `test_decision_support_service` (23) |
 | **P3.1 многопролётная ГВП** | **готово, запушен** (`bf2feb4` feat + `5c93459` docs) | `test_backwater_profile_service` (13) |
 | **P3.2 Muskingum-маршрутизация (11.1=а)** | **готово, запушен** (`d108ef7`/`ce33f55`/`5dc3f9f` feat + `96e08b9`/`953fd60` docs) | `test_routing_service` (22) |
+| **P3.3 Затопление H→S,V (11.2=а)** | **готово в рабочем дереве, ожидает commit/push** | `test_inundation_service` (19) |
 | мёрдж в main | **выполнен** (решение 8.2) | — |
 
-Итого: **348 passed** (`tests/`), корневые **135 passed**, ruff по новым routing-файлам чист (Work7/build.py — существующие baseline), nav **25/25/25**, GUI smoke OK; native Work7 valid/error states проверены при 1200×700 и 1600×900.
+Итого: **367 passed** (`tests/`), корневые **135 passed**, новые inundation-файлы ruff/no-excuse/LSP чистые (Work9/build.py — существующие baseline), nav **25/25/25**, Work9 4 внутренние вкладки; native valid/GeoJSON/error states проверены при 1200×700 и 1600×900.
 
 ### P1.6 — что сделано (решение 9.3 = (б) GeoJSON)
 
@@ -114,6 +115,21 @@
 - Решение **11.1=(а) закрыто**; 11.2/11.3 остаются P3.3/P3.5. Два независимых visual-review не запустились из-за provider-model конфигурации; локальная native-screen проверка и regression-тесты зелёные.
 - Push: feature/docs tip `953fd60` отправлен в `origin/global-implementation` и `origin/main`; divergence **0/0**.
 
+### P3.3 — что сделано (решение 11.2 = (а) S(H))
+
+1. **`core/hydrorash/inundation.py`** — `StageAreaPoint` / `InundationEstimate`; строгая монотонная S(H), линейная интерполяция, trapezoidal volume, clamp+warning выше максимума, аналитический trapezoid.
+2. **`core/services/inundation_service.py`** — `StageAreaSource` / `TrapezoidSource` / `GeoJsonSource`, request/result/service, GeoJSON через существующий `GeoService`, provenance `inundation@1.0`, JSON-safe `to_dict()`.
+3. **`tests/test_inundation_service.py`** — 19: интерполяция/интеграл, монотонность, clamp, analytic trapezoid, GeoJSON elevation, ошибки, JSON, exports/build и GUI.
+4. **GUI `gui/tabs/tab_inundation.py` + Work9** — внутренняя вкладка «Затопление H → S,V», три источника, редактируемая S(H), график/result, dynamic m²/km², очистка stale output; nav = 25.
+5. **exports/build** — `Inundation*` в `core.services`; hidden imports core/service/GUI.
+
+### Верификация DoD P3.3 (2026-09-24)
+
+- `pytest tests -q` → **367** (+19); root → **135**; nav **25/25/25**; Work9 tabs = 4; GUI smoke OK.
+- Targeted P3.3 → **19 passed**; новые файлы ruff/no-excuse/LSP чистые; Work9/build.py baseline без новых ошибок.
+- Native Windows: `S(H)` 1200×700/1600×900, trapezoid, пустой GeoJSON и empty-table error; small-area plot использует м² без `1e-5`; смена источника очищает старый output.
+- Без новых runtime-зависимостей и DEM; решение **11.2=(а) закрыто**, GeoJSON — второй источник; 11.3 остаётся P3.5.
+
 ### P1.7 — что сделано
 
 1. **domain** — `Scenario.scenario_type` (`generic`/`reservoir`), сериализация в `.hsp`.
@@ -175,7 +191,7 @@
 
 - 2 предсуществующих `except Exception` в `main_window` — по мере рефакторинга.
 - Ручной GUI / приёмка — за пользователем.
-- **§6.2 P2, P3.1 и P3.2 закрыты; P3.2 запушен.** Дальше — **P3.3 → P3.5** (решение 11.1=(а) закрыто; 11.2 — P3.3, 11.3 — P3.5).
+- **§6.2 P2, P3.1 и P3.2 закрыты; P3.3 выполнен в рабочем дереве.** Дальше — **commit/push P3.3 → P3.4 → P3.5** (решения 11.1=(а)/11.2=(а) закрыты; 11.3 — P3.5).
 
 ### Примечания
 
@@ -186,4 +202,4 @@
 - P1.6: DEM-растры (rasterio) — осознанно вне объёма (решение 9.3 = (б)); при необходимости — reopen 9.3 позже.
 - P2.1: demo model y=a·x+b — для smoke/знакомства; подключение к калиброванным моделям/P2.2 — позже.
 
-Обновлено: 2026-09-24 (P3.2 запушен: feat `d108ef7`/`ce33f55`/`5dc3f9f`, docs `96e08b9`/`953fd60`; 348+135, nav 25, native GUI valid/error QA, origin/main == origin/global-implementation 0/0; решение 11.1=(а) закрыто)
+Обновлено: 2026-09-24 (P3.2 запушен: feat `d108ef7`/`ce33f55`/`5dc3f9f`, docs `96e08b9`/`953fd60`; P3.3 выполнен в рабочем дереве и ожидает commit/push; 367+135, nav 25, Work9 4 tabs, native inundation QA; решение 11.2=(а) закрыто)
