@@ -64,6 +64,7 @@ HIDDEN_IMPORTS = [
     "core.services.backwater_profile_service",
     "core.services.routing_service",
     "core.services.inundation_service",
+    "core.services.hydraulic_uncertainty_service",
     "core.services.methodology_registry",
     "core.services.project_service", "core.services.quality_pipeline",
     "core.services.report_service",
@@ -86,7 +87,11 @@ HIDDEN_IMPORTS = [
     "gui.tabs.tab_data", "gui.tabs.tab_data_quality", "gui.tabs.tab_results",
     "gui.tabs.tab_scenarios", "gui.tabs.tab_report", "gui.tabs.tab_geo",
     "gui.tabs.tab_inundation", "gui.tabs.tab_monte_carlo",
+    "gui.tabs.hydraulic_uncertainty_panel",
+    "gui.tabs.hydraulic_uncertainty_result_view",
+    "gui.tabs.hydraulic_uncertainty_support",
     "gui.workers", "gui.workers.calculation_workers",
+    "gui.workers.hydraulic_uncertainty_worker",
     "create_unified_template",
 ]
 
