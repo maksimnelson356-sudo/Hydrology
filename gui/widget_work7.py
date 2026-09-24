@@ -42,6 +42,7 @@ from core.hydrorash.snowmelt import (
     MELT_COEFFICIENTS,
     snowmelt_degree_day,
 )
+from core.services.routing_service import RoutingError, RoutingRequest, RoutingService
 
 
 class Work7Widget(QWidget):
@@ -162,8 +163,26 @@ class Work7Widget(QWidget):
         form.addRow("Длительность паводка:", self.hg_Tbase)
 
         self.hg_method = QComboBox()
-        self.hg_method.addItems(["Гамма (СП 33)", "Треугольный"])
+        self.hg_method.addItems(["Гамма (СП 33)", "Треугольный", "Мускингум"])
         form.addRow("Метод:", self.hg_method)
+
+        self.hg_k = QDoubleSpinBox()
+        self.hg_k.setRange(0.1, 1000)
+        self.hg_k.setValue(6.0)
+        self.hg_k.setSuffix(" ч")
+        form.addRow("Параметр K (ч) Muskingum:", self.hg_k)
+
+        self.hg_x = QDoubleSpinBox()
+        self.hg_x.setRange(0.0, 0.5)
+        self.hg_x.setValue(0.2)
+        self.hg_x.setSuffix(" -")
+        form.addRow("Параметр x Muskingum:", self.hg_x)
+
+        self.hg_dt = QDoubleSpinBox()
+        self.hg_dt.setRange(0.5, 24)
+        self.hg_dt.setValue(3.0)
+        self.hg_dt.setSuffix(" ч")
+        form.addRow("Шаг dt (ч) Muskingum:", self.hg_dt)
 
         lay.addWidget(grp)
 
@@ -286,14 +305,85 @@ class Work7Widget(QWidget):
         Tpeak = self.hg_Tpeak.value()
         Tbase = self.hg_Tbase.value()
 
-        if self.hg_method.currentIndex() == 0:
+        method_idx = self.hg_method.currentIndex()
+        if method_idx == 0:
             hg = gamma_hydrograph(Qpeak, Tpeak, Tbase)
             method = "Гамма"
-        else:
+            inflow = hg['Q_m3_s']
+        elif method_idx == 1:
             hg = triangular_hydrograph(Qpeak, Tpeak, Tbase)
             method = "Треугольный"
+            inflow = hg['Q_m3_s']
+        else:  # Мускингум
+            k = self.hg_k.value()
+            x = self.hg_x.value()
+            dt = self.hg_dt.value()
+            try:
+                hg = gamma_hydrograph(Qpeak, Tpeak, Tbase, dt=dt)
+                inflow = hg['Q_m3_s']
+                result = RoutingService.run(
+                    RoutingRequest(
+                        inflow=inflow,
+                        dt=dt,
+                        k=k,
+                        x=x,
+                        outflow0=inflow[0],
+                    )
+                )
+                outflow = result.outflow
+                coeffs = result.coefficients
 
-        vol = flood_volume(np.array(hg['Q_m3_s']))
+                self.hg_result.clear()
+                self.hg_result.append(f"Мускингум: K={k} ч, x={x}, dt={dt} ч")
+                self.hg_result.append(
+                    f"Коэфф.: C0={coeffs['C0']:.4f}, "
+                    f"C1={coeffs['C1']:.4f}, C2={coeffs['C2']:.4f}"
+                )
+                self.hg_result.append(
+                    f"Qпик вход: {result.peak_in_m3s:.2f} м³/с | "
+                    f"Qпик выход: {result.peak_out_m3s:.2f} м³/с"
+                )
+                self.hg_result.append(
+                    f"Ослабление пика: {result.peak_attenuation_m3s:.2f} м³/с | "
+                    f"Запаздывание: {result.peak_lag_steps} шагов"
+                )
+                self.hg_result.append(
+                    f"Шагов: {result.n_steps} | Источник: {result.provenance}"
+                )
+
+                self.hg_figure.clear()
+                ax = self.hg_figure.add_subplot(111)
+                ax.plot(
+                    hg['t_hours'],
+                    inflow,
+                    color='#1976D2',
+                    linewidth=2,
+                    label="Входной гидрограф",
+                    alpha=0.7,
+                )
+                ax.plot(
+                    hg['t_hours'],
+                    outflow,
+                    color='#1565C0',
+                    linewidth=2,
+                    label="Выходной (Мускингум)",
+                )
+                ax.fill_between(hg['t_hours'], outflow, alpha=0.2, color='#42A5F5')
+                ax.set_xlabel("Время, ч")
+                ax.set_ylabel("Расход, м³/с")
+                ax.set_title("Маршрутизация Мускингума")
+                ax.grid(True, alpha=0.5)
+                ax.legend()
+                self.hg_canvas.draw()
+                return
+            except RoutingError as error:
+                self.hg_figure.clear()
+                self.hg_canvas.draw()
+                self.hg_result.clear()
+                self.hg_result.append(f"Ошибка Мускингума: {error}")
+                return
+
+        vol = flood_volume(np.array(inflow))
 
         self.hg_result.clear()
         self.hg_result.append(f"Qпик = {Qpeak} м³/с | Tнар = {Tpeak} ч | Tполн = {Tbase} ч")
