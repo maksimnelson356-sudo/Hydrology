@@ -249,6 +249,7 @@ def hydrograph_from_peak(
     method: str = 'gamma',
     shape: float = 3.5,
     dt: float = 1.0,
+    asymmetry: float = 0.3,
 ) -> dict:
     """
     Построение гидрографа по Qpeak, Tpeak, Tbase.
@@ -265,7 +266,13 @@ def hydrograph_from_peak(
         Dict: t_hours, Q_m3_s, volume
     """
     if method == 'triangle':
-        return triangular_hydrograph(Q_peak, T_peak, T_base, dt=dt)
+        return triangular_hydrograph(
+            Q_peak,
+            T_peak,
+            T_base,
+            asymmetry=asymmetry,
+            dt=dt,
+        )
     else:
         return gamma_hydrograph(Q_peak, T_peak, T_base, shape, dt)
 

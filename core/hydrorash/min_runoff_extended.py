@@ -10,6 +10,8 @@ core/hydrorash/min_runoff_extended.py
 import numpy as np
 import pandas as pd
 
+from core.stats.parameters import MAX_MIN_RELATIVE_RMS_ERROR_LIMIT
+
 from .utils import compute_basic_stats, kritsky_menkel_quantiles
 
 
@@ -121,20 +123,7 @@ def compute_min_runoff_stats(
     period_days: int = 7,
     use_normative_Cs: bool = True
 ) -> dict:
-    """
-    Статистика ряда минимальных стоков (7/10-суточных).
-
-    Рассчитывает основные статистические характеристики: среднее, Cv, Cs,
-    погрешность оценки ε. Использует функцию compute_basic_stats из utils.
-
-    Parameters:
-        min_series:.Series с годовыми минимальными средними расходами
-        period_days: длительность периода (7 или 10 суток)
-        use_normative_Cs: использовать нормативное Cs = 2×Cv (СП 33-101-2003 п. 6.3.3)
-
-    Returns:
-        Словарь со статистическими характеристиками
-    """
+    """Статистика ряда минимальных стоков по СП 33-101-2003."""
     series = min_series.dropna()
 
     if len(series) < 3:
@@ -144,20 +133,19 @@ def compute_min_runoff_stats(
             "Cs": None,
             "Cs/Cv": None,
             "epsilon": None,
+            "relative_rms_error_limit": MAX_MIN_RELATIVE_RMS_ERROR_LIMIT,
             "n": len(series),
             "period_days": period_days,
             "reliability_class": "Недостаточно данных",
             "warnings": ["Длина ряда < 3 лет. Статистические расчёты невозможны."]
         }
 
-    basic = compute_basic_stats(series, use_normative_Cs=use_normative_Cs)
+    basic = compute_basic_stats(
+        series,
+        use_normative_Cs=use_normative_Cs,
+        relative_rms_error_limit=MAX_MIN_RELATIVE_RMS_ERROR_LIMIT,
+    )
     basic["period_days"] = period_days
-
-    if basic["n"] < 10:
-        basic["warnings"].append(
-            f"Длина ряда {basic['n']} лет. Для 7-суточных минимумов рекомендуется ≥ 10 лет (СП 33-101-2003 п. 6.2.2)."
-        )
-
     return basic
 
 

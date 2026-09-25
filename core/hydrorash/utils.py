@@ -17,12 +17,18 @@ import numpy as np
 import pandas as pd
 from scipy.stats import linregress, pearson3
 
+from core.stats.parameters import (
+    DEFAULT_RELATIVE_RMS_ERROR_LIMIT,
+    relative_mean_error_percent,
+)
+
 
 def compute_basic_stats(
     Q: pd.Series,
     r: float | None = None,
     ddof: int = 1,
-    use_normative_Cs: bool = True
+    use_normative_Cs: bool = True,
+    relative_rms_error_limit: float = DEFAULT_RELATIVE_RMS_ERROR_LIMIT,
 ) -> dict:
     """
     Расчёт основных статистических характеристик ряда годового стока
@@ -33,10 +39,18 @@ def compute_basic_stats(
         r: коэффициент автокорреляции (если None — рассчитывается)
         ddof: степени свободы для СКО
         use_normative_Cs: использовать нормативное Cs = 2×Cv (СП 33-101-2003 п. 6.3.3)
+        relative_rms_error_limit: предел относительной погрешности среднего;
+            0.10 для годового/сезонного стока, 0.20 для max/min
 
     Returns:
         Словарь со статистическими характеристиками
     """
+    if (
+        not np.isfinite(relative_rms_error_limit)
+        or not 0.0 < relative_rms_error_limit <= 1.0
+    ):
+        raise ValueError("Предел погрешности должен быть в диапазоне (0, 1]")
+
     # Приводим к числовому типу — object-dtype ломает np.corrcoef (numpy 2.x)
     Q = pd.to_numeric(Q, errors="coerce").dropna()
     n = len(Q)
@@ -57,27 +71,17 @@ def compute_basic_stats(
     elif r is None:
         r = 0.0
 
-    K_r = np.sqrt((1 + r) / (1 - r)) if 0 <= r < 1 else 1.0
-    epsilon = (Cv / np.sqrt(n)) * K_r * 100.0
+    epsilon = relative_mean_error_percent(Cv, n, r)
+    error_limit_percent = relative_rms_error_limit * 100.0
 
-    # Проверки по СП 33-101-2003 п. 6.2.2 и 6.2.4
     warnings = []
     reliability_class = "Надёжная"
-
-    if n < 10:
-        warnings.append("⚠️ КРИТИЧНО: Длина ряда < 10 лет. Расчёты ненадёжны (СП 33-101-2003 п. 6.2.2)")
+    if epsilon > error_limit_percent:
+        warnings.append(
+            f"εQ = {epsilon:.1f}% > {error_limit_percent:.0f}%. "
+            "Требуется удлинение ряда (СП 33-101-2003 п. 5.1, 5.14)"
+        )
         reliability_class = "Ненадёжная"
-    elif n < 15:
-        warnings.append("⚠️ ВНИМАНИЕ: Длина ряда < 15 лет. Рекомендуется удлинение (СП 33-101-2003 п. 6.2.2)")
-        reliability_class = "Пониженная надёжность"
-
-    if epsilon > 15:
-        warnings.append(f"⚠️ εQ = {epsilon:.1f}% > 15%. Требуется удлинение ряда (СП 33-101-2003 п. 6.2.4)")
-        reliability_class = "Ненадёжная"
-    elif epsilon > 10:
-        warnings.append(f"⚠️ εQ = {epsilon:.1f}% > 10%. Желательно удлинение ряда (СП 33-101-2003 п. 6.2.4)")
-        if reliability_class == "Надёжная":
-            reliability_class = "Пониженная надёжность"
 
     return {
         "n": n,
@@ -89,6 +93,7 @@ def compute_basic_stats(
         "Cs/Cv": Cs / Cv if Cv != 0 else 0.0,
         "r": r,
         "epsilon": epsilon,
+        "relative_rms_error_limit": relative_rms_error_limit,
         "warnings": warnings,
         "reliability_class": reliability_class,
         "normative": "СП 33-101-2003, СП 529.1325800.2023"
