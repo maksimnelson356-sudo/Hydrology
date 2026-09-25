@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 import pytest
 
@@ -44,6 +46,37 @@ def _empty_dataset() -> Dataset:
     )
 
 
+def _staged_dataset() -> Dataset:
+    data = {
+        2000 + i: 20.0 + 1.5 * (i + 1) + 0.8 * ((i % 5) + 1)
+        for i in range(10)
+    }
+    return Dataset(
+        name="Ступенчатый ряд",
+        data=data,
+        dataset_type=DatasetType.OBSERVED,
+    )
+
+
+def _staged_parameters() -> dict:
+    years = range(2000, 2023)
+    analogs = {
+        "a1": {year: float(i + 1) for i, year in enumerate(years)},
+        "a2": {year: float((i % 5) + 1) for i, year in enumerate(years)},
+    }
+    return {
+        "stages": [
+            {
+                "name": "recent",
+                "analogs": analogs,
+                "fit_years": list(range(2000, 2010)),
+                "target_years": [2010, 2011, 2012],
+                "ro_cr": 0.6,
+            }
+        ]
+    }
+
+
 def test_series_extension_completes_through_service() -> None:
     result = _execute(
         "series_extension",
@@ -67,6 +100,28 @@ def test_series_extension_proportional_completes_through_service() -> None:
     assert result.is_successful is True
     assert result.output_data["method"] == "proportional"
     assert len(result.output_data["extended_series"]) == 20
+
+
+def test_series_extension_staged_completes_through_service() -> None:
+    result = _execute(
+        "series_extension_staged",
+        _staged_dataset(),
+        _staged_parameters(),
+    )
+
+    assert result.is_successful is True
+    assert result.output_data["success"] is True
+    assert result.output_data["extended_series"]["2010"] > 0.0
+    assert result.output_data["stages"][0]["name"] == "recent"
+    json.dumps(result.output_data)
+
+
+def test_staged_series_extension_rejects_empty_analog_data() -> None:
+    parameters = _staged_parameters()
+    parameters["stages"][0]["analogs"]["a1"] = {}
+
+    with pytest.raises(Exception, match="a1"):
+        _execute("series_extension_staged", _staged_dataset(), parameters)
 
 
 def test_flood_hydrograph_completes_through_service() -> None:
@@ -113,6 +168,7 @@ def test_new_methodologies_declare_required_parameters() -> None:
     registry = build_container().registry
 
     assert registry.get("series_extension").required_parameters == ("analog_df",)
+    assert registry.get("series_extension_staged").required_parameters == ("stages",)
     assert registry.get("flood_hydrograph").required_parameters == (
         "Q_peak",
         "T_peak",
@@ -130,3 +186,8 @@ def test_new_methodologies_declare_required_parameters() -> None:
 def test_missing_series_extension_input_is_rejected() -> None:
     with pytest.raises(Exception, match="analog_df"):
         _execute("series_extension", _short_series(), {})
+
+
+def test_missing_staged_series_extension_input_is_rejected() -> None:
+    with pytest.raises(Exception, match="stages"):
+        _execute("series_extension_staged", _staged_dataset(), {})

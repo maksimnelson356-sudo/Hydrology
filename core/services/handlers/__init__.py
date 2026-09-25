@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 
 from core.services.calculation_service import CalculationContext
+from core.services.handlers.staged_series_extension import handle_series_extension_staged
 
 VERSION = "1.0"
 
@@ -519,6 +520,7 @@ def handle_ice_phenomena(context: CalculationContext) -> dict[str, Any]:
 HANDLERS: dict[str, Any] = {
     "stats_parameters": handle_stats_parameters,
     "series_extension": handle_series_extension,
+    "series_extension_staged": handle_series_extension_staged,
     "flood_hydrograph": handle_flood_hydrograph,
     "backwater": handle_backwater,
     "frequency_pearson3": handle_frequency_pearson3,
