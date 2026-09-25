@@ -134,48 +134,33 @@ def test_hydraulic_calculations():
 
 
 def test_series_length_validation():
-    """Тест 3: Проверка длины ряда"""
+    """Тест 3: Проверка достаточности ряда по СП 33-101-2003 п. 5.1."""
     print("=" * 80)
-    print("ТЕСТ 3: Валидация длины ряда (СП 482.1325800.2020 п. 8.2)")
+    print("ТЕСТ 3: Достаточность ряда (СП 33-101-2003 п. 5.1)")
     print("=" * 80)
 
-    # Тест 3.1: Короткий ряд (< 10 лет)
-    print("\n--- Тест 3.1: Критически короткий ряд (5 лет) ---")
-    data_short = np.array([120, 150, 110, 140, 130])
-    warnings = validate_series_length(len(data_short), min_probability=0.01)
-    for w in warnings:
-        print(w)
-    print(f"✅ Обнаружено {len(warnings)} предупреждений (ожидалось ≥3)")
-
-    # Тест 3.2: Недостаточный ряд (20 лет)
-    print("\n--- Тест 3.2: Недостаточный ряд (20 лет) ---")
-    warnings = validate_series_length(20, min_probability=0.05)
-    for w in warnings:
-        print(w)
+    print("\n--- Тест 3.1: Погрешность не превышает 10% ---")
+    warnings = validate_series_length(5, relative_rms_error=0.05, error_limit=0.10)
     print(f"✅ Обнаружено {len(warnings)} предупреждений")
 
-    # Тест 3.3: Достаточный ряд (30 лет)
-    print("\n--- Тест 3.3: Достаточный ряд (30 лет) ---")
-    warnings = validate_series_length(30, min_probability=0.05)
-    if warnings:
-        for w in warnings:
-            print(w)
-    else:
-        print("✅ Предупреждений нет - ряд достаточной длины")
+    print("\n--- Тест 3.2: Погрешность превышает 10% ---")
+    warnings = validate_series_length(20, relative_rms_error=0.15, error_limit=0.10)
+    for warning in warnings:
+        print(warning)
+    print(f"✅ Обнаружено {len(warnings)} предупреждений")
 
-    # Тест 3.4: Интеграция в calculate_statistical_parameters
-    print("\n--- Тест 3.4: Интеграция в расчет параметров ---")
-    data = np.random.lognormal(4.5, 0.3, 15)  # 15 лет данных
+    print("\n--- Тест 3.3: Интеграция в calculate_statistical_parameters ---")
+    data = np.random.lognormal(4.5, 0.3, 15)
     print(f"Тестовый ряд: n={len(data)} значений")
 
     import warnings as warn
-    with warn.catch_warnings(record=True) as w:
+    with warn.catch_warnings(record=True) as caught:
         warn.simplefilter("always")
-        params = calculate_statistical_parameters(data, min_probability=0.01, show_warnings=True)
-        print(f"✅ Получено {len(w)} предупреждений через warnings.warn()")
+        params = calculate_statistical_parameters(data, show_warnings=True)
+        print(f"✅ Получено {len(caught)} предупреждений через warnings.warn()")
         print(f"✅ Сохранено {len(params['length_warnings'])} предупреждений в результате")
 
-    print("\n✅ Тест 3 пройден: валидация длины ряда работает корректно\n")
+    print("\n✅ Тест 3 пройден: проверка относительной погрешности работает корректно\n")
 
 
 def test_gts_reference():
