@@ -1,6 +1,6 @@
 # Матрица нормативной проверяемости HydroSphere
 
-**Состояние на:** 2026-09-25  
+**Состояние на:** 2026-09-25
 **Назначение:** отделить наличие формулы и regression-тестов от доказанной нормативной валидности.
 
 ## Как читать статусы
@@ -21,6 +21,7 @@
 | `frequency_kritsky_menkel` | true | СП 33-101-2003, п. 5.1–5.6 | `core/stats/frequency.py` | `test_all_functions.py`, `test_methodology_service.py` | SOURCE_CHECKED | Проверка таблиц/параметров и независимые ординаты |
 | `homogeneity_full` | true | СП 33-101-2003, п. 4.7, прил. А.1–А.3 | `core/stats/homogeneity.py` | `test_all_functions.py`, `test_methodology_service.py` | SOURCE_CHECKED | Официальные примеры критериев и независимая проверка границ |
 | `series_extension` | false | СП 33-101-2003, п. 6.2–6.7, 6.17 | `core/stats/series_extension.py`, `core/stats/sp33_variance_correction.py`, `core/stats/staged_series_extension.py::staged_multi_analog_extension` | `test_sp33_series_corrections.py`, `test_new_methodology_handlers.py`, `test_staged_series_extension.py` | PARTIAL | Получить raw analog series A.8 и добавить независимый golden-тест; проверить staged API на полном сценарии |
+| `series_extension_staged` | false | СП 33-101-2003, п. 6.2–6.7, п. 6.17, Приложение А.8 | `core/services/handlers/staged_series_extension.py::handle_series_extension_staged`, `tools/run_methodology.py::load_staged_config` | `test_new_methodology_handlers.py`, `test_run_methodology_cli.py`, `test_staged_series_extension.py` | PARTIAL | Добавить raw analog series A.8 и полный golden-тест; проверить JSON-контракт в отдельном CLI-сценарии |
 | `composite_curves` | true | СП 33-101-2003, п. 5.12, формулы 5.21–5.25 | `core/stats/composite_curves.py` | `test_normative_algorithms.py` | PARTIAL | Реализовать режимы 5.22/5.25 и получить официальный пример; отдельно подтвердить случай одного значения в год |
 | `max_runoff` | true | СП 33-101-2003, п. 5.26–5.31 | `core/hydrorash/max_runoff.py` | `test_sp33_flow_limits.py`, `test_methodology_service.py` | PARTIAL | Проверить полную процедуру 5.26–5.31 на независимом максимальном ряду |
 | `flood_hydrograph` | true | СП 33-101-2003, п. 5.32 | `core/hydrorash/flood_hydrograph.py` | `test_new_methodology_handlers.py`, `test_all_functions.py` | UNVERIFIED | Подтвердить форму/коэффициенты и сравнить с официальным примером |
@@ -97,9 +98,9 @@
 
 1. В тексте не приведены полные исходные погодовые ряды семи аналогов, поэтому восстановленные значения нельзя независимо воспроизвести только из стандарта.
 2. A.8 использует последовательное применение нескольких уравнений на разных временных этапах. Базовый `multi_analog_extension` выполняет одно одновременное уравнение максимум для трёх аналогов; добавленный `staged_multi_analog_extension` поддерживает отдельные наборы аналогов, `fit_years`, `target_years`, пороги и коррекцию для каждого этапа.
-3. A.8 задаёт для примера `Rкр = 0.60`, тогда как текущий обработчик использует базовый порог 0.70; staged API позволяет задать порог 0.60, но отдельная CLI/GUI-интеграция и полный A.8 fixture ещё не выполнены.
+3. A.8 задаёт для примера `Rкр = 0.60`, тогда как текущий обработчик использует базовый порог 0.70; staged API и CLI позволяют задать порог 0.60, но полный A.8 fixture ещё не выполнен.
 
-**Вывод:** staged-workflow теперь реализован и покрыт синтетическими тестами, но A.8 всё ещё нельзя честно исполнить как golden-тест без исходных рядов аналогов и полного сценария A.8. Статус остаётся `PARTIAL`.
+**Вывод:** staged-workflow, service handler и CLI-конфигурация реализованы и покрыты синтетическими тестами, но A.8 всё ещё нельзя честно исполнить как golden-тест без исходных рядов аналогов и полного сценария A.8. Статус остаётся `PARTIAL`.
 
 ## Источники, с которыми уже сверялась реализация
 
