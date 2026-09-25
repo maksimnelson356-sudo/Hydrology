@@ -29,4 +29,8 @@ def test_matrix_distinguishes_tests_from_normative_validation() -> None:
     assert "staged-workflow" in text
     assert "sp33_a8_manifest_v1.json" in text
     assert "Partial evidence A.8" in text
+    assert "A.8 import contract" in text
+    assert "tools/import_a8_data.py" in text
+    assert "--dry-run" in text
+    assert "provenance" in text
     assert "не является доказательством корректности" in text

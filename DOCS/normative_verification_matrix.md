@@ -21,7 +21,7 @@
 | `frequency_kritsky_menkel` | true | СП 33-101-2003, п. 5.1–5.6 | `core/stats/frequency.py` | `test_all_functions.py`, `test_methodology_service.py` | SOURCE_CHECKED | Проверка таблиц/параметров и независимые ординаты |
 | `homogeneity_full` | true | СП 33-101-2003, п. 4.7, прил. А.1–А.3 | `core/stats/homogeneity.py` | `test_all_functions.py`, `test_methodology_service.py` | SOURCE_CHECKED | Официальные примеры критериев и независимая проверка границ |
 | `series_extension` | false | СП 33-101-2003, п. 6.2–6.7, 6.17 | `core/stats/series_extension.py`, `core/stats/sp33_variance_correction.py`, `core/stats/staged_series_extension.py::staged_multi_analog_extension` | `test_sp33_series_corrections.py`, `test_new_methodology_handlers.py`, `test_staged_series_extension.py` | PARTIAL | Получить raw analog series A.8 и добавить независимый golden-тест; проверить staged API на полном сценарии |
-| `series_extension_staged` | false | СП 33-101-2003, п. 6.2–6.7, п. 6.17, Приложение А.8 | `core/services/handlers/staged_series_extension.py::handle_series_extension_staged`, `tools/run_methodology.py::load_staged_config` | `test_new_methodology_handlers.py`, `test_run_methodology_cli.py`, `test_staged_series_extension.py`, `test_sp33_a8_partial_evidence.py` | PARTIAL | Добавить raw analog series A.8 и полный golden-тест; partial manifest/fixture уже зафиксированы |
+| `series_extension_staged` | false | СП 33-101-2003, п. 6.2–6.7, п. 6.17, Приложение А.8 | `core/services/handlers/staged_series_extension.py::handle_series_extension_staged`, `core/services/a8_import.py`, `tools/import_a8_data.py`, `tools/run_methodology.py::load_staged_config` | `test_new_methodology_handlers.py`, `test_run_methodology_cli.py`, `test_staged_series_extension.py`, `test_sp33_a8_partial_evidence.py`, `test_a8_import.py` | PARTIAL | Импортёр и partial manifest/fixture готовы; добавить raw analog series A.8 и полный golden-тест |
 | `composite_curves` | true | СП 33-101-2003, п. 5.12, формулы 5.21–5.25 | `core/stats/composite_curves.py` | `test_normative_algorithms.py` | PARTIAL | Реализовать режимы 5.22/5.25 и получить официальный пример; отдельно подтвердить случай одного значения в год |
 | `max_runoff` | true | СП 33-101-2003, п. 5.26–5.31 | `core/hydrorash/max_runoff.py` | `test_sp33_flow_limits.py`, `test_methodology_service.py` | PARTIAL | Проверить полную процедуру 5.26–5.31 на независимом максимальном ряду |
 | `flood_hydrograph` | true | СП 33-101-2003, п. 5.32 | `core/hydrorash/flood_hydrograph.py` | `test_new_methodology_handlers.py`, `test_all_functions.py` | UNVERIFIED | Подтвердить форму/коэффициенты и сравнить с официальным примером |
@@ -111,6 +111,18 @@
 - Partial fixture содержит 22 опубликованных `q` Сьежи за 1971–1992 и производные `Q = q × 407 / 1000`; это не первичный архив `Q`.
 - Все семь analog-колонок оставлены `null`: первичные годовые ряды аналогов в СП не опубликованы.
 - Артефакт не запускает staged-расчёт и не является `GOLDEN_VALIDATED`.
+
+## A.8 import contract
+
+- Импортёр: `tools/import_a8_data.py`.
+- Вход: long-form CSV/Excel с `series_id`, `year`, `value`, `unit`.
+- `series_id`: `seja_d_stan` или `q1`…`q7`; допускаются также IDs и названия из manifest.
+- Единицы: `q` (л/с·км²) и `Q` (м³/с); `Q` переводится в `q` через площадь водосбора.
+- Выход: `stages.json` для `series_extension_staged` и JSON основного ряда для CLI.
+- По умолчанию требуются все годы основного ряда и годы, необходимые уравнениям; `--allow-missing` создаёт явно частичный результат.
+- Дубликаты `(series_id, year)` отклоняются; пропуски остаются пропусками и не заменяются нулями.
+- `--dry-run` проверяет вход и печатает provenance, не создавая output-файлы.
+- В metadata сохраняются SHA-256 входного файла и manifest, число строк, series/unit counts и недостающие обязательные годы.
 
 ## Источники, с которыми уже сверялась реализация
 
