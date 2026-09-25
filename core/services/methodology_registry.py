@@ -300,6 +300,22 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
 
     ),
     MethodologyDescriptor(
+        id="series_extension_staged",
+        name="Ступенчатое восстановление ряда по этапам",
+        category="statistics",
+        standard="СП 33-101-2003",
+        clause="п. 6.2–6.7, п. 6.17, Приложение А.8",
+        scope="Последовательное регрессионное восстановление короткого ряда по этапам",
+        min_points=6,
+        required_parameters=("stages",),
+        limitations=(
+            "Для каждого этапа нужны собственные аналоги, период обучения и годы восстановления",
+            "A.8 не воспроизводится без исходных рядов аналогов",
+        ),
+        is_normative=False,
+        notes="Сервисный handler; core/stats/staged_series_extension.py",
+    ),
+    MethodologyDescriptor(
         id="composite_curves",
         name="Составная кривая обеспеченности (Рождественский)",
         category="statistics",

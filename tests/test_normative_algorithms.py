@@ -138,6 +138,11 @@ EXPECTED_NORMATIVE_METADATA = {
     "frequency_pearson3": ("СП 33-101-2003", "п. 5.1–5.3", True),
     "homogeneity_full": ("СП 33-101-2003", "п. 4.7, прил. А.1–А.3", True),
     "series_extension": ("СП 33-101-2003", "п. 6.2–6.7, п. 6.17", False),
+    "series_extension_staged": (
+        "СП 33-101-2003",
+        "п. 6.2–6.7, п. 6.17, Приложение А.8",
+        False,
+    ),
     "spectral_hurst": ("Метод R/S (экспонента Хёрста)", None, False),
     "stats_parameters": ("СП 33-101-2003", "п. 5.1, п. 5.4–5.15", True),
     "trends_full": ("Манн—Кендалл / Сен / Pettitt", None, False),
