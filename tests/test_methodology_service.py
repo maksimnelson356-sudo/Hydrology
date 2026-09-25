@@ -68,11 +68,13 @@ def test_container_registers_all_p0_handlers():
     container = make_container()
 
     assert sorted(container.registered_methodology_ids()) == [
+        "backwater",
         "baseflow",
         "composite_curves",
         "confidence_bands",
         "drought_spi",
         "ecological_flow",
+        "flood_hydrograph",
         "flow_duration",
         "frequency_kritsky_menkel",
         "frequency_pearson3",
@@ -82,6 +84,7 @@ def test_container_registers_all_p0_handlers():
         "max_runoff",
         "min_runoff",
         "reservoir_regulation",
+        "series_extension",
         "snowmelt",
         "spectral_hurst",
         "spillway",
@@ -167,9 +170,7 @@ def test_stats_parameters_equivalent_to_core():
     container = make_container()
 
     result = execute(container, "stats_parameters", dataset)
-    direct = calculate_statistical_parameters(
-        np.asarray(dataset.values, dtype=float), show_warnings=False
-    )
+    direct = calculate_statistical_parameters(np.asarray(dataset.values, dtype=float))
 
     for key, expected in direct.items():
         assert result.output_data[key] == pytest.approx(expected)
@@ -235,23 +236,21 @@ def test_flow_duration_equivalent_to_core():
 # ----------------------------------------------------------------------
 # Inapplicable methodology: clear error with the normative reference
 # ----------------------------------------------------------------------
-def test_short_series_is_rejected_with_normative_reference():
+def test_short_series_is_evaluated_by_sp33_error_criterion():
     container = make_container()
-    # stats_parameters requires >= 25 points (СП 482 п. 8.2 / СП 33-101-2003)
     short = Dataset(
         name="Короткий ряд",
         data={1990 + k: 100.0 + 5.0 * k for k in range(5)},
         dataset_type=DatasetType.OBSERVED,
     )
 
-    with pytest.raises(Exception) as exc_info:
-        execute(container, "stats_parameters", short)
+    with pytest.warns(UserWarning, match="10%"):
+        result = execute(container, "stats_parameters", short)
 
-    message = str(exc_info.value)
-    assert "Статистические параметры" in message  # methodology name
-    assert "не короче 25 лет" in message  # requirement
-    assert "5" in message  # actual length reported
-    assert "СП 33-101-2003" in message  # normative reference present
+    assert result.is_successful is True
+    assert result.output_data["n"] == 5
+    assert len(result.output_data["length_warnings"]) == 1
+    assert "10%" in result.output_data["length_warnings"][0]
 
 
 def test_missing_required_parameter_is_rejected():
