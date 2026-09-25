@@ -6,6 +6,7 @@ Examples:
     python tools/run_methodology.py --list
     python tools/run_methodology.py --method stats_parameters --file data.xlsx --post "Пост 1"
     python tools/run_methodology.py --method frequency_pearson3 --demo
+    python tools/run_methodology.py --method series_extension_staged --file primary.xlsx --staged-config stages.json
 
 Runs without GUI: builds the service container via build_container(), reads the
 series with core.stats.sheet_reader and delegates to CalculationService.
@@ -92,11 +93,35 @@ def run_methodology(container, methodology_id: str, dataset: Dataset, parameters
     return 0
 
 
+def load_staged_config(path: str) -> dict:
+    """Load and validate the JSON stage configuration for the staged method."""
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+    except OSError as error:
+        raise SystemExit(f"Не удалось прочитать staged-конфигурацию: {path}") from error
+    try:
+        config = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise SystemExit(f"Некорректный JSON staged-конфигурации: {path}") from error
+    if not isinstance(config, dict) or not isinstance(config.get("stages"), list):
+        raise SystemExit("staged-конфигурация должна содержать непустой список stages")
+    if not config["stages"]:
+        raise SystemExit("staged-конфигурация должна содержать непустой список stages")
+    return config
+
+
 def _build_parameters(args, dataset: Dataset) -> dict:
     """Map CLI options to the selected methodology's parameter names."""
     parameters: dict = {}
     if args.demand is not None:
         parameters["demand_m3_s"] = args.demand
+
+    if args.method == "series_extension_staged":
+        if args.staged_config is None:
+            raise SystemExit("Для series_extension_staged требуется --staged-config")
+        config = load_staged_config(args.staged_config)
+        parameters["stages"] = config["stages"]
+        parameters["exclude_negative"] = config.get("exclude_negative", True)
 
     if args.method == "series_extension":
         if args.analog_file:
@@ -145,6 +170,7 @@ def main() -> int:
     parser.add_argument("--analog-file", help="файл ряда-аналога для series_extension")
     parser.add_argument("--analog-post", help="имя поста-аналога")
     parser.add_argument("--extension-method", choices=["regression", "proportional"], help="метод series_extension")
+    parser.add_argument("--staged-config", help="JSON-конфигурация этапов для series_extension_staged")
     parser.add_argument("--q-peak", type=float, help="пиковый расход flood_hydrograph")
     parser.add_argument("--t-peak", type=float, help="время нарастания flood_hydrograph, ч")
     parser.add_argument("--t-base", type=float, help="длительность паводка flood_hydrograph, ч")

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from types import SimpleNamespace
+
+import pytest
 
 from core.domain import Dataset
 from tools import run_methodology as cli
@@ -130,3 +133,62 @@ def test_series_extension_cli_loads_analog_file(monkeypatch) -> None:
 
     assert exit_code == 0
     assert container.calculation.parameters == {"analog_df": analog.data}
+
+
+def test_staged_series_extension_cli_loads_stage_config(monkeypatch, tmp_path) -> None:
+    container = _Container()
+    years = range(1990, 2026)
+    config = {
+        "stages": [
+            {
+                "name": "recent",
+                "analogs": {
+                    "a1": {str(year): float(i + 1) for i, year in enumerate(years)},
+                    "a2": {
+                        str(year): float((i % 5) + 1)
+                        for i, year in enumerate(years)
+                    },
+                },
+                "fit_years": list(range(1990, 2020)),
+                "target_years": [2020, 2021, 2022],
+                "ro_cr": 0.6,
+            }
+        ]
+    }
+    config_path = tmp_path / "staged.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    exit_code = _run_main(
+        monkeypatch,
+        [
+            "--method", "series_extension_staged",
+            "--demo",
+            "--staged-config", str(config_path),
+        ],
+        container,
+    )
+
+    assert exit_code == 0
+    assert container.calculation.parameters == {
+        "stages": config["stages"],
+        "exclude_negative": True,
+    }
+
+
+def test_staged_series_extension_cli_requires_config(monkeypatch) -> None:
+    container = _Container()
+
+    with pytest.raises(SystemExit, match="--staged-config"):
+        _run_main(
+            monkeypatch,
+            ["--method", "series_extension_staged", "--demo"],
+            container,
+        )
+
+
+def test_load_staged_config_rejects_invalid_json(tmp_path) -> None:
+    config_path = tmp_path / "broken.json"
+    config_path.write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="Некорректный JSON"):
+        cli.load_staged_config(str(config_path))
