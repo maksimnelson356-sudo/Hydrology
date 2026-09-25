@@ -17,6 +17,7 @@ core/stats/__init__.py
 - confidence_bands — доверительные полосы
 - drought — анализ засух
 - series_extension — продление ряда
+- staged_series_extension — последовательное восстановление по этапам
 - kritsky_tables — таблицы Критского
 - gts_integration — интеграция с ГТС
 - report — формирование отчётов
@@ -41,6 +42,7 @@ __all__ = [
     "confidence_bands",
     "drought",
     "series_extension",
+    "staged_series_extension",
     "kritsky_tables",
     "gts_integration",
     "report",
