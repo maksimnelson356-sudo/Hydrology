@@ -107,7 +107,6 @@ def handle_stats_parameters(context: CalculationContext) -> dict[str, Any]:
     result = calculate_statistical_parameters(
         _values(context),
         min_probability=_param(context, "min_probability", None),
-        show_warnings=False,
     )
     return _clean(dict(result))
 
@@ -155,6 +154,97 @@ def handle_trends_full(context: CalculationContext) -> dict[str, Any]:
 
     frame = pd.DataFrame({"year": _years(context), "value": _values(context)})
     result = full_trend_analysis(frame)
+    return _clean(dict(result))
+
+
+def handle_series_extension(context: CalculationContext) -> dict[str, Any]:
+    """Удлинение короткого ряда по заданному ряду-аналогу."""
+    from core.stats.series_extension import full_extension_workflow
+
+    raw_analog = _param(context, "analog_df", None)
+    if raw_analog is None:
+        raise ValueError("series_extension требует параметр analog_df")
+
+    if isinstance(raw_analog, pd.Series):
+        analog = raw_analog.astype(float).copy()
+    elif isinstance(raw_analog, pd.DataFrame):
+        year_col = str(_param(context, "analog_year_col", "year"))
+        value_col = str(_param(context, "analog_value_col", "value"))
+        missing = [name for name in (year_col, value_col) if name not in raw_analog.columns]
+        if missing:
+            raise ValueError(
+                f"series_extension: analog_df не содержит колонки {', '.join(missing)}"
+            )
+        analog = pd.Series(
+            pd.to_numeric(raw_analog[value_col], errors="coerce").to_numpy(dtype=float),
+            index=pd.to_numeric(raw_analog[year_col], errors="coerce").to_numpy(),
+            name="analog",
+        ).dropna()
+    elif isinstance(raw_analog, dict):
+        analog = pd.Series(raw_analog, dtype=float)
+    else:
+        raise ValueError("series_extension: analog_df должен быть DataFrame, Series или dict")
+
+    try:
+        analog.index = analog.index.astype(int)
+    except (TypeError, ValueError) as error:
+        raise ValueError("series_extension: годы analog_df должны быть целыми") from error
+
+    observed = pd.Series(
+        _values(context),
+        index=_years(context).astype(int),
+        name="observed",
+    )
+    method = str(_param(context, "method", "regression"))
+    if method not in {"regression", "proportional"}:
+        raise ValueError("series_extension: method должен быть regression или proportional")
+
+    result = full_extension_workflow(observed, analog, method=method)
+    return _clean(dict(result))
+
+
+def handle_flood_hydrograph(context: CalculationContext) -> dict[str, Any]:
+    """Построение гидрографа паводка по пиковому расходу."""
+    from core.hydrorash.flood_hydrograph import hydrograph_from_peak
+
+    required = ("Q_peak", "T_peak", "T_base")
+    missing = [name for name in required if _param(context, name, None) is None]
+    if missing:
+        raise ValueError(
+            f"flood_hydrograph требует параметры {', '.join(missing)}"
+        )
+
+    result = hydrograph_from_peak(
+        Q_peak=float(_param(context, "Q_peak", None)),
+        T_peak=float(_param(context, "T_peak", None)),
+        T_base=float(_param(context, "T_base", None)),
+        method=str(_param(context, "method", "gamma")),
+        shape=float(_param(context, "shape", 3.5)),
+        dt=float(_param(context, "dt", 1.0)),
+        asymmetry=float(_param(context, "asymmetry", 0.3)),
+    )
+    return _clean(dict(result))
+
+
+def handle_backwater(context: CalculationContext) -> dict[str, Any]:
+    """Расчёт линии подпора от водохранилища."""
+    from core.hydrorash.backwater import backwater_from_reservoir
+
+    required = ("Q", "B", "m", "n", "I", "H_reservoir")
+    missing = [name for name in required if _param(context, name, None) is None]
+    if missing:
+        raise ValueError(f"backwater требует параметры {', '.join(missing)}")
+
+    result = backwater_from_reservoir(
+        Q=float(_param(context, "Q", None)),
+        B=float(_param(context, "B", None)),
+        m=float(_param(context, "m", None)),
+        n=float(_param(context, "n", None)),
+        I=float(_param(context, "I", None)),
+        H_reservoir=float(_param(context, "H_reservoir", None)),
+        L_max=float(_param(context, "L_max", 10000.0)),
+        dx=float(_param(context, "dx", 200.0)),
+    )
     return _clean(dict(result))
 
 
@@ -428,6 +518,9 @@ def handle_ice_phenomena(context: CalculationContext) -> dict[str, Any]:
 # ----------------------------------------------------------------------
 HANDLERS: dict[str, Any] = {
     "stats_parameters": handle_stats_parameters,
+    "series_extension": handle_series_extension,
+    "flood_hydrograph": handle_flood_hydrograph,
+    "backwater": handle_backwater,
     "frequency_pearson3": handle_frequency_pearson3,
     "frequency_kritsky_menkel": handle_frequency_kritsky_menkel,
     "homogeneity_full": handle_homogeneity_full,

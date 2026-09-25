@@ -236,12 +236,12 @@ class MethodologyRegistry:
 
 
 # ----------------------------------------------------------------------
-# P0 catalogue
+# Methodology catalogue
 #
-# References are quoted from the docstrings of the corresponding core modules
-# (see the table in DOCS/ROADMAP.md, section 12). Data requirements that are not
-# stated in the normative document are left at 0 / empty on purpose: the full
-# catalogue (parameters schema, limitations, handlers) is filled in stage 3.
+# Normative references were checked against the current texts available on
+# 2026-09-24. Methods without a verified prescriptive source are explicitly
+# marked is_normative=False; engineering implementations remain available but
+# must not be advertised as compliant with СП/ГОСТ.
 # ----------------------------------------------------------------------
 DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     MethodologyDescriptor(
@@ -249,20 +249,19 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         name="Статистические параметры ряда (Qср, Cv, Cs, ε)",
         category="statistics",
         standard="СП 33-101-2003",
+        clause="п. 5.1, п. 5.4–5.15",
         scope="Оценка среднего значения, коэффициентов вариации и асимметрии, ошибок ε",
-        min_points=25,
         limitations=(
-            "Ряд короче 25 лет — оценки ненадёжны (СП 482.1325800.2020, п. 8.2)",
-            "Для обеспеченности P ≤ 1 % требуется не менее 50 лет наблюдений",
-            "Cs ненадёжен при n < 20 лет",
+            "Достаточность ряда определяется относительной среднеквадратической погрешностью, а не фиксированным числом лет",
         ),
-        notes="СП 482.1325800.2020, п. 8.2: 25 лет — снеговое питание, 30 лет — дождевое",
+        notes="Для годового и сезонного стока предельная относительная погрешность — 10%",
     ),
     MethodologyDescriptor(
         id="frequency_pearson3",
         name="Кривая обеспеченности (Пирсон III)",
         category="statistics",
         standard="СП 33-101-2003",
+        clause="п. 5.1–5.3",
         scope="Кривые обеспеченности среднегодовых, максимальных и минимальных расходов",
         limitations=("Форма кривой чувствительна к выбору Cs/Cv",),
         notes="Реализация: core/stats/frequency.py",
@@ -272,6 +271,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         name="Кривая обеспеченности (Крицкий-Менкель, ординаты)",
         category="statistics",
         standard="СП 33-101-2003",
+        clause="п. 5.1–5.6",
         scope="Трёхпараметрическое гамма-распределение, табличные ординаты",
         notes="Реализация: core/stats/frequency.py, таблицы core/stats/kritsky_tables.py",
     ),
@@ -280,7 +280,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         name="Проверка однородности ряда (12 критериев)",
         category="statistics",
         standard="СП 33-101-2003",
-        clause="Приложение А",
+        clause="п. 4.7, прил. А.1–А.3",
         scope="5 критериев Диксона, 2 критерия Смирнова-Граббса, тесты стационарности",
         notes="Реализация: core/stats/homogeneity.py",
     ),
@@ -289,17 +289,22 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         name="Удлинение (восстановление) ряда по аналогу",
         category="statistics",
         standard="СП 33-101-2003",
-        clause="раздел 6.2",
-        scope="Регрессионное удлинение короткого ряда наблюдений по посту-аналогу",
-        limitations=("Связь признаётся значимой при R > Ro(α, n)",),
-        notes="Проверка остатков — п. 6.2.4; реализация: core/stats/series_extension.py",
+        clause="п. 6.2–6.7, п. 6.17",
+         scope="Регрессионное удлинение короткого ряда наблюдений по посту-аналогу",
+         required_parameters=("analog_df",),
+         limitations=(
+             "Поддержаны критерии п. 6.7 и поправки дисперсии по п. 6.17; для коротких рядов требуется проверка репрезентативности",
+         ),
+         is_normative=False,
+         notes="Сервисный handler; core/stats/series_extension.py",
+
     ),
     MethodologyDescriptor(
         id="composite_curves",
         name="Составная кривая обеспеченности (Рождественский)",
         category="statistics",
         standard="СП 33-101-2003",
-        clause="п. 5.12",
+        clause="п. 5.12, формулы 5.21–5.25",
         scope="Осреднение кривых обеспеченности при генетической неоднородности ряда",
         notes="Реализация: core/stats/composite_curves.py",
     ),
@@ -308,11 +313,12 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         name="Максимальный сток (паводки)",
         category="runoff",
         standard="СП 33-101-2003",
-        clause="раздел 8",
+        clause="п. 5.26–5.31",
         scope=(
             "Расчёт максимальных расходов воды, кривые обеспеченности паводков, "
             "метод индексных годов, кривая Q = f(H)"
         ),
+        required_parameters=("daily_df",),
         notes="РД 52-26-2008; реализация: core/hydrorash/max_runoff.py",
     ),
     MethodologyDescriptor(
@@ -320,70 +326,77 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         name="Гидрограф паводка (форма паводочной кривой)",
         category="runoff",
         standard="СП 33-101-2003",
-        clause="п. 8.3",
-        scope="Построение и трансформация гидрографа паводка",
-        notes="Реализация: core/hydrorash/flood_hydrograph.py",
+         clause="п. 5.32",
+         scope="Построение и трансформация гидрографа паводка",
+         required_parameters=("Q_peak", "T_peak", "T_base"),
+         notes="Сервисный handler; core/hydrorash/flood_hydrograph.py",
+
     ),
     MethodologyDescriptor(
         id="ice_phenomena",
         name="Ледовые явления (ледостав, толщина льда, заторы)",
         category="runoff",
         standard="СП 33-101-2003",
-        clause="п. 8.5.2, п. 8.5.3",
+        clause="п. 5.44, п. 7.70–7.71, прил. А.14",
         scope="Сроки ледостава и вскрытия, толщина льда, заторные явления",
         required_parameters=("latitude", "mean_jan_temp"),
-        notes="ГОСТ 19179-73; Кондратьев В.Г. (1968); core/hydrorash/ice_phenomena.py",
+        is_normative=False,
+        notes="Формула толщины льда требует отдельной проверки по РД 52-26-2008; core/hydrorash/ice_phenomena.py",
     ),
     MethodologyDescriptor(
         id="flow_duration",
         name="Кривая длительностей (FDC)",
         category="statistics",
-        standard="СП 32.13330.2018",
+        standard="Инженерный метод FDC",
         scope="Перцентили Q10/Q50/Q90, показатели формы кривой, классификация режима",
+        is_normative=False,
         notes="Реализация: core/stats/flow_duration.py",
     ),
     MethodologyDescriptor(
         id="reservoir_regulation",
         name="Многолетнее регулирование стока",
         category="reservoir",
-        standard="СП 58.13330.2019",
+        standard="Метод Риппла (инженерный метод)",
         scope="Полезный объём, гарантированная отдача, кривая «объём — отдача»",
         required_parameters=("demand_m3_s",),
         limitations=("Расчёт зависит от выбранного правила регулирования и ряда притока",),
-        notes="СП 33-101-2003 / СП 33.13330.2016; core/hydrorash/reservoir_regulation.py",
+        is_normative=False,
+        notes="Требуется проектное обоснование режима; core/hydrorash/reservoir_regulation.py",
     ),
     MethodologyDescriptor(
         id="storage_yield",
         name="Кривая «объём — гарантированная отдача»",
         category="reservoir",
-        standard="СП 58.13330.2019",
+        standard="Метод Риппла (инженерный метод)",
         scope="Максимальная отдача D при заданном полезном объёме и целевой гарантии",
         limitations=("Для каждой V_max отдача ищется бинарным поиском по правилу Риппла",),
-        notes="Реализация: core/hydrorash/reservoir_regulation.py, storage_yield_curve",
+        is_normative=False,
+        notes="Требуется проектное обоснование режима; core/hydrorash/reservoir_regulation.py",
     ),
     MethodologyDescriptor(
         id="trends_full",
         name="Анализ тренда (линейный, Манн-Кендалл, Сен, Pettitt)",
         category="statistics",
-        standard="СП 33-101-2003",
-        clause="раздел 5.6",
+        standard="Манн—Кендалл / Сен / Pettitt",
         scope="Выявление направленных изменений многолетнего ряда (тренд, точка смены режима)",
         min_points=10,
         limitations=(
             "Манн-Кендалл/Сен предполагают отсутствие сильной автокорреляции ряда",
         ),
-        notes="Реализация: core/stats/trends.py",
+        is_normative=False,
+        notes="Методы не регламентированы СП 33-101-2003; core/stats/trends.py",
     ),
     MethodologyDescriptor(
         id="min_runoff",
         name="Минимальный сток (30-суточные зимние минимумы)",
         category="runoff",
         standard="СП 33-101-2003",
-        clause="раздел 9",
+        clause="п. 5.41–5.43",
         scope=(
             "Расчёт минимальных расходов воды: 7/10/30-суточные минимумы, "
             "экосистемный минимум (СП 32.13330.2018)"
         ),
+        required_parameters=("daily_df",),
         notes="Реализация: core/hydrorash/min_runoff_extended.py",
     ),
     MethodologyDescriptor(
@@ -391,9 +404,12 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         name="Кривые подпора (ГВП)",
         category="hydraulics",
         standard="СП 33-101-2003",
-        scope="Расчёт кривой подпора и отметок воды при подпорном воздействии",
-        limitations=("Точность зависит от детальности морфометрии русла (±5–10 %)",),
-        notes="Реализация: core/hydrorash/backwater.py",
+         clause="п. 5.45, п. 7.69",
+         scope="Расчёт кривой подпора и отметок воды при подпорном воздействии",
+         required_parameters=("Q", "B", "m", "n", "I", "H_reservoir"),
+         limitations=("Точность зависит от детальности морфометрии русла (±5–10 %)",),
+         notes="Сервисный handler; core/hydrorash/backwater.py",
+
     ),
     # ----------------------------------------------------------------------
     # P1.4 — расширенная статистика (N=10; решение 9.4)
@@ -414,14 +430,15 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         id="drought_spi",
         name="Стандартный индекс осадков (SPI)",
         category="statistics",
-        standard="СП 32.13330.2018",
+        standard="McKee et al. (1993) / WMO SPI",
         scope="Классификация засух по накопленным месячным осадкам (McKee et al., 1993)",
         min_points=12,
         limitations=(
             "Ряд должен быть месячными осадками, мм (не годовыми расходами)",
             "Масштаб scale: 1, 3, 6 или 12 месяцев",
         ),
-        notes="Реализация: core/stats/drought.py",
+        is_normative=False,
+        notes="Упрощённая z-нормировка; полная методика WMO требует отдельной реализации",
     ),
     MethodologyDescriptor(
         id="baseflow",
@@ -438,12 +455,14 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         id="confidence_bands",
         name="Доверительные полосы кривой обеспеченности",
         category="statistics",
-        standard="СП 482.1325800.2020",
-        scope="Бутстреп-интервалы для кривой Пирсон III (уровень доверия 90/95/99 %)",
+        standard="Bootstrap-метод (инженерная оценка)",
+        scope="Бутстреп-интервалы для кривой Пирсона III (уровень доверия 90/95/99 %)",
         min_points=25,
         limitations=("Число бутстреп-выборок n_bootstrap влияет на время расчёта",),
-        notes="Реализация: core/stats/confidence_bands.py",
+        is_normative=False,
+        notes="Метод не предписан СП 482; core/stats/confidence_bands.py",
     ),
+
     MethodologyDescriptor(
         id="intra_annual",
         name="Внутригодовое распределение стока",
@@ -459,32 +478,32 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         id="snowmelt",
         name="Снеговой баланс за период таяния",
         category="runoff",
-        standard="СП 33-101-2003",
-        clause="п. 8.1",
+        standard="РД 52-26-2008",
         scope="Объём талых вод и сток с бассейна: W_end = W_init + P − M",
         required_parameters=("W_initial", "precipitation_mm", "T_air"),
-        notes="РД 52-26-2008; реализация: core/hydrorash/snowmelt.py",
+        is_normative=False,
+        notes="Требуется проверка коэффициентов и статуса РД 52-26-2008",
     ),
     MethodologyDescriptor(
         id="spillway",
         name="Пропускная способность ППУ (водосброс)",
         category="reservoir",
-        standard="СП 58.13330.2019",
-        clause="п. 6",
+        standard="СП 290.1325800.2016",
         scope="Сравнение расчётного расхода паводка с пропускной способностью водосброса",
         required_parameters=("Q_design", "H_max", "L"),
-        notes="Реализация: core/hydrorash/spillway.py",
+        is_normative=False,
+        notes="Простая расчётная схема требует проектной проверки по СП 290",
     ),
     MethodologyDescriptor(
         id="ecological_flow",
         name="Экологический сток (сезонный Тессман)",
         category="runoff",
-        standard="СП 32.13330.2018",
-        clause="прил. 8",
+        standard="Метод Тессмана (инженерный метод)",
         scope="Сезонные величины экологического стока по месяцам (α, β по типу региона)",
         required_parameters=("Q_annual_mean",),
         limitations=("Q_monthly_mean (12 значений) опционален; без него месяцы равны годовому среднему",),
-        notes="Реализация: core/hydrorash/ecological_flow.py",
+        is_normative=False,
+        notes="Требуется подтверждение источника региональных коэффициентов",
     ),
 )
 

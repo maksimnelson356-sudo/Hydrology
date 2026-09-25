@@ -59,7 +59,7 @@ def demo_dataset() -> Dataset:
 
 
 def print_list(container) -> None:
-    print("Зарегистрированные методики (P0):\n")
+    print("Зарегистрированные методики:\n")
     for methodology_id in container.registered_methodology_ids():
         descriptor = container.registry.get(methodology_id)
         print(f"  {methodology_id}")
@@ -92,12 +92,74 @@ def run_methodology(container, methodology_id: str, dataset: Dataset, parameters
     return 0
 
 
+def _build_parameters(args, dataset: Dataset) -> dict:
+    """Map CLI options to the selected methodology's parameter names."""
+    parameters: dict = {}
+    if args.demand is not None:
+        parameters["demand_m3_s"] = args.demand
+
+    if args.method == "series_extension":
+        if args.analog_file:
+            analog = load_dataset(args.analog_file, args.analog_post)
+            parameters["analog_df"] = dict(analog.data)
+        elif args.demo:
+            parameters["analog_df"] = dict(dataset.data)
+        if args.extension_method is not None:
+            parameters["method"] = args.extension_method
+
+    if args.method == "flood_hydrograph":
+        flood_values = {
+            "Q_peak": args.q_peak,
+            "T_peak": args.t_peak,
+            "T_base": args.t_base,
+            "shape": args.flood_shape,
+            "dt": args.flood_dt,
+            "asymmetry": args.flood_asymmetry,
+        }
+        parameters.update({key: value for key, value in flood_values.items() if value is not None})
+        if args.flood_method is not None:
+            parameters["method"] = args.flood_method
+
+    if args.method == "backwater":
+        backwater_values = {
+            "Q": args.q,
+            "B": args.channel_width,
+            "m": args.channel_side_slope,
+            "n": args.manning_n,
+            "I": args.channel_slope,
+            "H_reservoir": args.reservoir_head,
+            "L_max": args.backwater_length,
+            "dx": args.backwater_dx,
+        }
+        parameters.update({key: value for key, value in backwater_values.items() if value is not None})
+
+    return parameters
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Прогон методики через сервисный слой HydroSphere")
     parser.add_argument("--method", help="id методики (см. --list)")
     parser.add_argument("--file", help="файл данных (.xlsx/.xls)")
     parser.add_argument("--post", help="имя поста в файле (опционально)")
     parser.add_argument("--demand", type=float, default=None, help="demand_m3_s для reservoir_regulation")
+    parser.add_argument("--analog-file", help="файл ряда-аналога для series_extension")
+    parser.add_argument("--analog-post", help="имя поста-аналога")
+    parser.add_argument("--extension-method", choices=["regression", "proportional"], help="метод series_extension")
+    parser.add_argument("--q-peak", type=float, help="пиковый расход flood_hydrograph")
+    parser.add_argument("--t-peak", type=float, help="время нарастания flood_hydrograph, ч")
+    parser.add_argument("--t-base", type=float, help="длительность паводка flood_hydrograph, ч")
+    parser.add_argument("--flood-method", choices=["gamma", "triangle"], help="форма flood_hydrograph")
+    parser.add_argument("--flood-shape", type=float, help="параметр формы гамма-гидрографа")
+    parser.add_argument("--flood-dt", type=float, help="шаг времени flood_hydrograph, ч")
+    parser.add_argument("--flood-asymmetry", type=float, help="асимметрия треугольного гидрографа")
+    parser.add_argument("--q", type=float, help="расход backwater, м3/с")
+    parser.add_argument("--channel-width", type=float, help="ширина дна backwater, м")
+    parser.add_argument("--channel-side-slope", type=float, help="откос бортов backwater")
+    parser.add_argument("--manning-n", type=float, help="коэффициент Маннинга backwater")
+    parser.add_argument("--channel-slope", type=float, help="уклон русла backwater")
+    parser.add_argument("--reservoir-head", type=float, help="уровень водохранилища backwater, м")
+    parser.add_argument("--backwater-length", type=float, help="максимальная длина расчёта backwater, м")
+    parser.add_argument("--backwater-dx", type=float, help="шаг длины backwater, м")
     parser.add_argument("--list", action="store_true", help="показать список методик")
     parser.add_argument("--demo", action="store_true", help="использовать встроенный демо-ряд")
     args = parser.parse_args()
@@ -119,10 +181,7 @@ def main() -> int:
         return 2
 
     dataset = demo_dataset() if args.demo else load_dataset(args.file, args.post)
-    parameters: dict = {}
-    if args.demand is not None:
-        parameters["demand_m3_s"] = args.demand
-
+    parameters = _build_parameters(args, dataset)
     return run_methodology(container, args.method, dataset, parameters)
 
 

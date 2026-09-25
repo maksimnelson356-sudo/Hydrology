@@ -225,8 +225,8 @@ run_test('validate_correlation', test_validate_correlation)
 
 def test_regression():
     np.random.seed(42)
-    Q_calc = pd.Series(np.random.normal(100, 15, 30))
-    Q_analog = pd.Series(np.random.normal(100, 15, 30))
+    Q_analog = pd.Series(np.linspace(50.0, 150.0, 30))
+    Q_calc = pd.Series(1.2 * Q_analog + 10.0 + np.random.normal(0.0, 1.0, 30))
     r = regression_extension(Q_calc, Q_analog)
     assert 'extended_series' in r, 'No extended_series'
 

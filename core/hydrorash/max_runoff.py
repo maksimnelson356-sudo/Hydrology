@@ -19,6 +19,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from core.stats.parameters import (
+    MAX_MIN_RELATIVE_RMS_ERROR_LIMIT,
+    relative_mean_error_percent,
+)
+
 from .utils import compute_basic_stats
 
 
@@ -65,15 +70,19 @@ def compute_max_runoff_stats(
     max_series: pd.Series,
     use_normative_Cs: bool = True
 ) -> dict:
-    """
-    Статистические характеристики ряда максимальных стоков.
-
-    СП 33-101-2003 п. 6.3.3: для максимальных стоков Cs ≈ 2×Cv (при Cv ≤ 0.5)
-    или Cs ≈ 3×Cv (при Cv > 0.5).
-    """
+    """Статистические характеристики ряда максимальных стоков по СП 33."""
     data = np.asarray(pd.Series(max_series).dropna(), dtype=float)
     if len(data) < 3:
-        return {"mean": None, "Cv": None, "Cs": None, "n": len(data), "reliability_class": "Недостаточно данных"}
+        return {
+            "mean": None,
+            "Cv": None,
+            "Cs": None,
+            "n": len(data),
+            "epsilon": None,
+            "relative_rms_error_limit": MAX_MIN_RELATIVE_RMS_ERROR_LIMIT,
+            "warnings": ["Длина ряда < 3 лет. Статистические расчёты невозможны."],
+            "reliability_class": "Недостаточно данных",
+        }
 
     n = len(data)
     mean = float(np.mean(data))
@@ -86,19 +95,17 @@ def compute_max_runoff_stats(
     else:
         Cs = Cs_emp
 
-    epsilon = (Cv / np.sqrt(n)) * 100.0
+    r1 = float(np.corrcoef(data[:-1], data[1:])[0, 1])
+    epsilon = relative_mean_error_percent(Cv, n, r1)
+    error_limit_percent = MAX_MIN_RELATIVE_RMS_ERROR_LIMIT * 100.0
 
     warnings = []
     reliability_class = "Надёжная"
-    if n < 10:
-        warnings.append(f"Критично: длина ряда {n} лет < 10")
-        reliability_class = "Ненадёжная"
-    elif n < 20:
-        warnings.append(f"Длина ряда {n} лет < 20. Желательно удлинение")
-        reliability_class = "Пониженная надёжность"
-
-    if epsilon > 15:
-        warnings.append(f"εQ = {epsilon:.1f}% > 15%. Требуется удлинение")
+    if epsilon > error_limit_percent:
+        warnings.append(
+            f"εQ = {epsilon:.1f}% > {error_limit_percent:.0f}%. "
+            "Требуется удлинение ряда (СП 33-101-2003 п. 5.1, 5.14)"
+        )
         reliability_class = "Ненадёжная"
 
     return {
@@ -108,7 +115,9 @@ def compute_max_runoff_stats(
         "Cv": round(Cv, 4),
         "Cs": round(Cs, 4),
         "Cs_empirical": round(Cs_emp, 4),
+        "r1": r1,
         "epsilon": round(epsilon, 2),
+        "relative_rms_error_limit": MAX_MIN_RELATIVE_RMS_ERROR_LIMIT,
         "warnings": warnings,
         "reliability_class": reliability_class
     }

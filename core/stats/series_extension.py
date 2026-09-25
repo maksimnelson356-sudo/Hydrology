@@ -2,11 +2,11 @@
 core/stats/series_extension.py
 Удлинение рядов наблюдений
 
-Реализация методов удлинения согласно СП 33-101-2003 раздел 6.2:
+Реализация методов удлинения согласно СП 33-101-2003, п. 6.2–6.7:
 - Регрессионный метод (линейная регрессия Qрасчёт = a × Qаналог + b)
 - Метод пропорций (Qрасчёт = k × Qаналог)
-- Проверка значимости связи (R > Ro крит)
-- Оценка погрешности удлинённого ряда
+- Проверка числа совместных наблюдений, корреляции и погрешности коэффициентов
+- Оценка неопределённости по остаткам регрессии
 
 Основные функции:
 - validate_correlation — проверка значимости корреляции
@@ -21,7 +21,15 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-# Табличные значения Ro крит (СП 33-101-2003, Таблица 3)
+from core.stats.sp33_variance_correction import apply_formula_6_9, apply_formula_6_10
+
+MIN_COMMON_YEARS = 6
+MIN_CORRELATION = 0.7
+MIN_CORRELATION_SIGMA_RATIO = 2.0
+MIN_SLOPE_SIGMA_RATIO = 2.0
+
+# Legacy table retained for callers of get_ro_critical(). The normative
+# regression gate follows СП 33-101-2003 п. 6.7 and uses MIN_CORRELATION.
 # Ключ: (n_common, alpha=0.05)
 RO_CRITICAL = {
     5: 0.878, 6: 0.811, 7: 0.754, 8: 0.707, 9: 0.666, 10: 0.632,
@@ -57,36 +65,33 @@ def validate_correlation(
     Q_analog: pd.Series,
     alpha: float = 0.05
 ) -> dict:
-    """
-    Проверка статистической значимости корреляционной связи.
-
-    СП 33-101-2003 п. 6.2.3: связь признаётся значимой при R > Ro(α, n).
-
-    Parameters:
-        Q_calc: ряд расчётной реки
-        Q_analog: ряд реки-аналога
-        alpha: уровень значимости
-
-    Returns:
-        Dict: R, Ro_crit, n_common, is_significant, quality_class
-    """
+    """Проверить применимость регрессии по критериям СП 33-101-2003 п. 6.7."""
     common_idx = Q_calc.index.intersection(Q_analog.index)
     n = len(common_idx)
 
-    if n < 5:
+    if n < MIN_COMMON_YEARS:
         return {
-            'R': 0, 'Ro_crit': 1.0, 'n_common': n,
+            'R': 0.0,
+            'R2': 0.0,
+            'Ro_crit': MIN_CORRELATION,
+            'R_critical': MIN_CORRELATION,
+            'sigma_R': float('inf'),
+            'R_over_sigma_R': 0.0,
+            'n_common': n,
             'is_significant': False,
-            'quality_class': 'Нет связи (n < 5)'
+            'p_value': 1.0,
+            'quality_class': f'Недостаточно совместных наблюдений (n < {MIN_COMMON_YEARS})',
         }
 
     Qc = Q_calc.loc[common_idx].values
     Qa = Q_analog.loc[common_idx].values
-
     R, p_value = stats.pearsonr(Qa, Qc)
-    Ro = get_ro_critical(n, alpha)
-
-    R2 = R ** 2
+    sigma_R = max((1.0 - float(R) ** 2) / np.sqrt(n), 1e-12)
+    R_over_sigma_R = float(R) / sigma_R
+    is_significant = (
+        float(R) >= MIN_CORRELATION
+        and R_over_sigma_R >= MIN_CORRELATION_SIGMA_RATIO
+    )
 
     if R > 0.95:
         quality = 'Отличная (R² > 0.90)'
@@ -101,12 +106,15 @@ def validate_correlation(
 
     return {
         'R': round(float(R), 4),
-        'R2': round(float(R2), 4),
-        'Ro_crit': round(Ro, 4),
+        'R2': round(float(R) ** 2, 4),
+        'Ro_crit': MIN_CORRELATION,
+        'R_critical': MIN_CORRELATION,
+        'sigma_R': round(sigma_R, 6),
+        'R_over_sigma_R': round(R_over_sigma_R, 4),
         'n_common': n,
-        'is_significant': float(R) > float(Ro),
+        'is_significant': is_significant,
         'p_value': round(float(p_value), 6),
-        'quality_class': quality
+        'quality_class': quality,
     }
 
 
@@ -126,19 +134,38 @@ def regression_extension(
     Returns:
         Dict: a, b, R, n_common, validation, extended_series
     """
-    validation = validate_correlation(Q_calc, Q_analog)
-    if not validation['is_significant']:
-        pass  # предупреждаем, но не блокируем
-
     common_idx = Q_calc.index.intersection(Q_analog.index)
-    if len(common_idx) < 2:
-        raise ValueError("Недостаточно общих лет для регрессии (нужно ≥ 2)")
+    n_common = len(common_idx)
+    if n_common < MIN_COMMON_YEARS:
+        raise ValueError(
+            f"Для регрессии по СП 33-101-2003 п. 6.7 нужно ≥ {MIN_COMMON_YEARS} "
+            f"совместных лет; получено {n_common}"
+        )
 
+    validation = validate_correlation(Q_calc, Q_analog)
     Qc = Q_calc.loc[common_idx]
     Qa = Q_analog.loc[common_idx]
     result = stats.linregress(Qa.values, Qc.values)
     a = float(result.slope)
     b = float(result.intercept)
+
+    if not validation['is_significant']:
+        raise ValueError(
+            f"Корреляция R={validation['R']:.3f} не соответствует СП 33-101-2003 п. 6.7: "
+            f"R ≥ {MIN_CORRELATION}, R/σR ≥ {MIN_CORRELATION_SIGMA_RATIO}"
+        )
+
+    slope_std_error = float(result.stderr)
+    slope_over_sigma = (
+        float('inf') if slope_std_error == 0.0 else abs(a) / slope_std_error
+    )
+    if a <= 0.0:
+        raise ValueError("Коэффициент регрессии должен быть положительным")
+    if slope_over_sigma < MIN_SLOPE_SIGMA_RATIO:
+        raise ValueError(
+            f"Коэффициент регрессии не подтверждён критерием СП 33-101-2003 п. 6.7: "
+            f"k/σk={slope_over_sigma:.3f} < {MIN_SLOPE_SIGMA_RATIO}"
+        )
 
     Q_ext = Q_analog.copy().astype(float)
 
@@ -199,14 +226,17 @@ def regression_extension(
         'R': validation['R'],
         'R2': validation['R2'],
         'Ro_crit': validation['Ro_crit'],
+        'sigma_R': validation['sigma_R'],
+        'R_over_sigma_R': validation['R_over_sigma_R'],
+        'slope_std_error': round(slope_std_error, 6),
+        'slope_over_sigma': round(slope_over_sigma, 4),
         'n_common': validation['n_common'],
         'is_significant': validation['is_significant'],
         'quality_class': validation['quality_class'],
         'extended_series': Q_ext,
         'residual_diagnostics': residual_diagnostics,
         'warnings': warnings,
-        'warning': None if validation['is_significant'] else
-                   f"R={validation['R']:.3f} < Ro={validation['Ro_crit']:.3f}. Связь статистически незначима!"
+        'warning': None,
     }
 
 
@@ -253,34 +283,55 @@ def estimate_extension_error(
     Q_analog: pd.Series,
     regression_result: dict
 ) -> dict:
+    """Оценить неопределённость по остаткам линейной регрессии.
+
+    Это инженерная оценка ошибки прогноза: фиксированный коэффициент r=0.5
+    удалён, а неопределённость вычисляется из остатков и разброса аналога.
     """
-    Оценка погрешности продлённого ряда.
-
-    СП 33-101-2003 п. 6.2.4:
-    ε = (Cv / sqrt(n)) × Kr × 100%
-
-    Для продлённого ряда:
-    ε_продл = ε_исх × sqrt(n_исх / n_продл)
-
-    Parameters:
-        Q_calc: исходный (короткий) ряд
-        Q_analog: ряд-аналог (длинный)
-        regression_result: результат regression_extension
-
-    Returns:
-        Dict: epsilon_original, epsilon_extended, n_original, n_extended, reliability
-    """
-    n_orig = len(Q_calc.dropna())
+    common_idx = Q_calc.index.intersection(Q_analog.index)
+    n_orig = len(common_idx)
     n_ext = len(Q_analog.dropna())
+    if n_orig < 3:
+        raise ValueError("Для оценки погрешности нужно ≥ 3 совместных наблюдений")
 
-    Cv_orig = float(Q_calc.std() / Q_calc.mean()) if Q_calc.mean() != 0 else 0
+    if 'a' in regression_result:
+        a = float(regression_result['a'])
+        b = float(regression_result.get('b', 0.0))
+        parameter_count = 2 if 'b' in regression_result else 1
+    elif 'k' in regression_result:
+        a = float(regression_result['k'])
+        b = 0.0
+        parameter_count = 1
+    else:
+        raise ValueError("Результат удлинения не содержит коэффициент регрессии")
+    x_common = Q_analog.loc[common_idx].astype(float)
+    y_common = Q_calc.loc[common_idx].astype(float)
+    predicted_common = a * x_common + b
+    residuals = y_common - predicted_common
+    degrees_of_freedom = n_orig - parameter_count
+    if degrees_of_freedom <= 0:
+        raise ValueError("Недостаточно степеней свободы для оценки погрешности")
 
-    R = regression_result.get('R', 0.8)
-    r = 0.5
-    K_r = np.sqrt((1 + r) / (1 - r)) if r < 1 else 1.0
+    residual_std_error = float(np.sqrt(np.sum(residuals ** 2) / degrees_of_freedom))
+    x_mean = float(x_common.mean())
+    sxx = float(np.sum((x_common - x_mean) ** 2))
+    if sxx == 0.0:
+        raise ValueError("Ряд-аналог не имеет дисперсии")
 
-    eps_orig = (Cv_orig / np.sqrt(n_orig)) * K_r * 100
-    eps_ext = (Cv_orig / np.sqrt(n_ext)) * K_r * 100
+    def prediction_std_error(values: pd.Series) -> np.ndarray:
+        leverage = 1.0 / n_orig + (values - x_mean) ** 2 / sxx
+        return residual_std_error * np.sqrt(leverage)
+
+    common_error = prediction_std_error(x_common)
+    missing_idx = Q_analog.index.difference(Q_calc.index)
+    extended_x = Q_analog.loc[missing_idx].astype(float)
+    if extended_x.empty:
+        extended_x = x_common
+    extended_error = prediction_std_error(extended_x)
+    extended_prediction = a * extended_x + b
+
+    eps_orig = float(np.mean(common_error / np.maximum(np.abs(predicted_common), 1e-12)) * 100)
+    eps_ext = float(np.mean(extended_error / np.maximum(np.abs(extended_prediction), 1e-12)) * 100)
 
     if eps_ext <= 10:
         reliability = 'Надёжная'
@@ -292,11 +343,12 @@ def estimate_extension_error(
     return {
         'epsilon_original': round(eps_orig, 2),
         'epsilon_extended': round(eps_ext, 2),
+        'residual_std_error': round(residual_std_error, 6),
+        'prediction_std_error_mean': round(float(np.mean(extended_error)), 6),
         'n_original': n_orig,
         'n_extended': n_ext,
-        'Cv': round(Cv_orig, 4),
         'reliability': reliability,
-        'improvement_pct': round((eps_orig - eps_ext) / eps_orig * 100, 1) if eps_orig > 0 else 0
+        'improvement_pct': round((eps_orig - eps_ext) / eps_orig * 100, 1) if eps_orig > 0 else 0,
     }
 
 
@@ -364,38 +416,23 @@ def multi_analog_extension(
     y_over_sigma: float = 0.2,
     max_analogs: int = 3,
     exclude_negative: bool = True,
+    variance_correction: str = "6.9",
+    phi: pd.Series | np.ndarray | None = None,
+    random_state: int | None = None,
 ) -> dict:
-    """
-    Удлинение ряда множественной регрессией по рекам-аналогам.
+    """Удлинить ряд множественной регрессией по СП 33 п. 6.5 и 6.17.
 
-    Модель (как в протоколе «Продление» ГГИ HydroStatCalc):
-        Q = k0 + k1·Q1 + k2·Q2 + k3·Q3   (до max_analogs аналогов)
-
-    Критерии применимости (строка критериев протокола):
-        Nобщих >= n_min;  Ro >= ro_cr;  Ro/σRo >= ro_over_sigma;
-        ki/σki >= k_over_sigma (для каждого коэффициента);
-        |Yср|/σY <= y_over_sigma (систематическая погрешность);
-        число аналогов <= max_analogs.
-
-    σRo = (1 − R²) / √n  — совпадает с протоколом (n = число общих лет).
-
-    Parameters:
-        Q_calc: ряд расчётной реки (короткий, с пропусками)
-        analogs: {имя_аналога: ряд} — ряды рек-аналогов
-        n_min: минимальное число общих лет (Nmin)
-        ro_cr: критическое значение коэффициента корреляции (RoCr)
-        ro_over_sigma: минимальное отношение Ro/σRo
-        k_over_sigma: минимальное отношение ki/σki
-        y_over_sigma: допустимое отношение |Yср|/σY
-        max_analogs: максимальное число аналогов в уравнении
-        exclude_negative: исключать отрицательные восстановленные значения (Y(−)искл)
-
-    Returns:
-        Dict: R, σRo, n_common, коэффициенты k0..k3, σki, S(σY), Y/σY,
-              флаги критериев, extended_series, строки протокола
+    ``variance_correction="6.9"`` применяет детерминированную поправку
+    систематически заниженной дисперсии. Вариант ``"6.10"`` добавляет
+    нормально распределённую случайную составляющую; ``phi`` можно передать
+    явно либо задать воспроизводимый ``random_state``.
     """
     if not analogs:
         raise ValueError("Не задан ни один ряд-аналог")
+    if variance_correction not in {"6.9", "6.10"}:
+        raise ValueError("variance_correction должен быть '6.9' или '6.10'")
+    if phi is not None and random_state is not None:
+        raise ValueError("Передавайте либо phi, либо random_state, но не оба")
 
     analog_names = list(analogs.keys())[:max_analogs]
 
@@ -457,16 +494,60 @@ def multi_analog_extension(
     }
 
     extended = Q_calc.copy().astype(float)
-    for year in analogs[analog_names[0]].dropna().index:
-        if pd.isna(extended.loc[year]):
-            xs = np.array([1.0] + [
-                analogs[name].loc[year] for name in analog_names
-            ])
-            val = float(xs @ beta)
-            if exclude_negative and val < 0:
+    warnings = []
+    missing_years = extended.index[extended.isna()]
+    for name in analog_names:
+        missing_years = missing_years.intersection(
+            analogs[name].dropna().index,
+            sort=False,
+        )
+    missing_years = missing_years.sort_values()
+
+    if len(missing_years) > 0:
+        x_missing = np.column_stack([
+            np.ones(len(missing_years)),
+            *[analogs[name].loc[missing_years].values.astype(float)
+              for name in analog_names],
+        ])
+        raw_missing = x_missing @ beta
+        observed_mean = float(np.mean(y))
+
+        if variance_correction == "6.9":
+            corrected_missing = apply_formula_6_9(
+                raw_missing,
+                mean_n=observed_mean,
+                correlation=R,
+            )
+        else:
+            if phi is None:
+                normal_draws = np.random.default_rng(random_state).normal(
+                    size=len(missing_years)
+                )
+            elif isinstance(phi, pd.Series):
+                aligned_phi = phi.reindex(missing_years)
+                if aligned_phi.isna().any():
+                    raise ValueError("phi должен содержать значения для всех восстанавливаемых лет")
+                normal_draws = aligned_phi.to_numpy(dtype=float)
+            else:
+                normal_draws = np.asarray(phi, dtype=float)
+
+            if len(missing_years) < 30:
+                warnings.append(
+                    "Для формулы СП 33 п. 6.17 (6.10) рекомендуется "
+                    "не менее 30 восстановленных значений"
+                )
+            corrected_missing = apply_formula_6_10(
+                raw_missing,
+                correlation=R,
+                sigma=float(np.std(y, ddof=1)),
+                phi=normal_draws,
+            )
+
+        for year, value in zip(missing_years, corrected_missing, strict=True):
+            if exclude_negative and value < 0.0:
                 extended.loc[year] = np.nan
             else:
-                extended.loc[year] = val
+                extended.loc[year] = value
 
     coeffs = {'k0': round(k0, 4)}
     sigma_coeffs = {'s_k0': round(float(sigma_k[0]), 4)}
@@ -493,6 +574,11 @@ def multi_analog_extension(
         'criteria': checks,
         'all_criteria_ok': all(checks.values()),
         'extended_series': extended,
+        'variance_correction': variance_correction,
+        'variance_correction_clause': (
+            f'СП 33-101-2003 п. 6.17, формула {variance_correction}'
+        ),
+        'warnings': warnings,
         'formula': f'Q = {coeffs["k0"]}' + ''.join(
             f' {"+" if k[i] >= 0 else "-"} {abs(k[i]):.4f}·{name}'
             for i, name in enumerate(analog_names)
