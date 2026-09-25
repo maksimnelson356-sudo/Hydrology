@@ -278,7 +278,7 @@ def test_default_registry_catalogue_is_complete():
     assert all(item.name.strip() for item in registry)
 
     descriptor = registry.get("homogeneity_full")
-    assert descriptor.normative_reference == "СП 33-101-2003, Приложение А"
+    assert descriptor.normative_reference == "СП 33-101-2003, п. 4.7, прил. А.1–А.3"
     assert descriptor.scope
 
 

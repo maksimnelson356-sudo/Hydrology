@@ -163,8 +163,7 @@ def test_short_series_insufficient_data_error():
     assert report.quality_grade == "C"  # 0.7: error penalty x completeness
 
 
-def test_short_series_against_methodology_min_points():
-    # stats_parameters requires >= 25 points (registry, stage 2 catalogue)
+def test_short_series_not_rejected_by_false_methodology_minimum():
     values = {1990 + k: 100.0 + 5.0 * k for k in range(5)}
     dataset = make_dataset(values)
     service = DataQualityService()
@@ -172,7 +171,7 @@ def test_short_series_against_methodology_min_points():
     report = service.analyze(dataset, methodology_id="stats_parameters")
 
     codes = [i.code for i in report.issues]
-    assert "METHODOLOGY_MIN_POINTS" in codes
+    assert "METHODOLOGY_MIN_POINTS" not in codes
     assert "INSUFFICIENT_DATA" in codes
 
 
