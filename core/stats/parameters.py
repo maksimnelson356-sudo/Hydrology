@@ -1,7 +1,7 @@
 """
 core/stats/parameters.py
 Расчёт статистических параметров с поправками на автокорреляцию
-(по рекомендациям ГГИ / СП 33-11-2003)
+(по рекомендациям ГГИ / СП 33-101-2003)
 """
 
 import warnings
@@ -10,49 +10,71 @@ import numpy as np
 from scipy import stats
 
 
-def validate_series_length(n: int, min_probability: float | None = None) -> list[str]:
+DEFAULT_RELATIVE_RMS_ERROR_LIMIT = 0.10
+MAX_MIN_RELATIVE_RMS_ERROR_LIMIT = 0.20
+
+
+def validate_series_length(
+    n: int,
+    min_probability: float | None = None,
+    relative_rms_error: float | None = None,
+    error_limit: float = DEFAULT_RELATIVE_RMS_ERROR_LIMIT,
+) -> list[str]:
+    """Проверить достаточность ряда по критерию СП 33-101-2003 п. 5.1.
+
+    ``min_probability`` сохранён для совместимости с прежним API и больше не
+    определяет фиксированное число лет наблюдений.
     """
-    Проверка длины ряда наблюдений согласно СП 482.1325800.2020 п. 8.2.
+    if relative_rms_error is None:
+        return [
+            f"⚠️ СП 33-101-2003 п. 5.1: для ряда n={n} необходимо проверить "
+            f"относительную среднеквадратическую погрешность"
+        ]
 
-    Параметры:
-        n: длина ряда наблюдений (лет)
-        min_probability: минимальная обеспеченность для расчета (например, 0.01 для 1%)
+    if relative_rms_error > error_limit:
+        return [
+            f"⚠️ СП 33-101-2003 п. 5.1: относительная среднеквадратическая "
+            f"погрешность {relative_rms_error * 100:.1f}% превышает предел "
+            f"{error_limit * 100:.0f}% для ряда n={n}"
+        ]
 
-    Возвращает:
-        Список предупреждений (пустой если все в порядке)
+    return []
+
+
+def relative_mean_error_percent(
+    cv: float,
+    n: int,
+    lag1_autocorrelation: float,
+) -> float:
+    """Рассчитать погрешность среднего по формулам СП 33 п. 5.26–5.27.
+
+    Для ``r < 0.5`` применяется формула 5.26, для ``r >= 0.5`` — более
+    точная формула 5.27. Результат возвращается в процентах.
     """
-    warnings_list = []
+    if n < 2:
+        raise ValueError("Для погрешности среднего нужно минимум 2 наблюдения")
+    if not np.isfinite(cv) or cv < 0.0:
+        raise ValueError("Cv должен быть конечным и неотрицательным")
+    if cv == 0.0:
+        return 0.0
 
-    # СП 482 п. 8.2: Минимальная длина ряда для редких событий
-    if min_probability is not None and min_probability <= 0.01 and n < 50:
-        warnings_list.append(
-            f"⚠️ СП 482 п. 8.2: Для расчета характеристик обеспеченностью P ≤ 1% "
-            f"требуется ряд наблюдений ≥ 50 лет (текущая длина: {n} лет)"
-        )
+    r = float(lag1_autocorrelation)
+    if not np.isfinite(r) or abs(r) >= 1.0:
+        return float("inf")
 
-    # СП 482 п. 8.2: Общая минимальная длина для рек с снеговым питанием
-    if n < 25:
-        warnings_list.append(
-            f"⚠️ СП 482 п. 8.2: Минимальная длина ряда для рек с преимущественно "
-            f"снеговым питанием составляет 25 лет (текущая длина: {n} лет). "
-            f"Для рек с дождевым питанием - 30 лет."
-        )
+    if r < 0.5:
+        factor = np.sqrt((1.0 + r) / (1.0 - r))
+    else:
+        correction = sum(1.0 - r**power for power in range(1, n))
+        numerator = 1.0 + 2.0 * r / (n * (1.0 - r)) * correction
+        denominator = 1.0 - 2.0 * r / (
+            n * (n - 1) * (1.0 - r)
+        ) * correction
+        if denominator <= 0.0:
+            return float("inf")
+        factor = np.sqrt(numerator / denominator)
 
-    # СП 33-101-2003: Рекомендация для надежных оценок
-    if n < 30:
-        warnings_list.append(
-            f"ℹ️ СП 33-101-2003: Для надежных статистических оценок рекомендуется "
-            f"ряд наблюдений ≥ 30 лет (текущая длина: {n} лет)"
-        )
-
-    # Критически короткий ряд
-    if n < 10:
-        warnings_list.append(
-            f"❌ КРИТИЧНО: Ряд слишком короткий ({n} лет) для достоверных "
-            f"статистических выводов. Результаты могут быть ненадежными."
-        )
-
-    return warnings_list
+    return float(cv / np.sqrt(n) * factor * 100.0)
 
 
 def calculate_statistical_parameters(
@@ -68,7 +90,7 @@ def calculate_statistical_parameters(
         data: массив значений
         apply_autocorr_correction: не используется (оставлен для совместимости; эталон
             Cv не корректирует)
-        min_probability: минимальная обеспеченность для проверки длины ряда (например, 0.01)
+        min_probability: сохранённый параметр совместимости; фиксированный минимум лет не задаёт
         show_warnings: выводить ли предупреждения о длине ряда
     """
     data = np.asarray(data)
@@ -78,27 +100,24 @@ def calculate_statistical_parameters(
         raise ValueError("Для расчёта статистик нужно минимум 3 значения")
 
     n = len(data)
-
-    # Проверка длины ряда согласно СП 482
-    length_warnings = []
-    if show_warnings:
-        length_warnings = validate_series_length(n, min_probability)
-        for warning in length_warnings:
-            warnings.warn(warning, UserWarning)
     mean = np.mean(data)
     std = np.std(data, ddof=1)
-
-    if mean == 0:
-        cv = 0.0
-    else:
-        cv = std / mean
+    cv = std / mean if mean != 0 else 0.0
     cs = stats.skew(data, bias=False)
 
-    # Автокорреляция 1-го порядка
-    if n > 2:
-        r1 = np.corrcoef(data[:-1], data[1:])[0, 1]
-    else:
-        r1 = 0.0
+    r1 = np.corrcoef(data[:-1], data[1:])[0, 1]
+    mean_error_percent = relative_mean_error_percent(cv, n, r1)
+
+    length_warnings = []
+    if show_warnings:
+        length_warnings = validate_series_length(
+            n,
+            min_probability,
+            relative_rms_error=mean_error_percent / 100.0,
+            error_limit=DEFAULT_RELATIVE_RMS_ERROR_LIMIT,
+        )
+        for warning in length_warnings:
+            warnings.warn(warning, UserWarning, stacklevel=2)
 
     # === Поправки ===
     # СП 33-101-2003: поправка на автокорреляцию применяется к

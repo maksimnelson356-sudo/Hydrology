@@ -278,15 +278,25 @@ def split_series_by_year(values, years, break_year):
 
 def compute_composite_curve(values, years, break_year,
                             P_values=None, use_normative_Cs=True):
-    """Обратная совместимость: старый интерфейс."""
+    """Build the СП 33-101-2003 п. 5.12 composite curve for two periods.
+
+    The available annual data contain one value per year, so this interface
+    represents formula (5.24): component exceedance probabilities are averaged
+    before the composite discharge quantile is interpolated.
+    """
     if P_values is None:
         P_values = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5,
                     0.7, 0.8, 0.9, 0.95, 0.98, 0.99, 0.995, 0.999]
 
     values = np.asarray(values, dtype=float)
     years_arr = np.asarray(years, dtype=float) if years is not None else np.arange(len(values))
+    probabilities = np.asarray(P_values, dtype=float)
 
-    # Синхронизация длин: выбрасываем NaN в значениях и соответствующие годы
+    if len(values) != len(years_arr):
+        raise ValueError("values and years must have the same length")
+    if np.any((probabilities <= 0.0) | (probabilities >= 1.0)):
+        raise ValueError("P_values must be between 0 and 1")
+
     valid = ~np.isnan(values)
     values = values[valid]
     years_arr = years_arr[valid]
@@ -301,30 +311,57 @@ def compute_composite_curve(values, years, break_year,
             'error': 'Мало данных для составной кривой (нужно >= 10)',
         }
 
-    v1, y1, v2, y2 = split_series_by_year(values, years_arr, break_year)
+    v1, _, v2, _ = split_series_by_year(values, years_arr, break_year)
+    if len(v1) < 3 or len(v2) < 3:
+        return {
+            'curve_df': pd.DataFrame(),
+            'part1_stats': {}, 'part2_stats': {},
+            'break_year': break_year,
+            'n_part1': len(v1), 'n_part2': len(v2),
+            'homogeneity_test': {'is_homogeneous': False, 'u_p': None, 'ks_p': None},
+            'change_point': {'change_year': None, 'p_value': 1.0, 'significant': False},
+            'error': 'Каждая однородная часть должна содержать не менее 3 наблюдений',
+        }
 
     stats1 = compute_part_stats(v1, use_normative_Cs)
     stats2 = compute_part_stats(v2, use_normative_Cs)
-
-    P_arr = np.array(P_values)
-    Q1 = pearson3_ppf(P_arr, stats1['mean'], stats1['cv'], stats1['cs'])
-    Q2 = pearson3_ppf(P_arr, stats2['mean'], stats2['cv'], stats2['cs'])
-
     n1, n2 = len(v1), len(v2)
-    n_total = n1 + n2
-    Q_composite = (Q1 * n1 + Q2 * n2) / n_total
+
+    dense_probabilities = np.geomspace(1e-4, 1.0 - 1e-4, 512)
+    q1_dense = pearson3_ppf(
+        dense_probabilities, stats1['mean'], stats1['cv'], stats1['cs']
+    )
+    q2_dense = pearson3_ppf(
+        dense_probabilities, stats2['mean'], stats2['cv'], stats2['cs']
+    )
+    discharge_grid = np.unique(np.concatenate((q1_dense, q2_dense)))
+
+    order1 = np.argsort(q1_dense)
+    order2 = np.argsort(q2_dense)
+    p1_grid = np.interp(
+        discharge_grid, q1_dense[order1], dense_probabilities[order1]
+    )
+    p2_grid = np.interp(
+        discharge_grid, q2_dense[order2], dense_probabilities[order2]
+    )
+    combined_probability = (n1 * p1_grid + n2 * p2_grid) / (n1 + n2)
+    unique_probability, unique_index = np.unique(combined_probability, return_index=True)
+
+    q1 = pearson3_ppf(probabilities, stats1['mean'], stats1['cv'], stats1['cs'])
+    q2 = pearson3_ppf(probabilities, stats2['mean'], stats2['cv'], stats2['cs'])
+    q_composite = np.interp(
+        probabilities, unique_probability, discharge_grid[unique_index]
+    )
 
     curve_df = pd.DataFrame({
-        'P_%': np.round(P_arr * 100, 3),
-        'Q_часть1': np.round(Q1, 2),
-        'Q_часть2': np.round(Q2, 2),
-        'Q_составная': np.round(Q_composite, 2),
+        'P_%': np.round(probabilities * 100, 3),
+        'Q_часть1': np.round(q1, 2),
+        'Q_часть2': np.round(q2, 2),
+        'Q_составная': np.round(q_composite, 2),
     })
 
     cp = find_change_point(values, years_arr)
-    ht = homogeneity_two_parts(v1, v2) if n1 >= 3 and n2 >= 3 else {
-        'is_homogeneous': False, 'u_p': None, 'ks_p': None,
-    }
+    ht = homogeneity_two_parts(v1, v2)
 
     return {
         'curve_df': curve_df,
