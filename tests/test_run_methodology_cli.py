@@ -192,3 +192,26 @@ def test_load_staged_config_rejects_invalid_json(tmp_path) -> None:
 
     with pytest.raises(SystemExit, match="Некорректный JSON"):
         cli.load_staged_config(str(config_path))
+
+
+def test_load_dataset_reads_normalized_a8_json(tmp_path) -> None:
+    primary_path = tmp_path / "primary.json"
+    primary_path.write_text(
+        json.dumps(
+            {
+                "name": "р. Сьежа – д. Стан",
+                "unit": "л/с·км²",
+                "catchment_area_km2": 407,
+                "data": {"1971": 3.77},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    dataset = cli.load_dataset(str(primary_path), None)
+
+    assert dataset.name == "р. Сьежа – д. Стан"
+    assert dataset.data == {1971: 3.77}
+    assert dataset.unit == "л/с·км²"
+    assert dataset.catchment_area_km2 == 407

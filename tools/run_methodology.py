@@ -32,16 +32,52 @@ from core.domain.models import Dataset, DatasetType  # noqa: E402
 from core.services.bootstrap import build_container  # noqa: E402
 
 
+def _load_json_dataset(path: Path) -> Dataset:
+    """Read a normalized JSON dataset produced by the A.8 importer."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise SystemExit(f"Не удалось прочитать JSON-файл {path}") from error
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+        raise SystemExit(f"JSON-файл {path} должен содержать объект с полем data")
+
+    data: dict[int, float] = {}
+    for raw_year, raw_value in payload["data"].items():
+        if raw_value is None:
+            continue
+        try:
+            data[int(raw_year)] = float(raw_value)
+        except (TypeError, ValueError) as error:
+            raise SystemExit(f"Некорректные данные года {raw_year} в {path}") from error
+    if not data:
+        raise SystemExit(f"В JSON-файле {path} не найдено числовых данных")
+
+    name = str(payload.get("name") or path.stem)
+    unit = str(payload.get("unit") or "m³/s")
+    area = payload.get("catchment_area_km2")
+    return Dataset(
+        name=name,
+        data=data,
+        dataset_type=DatasetType.OBSERVED,
+        unit=unit,
+        catchment_area_km2=float(area) if area is not None else None,
+    )
+
+
 def load_dataset(path: str | None, post: str | None) -> Dataset:
-    """Read a yearly series from an Excel file (sheet_reader) or raise."""
+    """Read a yearly series from JSON/Excel (sheet_reader) or raise."""
+    if not path:
+        raise SystemExit("Не указан --file: путь к данным (.json/.xlsx/.xls)")
+    path_object = Path(path)
+    if path_object.suffix.lower() == ".json":
+        return _load_json_dataset(path_object)
+
     from core.stats.sheet_reader import read_hydro_data
 
-    if not path:
-        raise SystemExit("Не указан --file: путь к файлу данных (.xlsx/.xls)")
     data, _ = read_hydro_data(path, post or None)
     if not data:
         raise SystemExit(f"В файле {path} не найдено данных для поста «{post or '(первый)'}»")
-    name = post or Path(path).stem
+    name = post or path_object.stem
     return Dataset(name=name, data=data, dataset_type=DatasetType.OBSERVED)
 
 
