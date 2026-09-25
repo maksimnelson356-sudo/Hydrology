@@ -1,0 +1,157 @@
+{
+  "schema_version": "1.0",
+  "evidence_status": "partial",
+  "is_normative_validation": false,
+  "source": {
+    "standard": "СП 33-101-2003",
+    "title": "Определение основных расчетных гидрологических характеристик",
+    "edition": "Москва, 2004",
+    "section": "Приложение А, А.6–А.8",
+    "source_url": "https://files.stroyinf.ru/Data2/1/4294815/4294815038.htm",
+    "source_note": "Публичный текст СП; приложение содержит опубликованные q и результаты восстановления, но не первичные годовые ряды аналогов."
+  },
+  "subject": {
+    "id": "seja_d_stan",
+    "name": "р. Сьежа – д. Стан",
+    "variable": "q",
+    "unit": "л/с·км²",
+    "catchment_area_km2": 407,
+    "observed_period": [1971, 1992],
+    "observed_count": 22,
+    "restored_period": [1882, 1970],
+    "year_field": "year",
+    "water_year_semantics": "В А.8 поле обозначено как «Год»; без первоисточника не переименовывается в water_year.",
+    "missing_value": null
+  },
+  "derived_conversion": {
+    "formula": "Q_m3_s = q_l_s_km2 * catchment_area_km2 / 1000",
+    "result_label": "Q_derived_m3_s",
+    "is_observed_archive_value": false
+  },
+  "analogs": [
+    {
+      "number": 1,
+      "id": "volchina_s_volchinskoe_lesnichestvo",
+      "name": "р. Волчина – с. Волчинское лесничество",
+      "area_km2": 2990,
+      "observation_years_count": 39,
+      "annual_series_available": false
+    },
+    {
+      "number": 2,
+      "id": "meglinka_s_russkoe_pestovo",
+      "name": "р. Меглинка – с. Русское Пестово",
+      "area_km2": 700,
+      "observation_years_count": 38,
+      "annual_series_available": false
+    },
+    {
+      "number": 3,
+      "id": "kobozha_s_moshenik",
+      "name": "р. Кобожа – с. Мошеник",
+      "area_km2": 2350,
+      "observation_years_count": 54,
+      "annual_series_available": false
+    },
+    {
+      "number": 4,
+      "id": "molloga_s_spas_zaberezhe",
+      "name": "р. Молога – с. Спас-Забережье",
+      "area_km2": 10200,
+      "observation_years_count": 60,
+      "annual_series_available": false
+    },
+    {
+      "number": 5,
+      "id": "tikhvinka_d_gorelukha",
+      "name": "р. Тихвинка – д. Горелуха",
+      "area_km2": 2070,
+      "observation_years_count": 110,
+      "annual_series_available": false
+    },
+    {
+      "number": 6,
+      "id": "meta_s_berezovskiy_ryadok",
+      "name": "р. Мета – с. Березовский рядок",
+      "area_km2": 5180,
+      "observation_years_count": 69,
+      "annual_series_available": false
+    },
+    {
+      "number": 7,
+      "id": "volga_g_staritsa",
+      "name": "р. Волга – г. Старица",
+      "area_km2": 21100,
+      "observation_years_count": 102,
+      "annual_series_available": false
+    }
+  ],
+  "equations": [
+    {
+      "id": "a8_1954_1970",
+      "formula": "q = -1.08 + 0.92*q1 + 0.51*q3",
+      "coefficients": {
+        "intercept": -1.08,
+        "q1": 0.92,
+        "q3": 0.51
+      },
+      "target_periods": [{"start": 1954, "end": 1970}],
+      "restored_count": 17
+    },
+    {
+      "id": "a8_1935_1939_1941_1953",
+      "formula": "q = -1.17 + 0.78*q3 + 0.70*q4",
+      "coefficients": {
+        "intercept": -1.17,
+        "q3": 0.78,
+        "q4": 0.70
+      },
+      "target_periods": [
+        {"start": 1935, "end": 1939},
+        {"start": 1941, "end": 1953}
+      ],
+      "restored_count": 18
+    },
+    {
+      "id": "a8_1940_q3",
+      "formula": "q = -0.59 + 1.30*q3",
+      "coefficients": {
+        "intercept": -0.59,
+        "q3": 1.30
+      },
+      "target_periods": [{"start": 1940, "end": 1940}],
+      "restored_count": 1
+    },
+    {
+      "id": "a8_1933_1934_q4",
+      "formula": "q = 1.19 + 1.15*q4",
+      "coefficients": {
+        "intercept": 1.19,
+        "q4": 1.15
+      },
+      "target_periods": [{"start": 1933, "end": 1934}],
+      "restored_count": 2
+    },
+    {
+      "id": "a8_1891_1932_q5_q7",
+      "formula": "q = -2.08 + 0.59*q5 + 0.61*q7",
+      "coefficients": {
+        "intercept": -2.08,
+        "q5": 0.59,
+        "q7": 0.61
+      },
+      "target_periods": [{"start": 1891, "end": 1932}],
+      "restored_count": 42
+    },
+    {
+      "id": "a8_1882_1890_q5",
+      "formula": "q = -0.44 + 0.88*q5",
+      "coefficients": {
+        "intercept": -0.44,
+        "q5": 0.88
+      },
+      "target_periods": [{"start": 1882, "end": 1890}],
+      "restored_count": 9
+    }
+  ]
+}
