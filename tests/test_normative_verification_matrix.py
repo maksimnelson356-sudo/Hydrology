@@ -27,4 +27,6 @@ def test_matrix_distinguishes_tests_from_normative_validation() -> None:
     assert "EXPERT_VALIDATED" in text
     assert "А.8" in text
     assert "staged-workflow" in text
+    assert "sp33_a8_manifest_v1.json" in text
+    assert "Partial evidence A.8" in text
     assert "не является доказательством корректности" in text
