@@ -135,6 +135,47 @@ def required_year_gaps(
     return ordered
 
 
+def required_analog_coverage(manifest: A8Manifest) -> dict[int, tuple[int, ...]]:
+    """Return the years each analog must cover, derived from the equations.
+
+    An analog is required for every year of the subject's observed period (the
+    fit window) plus every year its equations restore. Windows may be
+    discontinuous, so the full year set is returned rather than a range.
+    """
+    fit_years = set(manifest.observed_period.years())
+    coverage: dict[int, set[int]] = {}
+    for equation in manifest.equations:
+        target_years = {
+            year for period in equation.target_periods for year in period.years()
+        }
+        for number in equation.analog_numbers:
+            coverage.setdefault(number, set()).update(fit_years | target_years)
+    return {
+        number: tuple(sorted(years))
+        for number, years in sorted(coverage.items())
+    }
+
+
+def published_coverage_conflicts(manifest: A8Manifest) -> dict[int, dict[str, int]]:
+    """Compare required analog coverage with the published record lengths.
+
+    Table A.6 states how many years each analog observed. When the equations
+    demand more years than the standard says exist, the standard's own example
+    is internally inconsistent. This is reported rather than silently accepted,
+    because importing such a scenario cannot be independently reproduced.
+    """
+    conflicts: dict[int, dict[str, int]] = {}
+    for number, years in required_analog_coverage(manifest).items():
+        published = manifest.analog_observation_years.get(number)
+        if published is not None and published < len(years):
+            conflicts[number] = {
+                "required_years": len(years),
+                "published_years": published,
+                "shortfall": len(years) - published,
+            }
+    return conflicts
+
+
 def observation_report(
     frame: pd.DataFrame,
     manifest: A8Manifest,
@@ -156,6 +197,10 @@ def observation_report(
         "series_counts": dict(sorted(series_counts.items())),
         "unit_counts": unit_counts,
         "missing_required_years": required_year_gaps(normalized, manifest),
+        "published_coverage_conflicts": {
+            f"q{number}": detail
+            for number, detail in published_coverage_conflicts(manifest).items()
+        },
     }
 
 
@@ -253,6 +298,8 @@ __all__ = [
     "normalize_observations",
     "observation_report",
     "parse_manifest",
+    "published_coverage_conflicts",
+    "required_analog_coverage",
     "required_year_gaps",
     "validate_required_observations",
 ]
