@@ -215,3 +215,48 @@ def test_load_dataset_reads_normalized_a8_json(tmp_path) -> None:
     assert dataset.data == {1971: 3.77}
     assert dataset.unit == "л/с·км²"
     assert dataset.catchment_area_km2 == 407
+
+
+def test_staged_series_extension_cli_forwards_the_evidence_status(monkeypatch, tmp_path) -> None:
+    """metadata.evidence_status обязан доехать до параметров расчёта.
+
+    Регрессия: _build_parameters брал из конфига только stages и exclude_negative,
+    поэтому статус доказательности оставался в файле и никуда не попадал.
+    """
+    container = _Container()
+    years = range(1990, 2026)
+    config = {
+        "stages": [
+            {
+                "name": "recent",
+                "analogs": {
+                    "a1": {str(year): float(i + 1) for i, year in enumerate(years)},
+                    "a2": {
+                        str(year): float((i % 5) + 1)
+                        for i, year in enumerate(years)
+                    },
+                },
+                "fit_years": list(range(1990, 2020)),
+                "target_years": [2020, 2021, 2022],
+                "ro_cr": 0.6,
+            }
+        ],
+        "metadata": {"evidence_status": "partial"},
+    }
+    config_path = tmp_path / "staged.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    exit_code = _run_main(
+        monkeypatch,
+        [
+            "--method", "series_extension_staged",
+            "--demo",
+            "--staged-config", str(config_path),
+        ],
+        container,
+    )
+
+    assert exit_code == 0
+    assert container.calculation.parameters["evidence_status"] == "partial", (
+        "статус доказательности не дошёл до параметров расчёта"
+    )

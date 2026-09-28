@@ -203,6 +203,42 @@ def _plain(value: Any) -> Any:
     return value
 
 
+# Статус доказательности из манифеста источника -> предупреждение для отчёта.
+# Формулировки живут здесь, в доменном слое: отчёт только печатает готовую строку,
+# поэтому смена wording не требует правок report_service.
+_EVIDENCE_NOTES: dict[str, str] = {
+    "partial": (
+        "Доказательность сценария частичная: восстановленный ряд опирается на неполное "
+        "покрытие наблюдений аналогов и не является независимо верифицированным."
+    ),
+    "unknown": (
+        "Статус доказательности источника не объявлен: восстановленный ряд не проверен "
+        "и не должен выдаваться за подтверждённый."
+    ),
+}
+_EVIDENCE_FALLBACK = (
+    "Статус доказательности источника: «{status}». Проверьте, соответствует ли он "
+    "требуемому уровню обоснованности."
+)
+
+
+def _evidence_note(status: Any) -> str | None:
+    """Return a user-facing caveat for a declared evidence status.
+
+    None means the series is declared verified: no caveat is warranted. Unknown
+    values are surfaced rather than swallowed, because silence is what made a
+    partially supported series indistinguishable from a verified one.
+    """
+    if not isinstance(status, str):
+        return None
+    normalized = status.strip()
+    if not normalized:
+        return None
+    if normalized == "published_target_series":
+        return None
+    return _EVIDENCE_NOTES.get(normalized, _EVIDENCE_FALLBACK.format(status=normalized))
+
+
 def handle_series_extension_staged(context: CalculationContext) -> dict[str, Any]:
     """Run the staged workflow from a validated service configuration."""
     raw_stages = context.parameters.get("stages")
@@ -223,7 +259,14 @@ def handle_series_extension_staged(context: CalculationContext) -> dict[str, Any
         _parse_stages(raw_stages),
         exclude_negative=exclude_negative,
     )
-    return _plain(dict(result))
+    payload = _plain(dict(result))
+    status = context.parameters.get("evidence_status")
+    if isinstance(status, str) and status.strip():
+        payload["evidence_status"] = status.strip()
+    note = _evidence_note(status)
+    if note:
+        payload["evidence_note"] = note
+    return payload
 
 
 __all__ = ["StagedSeriesConfigurationError", "handle_series_extension_staged"]

@@ -158,6 +158,13 @@ def _build_parameters(args, dataset: Dataset) -> dict:
         config = load_staged_config(args.staged_config)
         parameters["stages"] = config["stages"]
         parameters["exclude_negative"] = config.get("exclude_negative", True)
+        # Статус доказательности из манифеста источника: без него потребитель не
+        # отличит частично подтверждённый ряд от проверенного.
+        metadata = config.get("metadata")
+        if isinstance(metadata, dict):
+            status = metadata.get("evidence_status")
+            if isinstance(status, str) and status.strip():
+                parameters["evidence_status"] = status.strip()
 
     if args.method == "series_extension":
         if args.analog_file:

@@ -191,3 +191,45 @@ def test_missing_series_extension_input_is_rejected() -> None:
 def test_missing_staged_series_extension_input_is_rejected() -> None:
     with pytest.raises(Exception, match="stages"):
         _execute("series_extension_staged", _staged_dataset(), {})
+
+
+def test_staged_extension_publishes_partial_evidence_caveat():
+    """Частичная доказательность обязана быть видна в результате расчёта."""
+    parameters = _staged_parameters()
+    parameters["evidence_status"] = "partial"
+
+    result = _execute("series_extension_staged", _staged_dataset(), parameters)
+
+    assert result.output_data["evidence_status"] == "partial"
+    note = result.output_data["evidence_note"]
+    assert "частичная" in note
+    assert "не является независимо верифицированным" in note, (
+        f"оговорка не объясняет, почему ряд нельзя считать проверенным: {note!r}"
+    )
+    json.dumps(result.output_data)
+
+
+def test_staged_extension_stays_quiet_for_a_verified_status():
+    """Проверенный статус не должен порождать оговорку — иначе она неинформативна."""
+    parameters = _staged_parameters()
+    parameters["evidence_status"] = "published_target_series"
+
+    result = _execute("series_extension_staged", _staged_dataset(), parameters)
+
+    assert result.output_data["evidence_status"] == "published_target_series"
+    assert "evidence_note" not in result.output_data, (
+        "для полностью проверенного ряда оговорка не должна появляться"
+    )
+
+
+def test_staged_extension_never_leaves_status_unexplained():
+    """Неизвестный статус обязан быть показан, а не молча проглочен."""
+    parameters = _staged_parameters()
+    parameters["evidence_status"] = "какой-то новый статус"
+
+    result = _execute("series_extension_staged", _staged_dataset(), parameters)
+
+    note = result.output_data["evidence_note"]
+    assert "какой-то новый статус" in note, (
+        f"неизвестный статус должен попасть в текст оговорки, а не теряться: {note!r}"
+    )

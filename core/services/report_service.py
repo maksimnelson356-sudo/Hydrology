@@ -447,6 +447,11 @@ class ReportService:
                 lines.append(str(warning))
             if result.metadata.error_message:
                 lines.append(result.metadata.error_message)
+            # Метод сам сформулировал оговорку о доказательности ряда: слово
+            # принадлежит доменному слою, здесь оно только публикуется.
+            note = result.output_data.get("evidence_note")
+            if isinstance(note, str) and note.strip():
+                lines.append(note.strip())
         if quality is not None:
             for issue in quality.issues:
                 if issue.severity.value in ("warning", "error", "critical"):
