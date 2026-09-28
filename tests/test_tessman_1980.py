@@ -18,6 +18,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -125,3 +128,101 @@ def test_legacy_function_is_labelled_as_engineering() -> None:
     assert "Tessman 1980" not in blob, (
         "инженерная α/β-конструкция выдаёт себя за документированный метод Тессмана"
     )
+
+
+# --- Независимая перепроверка на втором наборе данных ----------------------
+#
+# Первый набор (Koldan) — опубликованная таблица чужой работы, MAF = 0,78.
+# Второй — независимая реализация того же правила, полученная от пользователя
+# проекта 2026-09-28, на данных реки с весенним половодьем и MAF = 16,83.
+# Он ценен тем, что пересекает границу третьей ветки на реалистичных
+# величинах, а не на синтетике: Июнь (MMF = 25 > MAF) уходит в 0,4·MMF,
+# а Июль (MMF = 14,5 < MAF) — в 0,4·MAF.
+#
+# Это НЕ первоисточник. Фикстур фиксирует провенанс явно, чтобы подтверждение
+# реализации не было выдано за новый нормативный статус метода.
+
+FIXTURE = (
+    Path(__file__).resolve().parents[1]
+    / "tests"
+    / "fixtures"
+    / "tessman_independent_model_v1.json"
+)
+MODEL = json.loads(FIXTURE.read_text(encoding="utf-8"))
+MODEL_MAF = MODEL["dataset"]["MAF"]
+MODEL_MONTHS = MODEL["months"]
+
+
+def test_independent_model_is_reproduced_month_by_month() -> None:
+    result = tessman_1980(MODEL_MAF, [m["MMF"] for m in MODEL_MONTHS])
+    assert result["monthly_Q_eco"] == pytest.approx(
+        [m["Q_eco"] for m in MODEL_MONTHS], abs=0.005
+    ), (
+        "помесячный расхождение с независимой моделью: наш "
+        f"{result['monthly_Q_eco']}, источник {[m['Q_eco'] for m in MODEL_MONTHS]}"
+    )
+
+
+def test_independent_model_agrees_on_the_branch_of_every_month() -> None:
+    """Не только числа, но и то, какая ветка правила сработала."""
+    result = tessman_1980(MODEL_MAF, [m["MMF"] for m in MODEL_MONTHS])
+    assert [r["ветка"] for r in result["monthly"]] == [
+        m["branch"] for m in MODEL_MONTHS
+    ], "расхождение веток с независимой моделью"
+
+
+def test_independent_model_crosses_the_third_branch_boundary() -> None:
+    """Июнь и Июль — пара, ради которой набор и подобран.
+
+    0,4·Июня = 10,0 и 0,4·Июля = 5,8: оба выше и ниже порога 6,733 в разные
+    стороны, поэтому третью ветку от второй отличает именно условие
+    MMF >= MAF, а не величина 0,4·MMF.
+    """
+    result = tessman_1980(MODEL_MAF, [m["MMF"] for m in MODEL_MONTHS])
+    # источник подписывает месяцы полностью («Июнь»), реализация — коротко
+    # («Июн»); соответствие проверяется здесь же, чтобы не молча разъехалось
+    assert tuple(m["month"][:3] for m in MODEL_MONTHS) == tuple(
+        r["Месяц"] for r in result["monthly"]
+    ), "подписи месяцев в фикстуре и в реализации разошлись"
+    by_month = {r["Месяц"]: r for r in result["monthly"]}
+    assert by_month["Июн"]["ветка"] == "0,4·MMF"
+    assert by_month["Июл"]["ветка"] == "0,4·MAF"
+    # ровно на границе: оба месяца выше порога 0,4·MAF, но только Июнь выше MAF
+    assert by_month["Июн"]["Q_ср_месяц"] > MODEL_MAF
+    assert by_month["Июл"]["Q_ср_месяц"] < MODEL_MAF
+    assert by_month["Июл"]["Q_ср_месяц"] > 0.4 * MODEL_MAF
+
+
+def test_independent_model_catches_the_naive_misreading() -> None:
+    """Фикстур не вакуумный: наивное прочтение правила им ловится.
+
+    Наивная ошибка — схлопнуть правило до двух веток: в сухих месяцах весь
+    естественный сток, во всех остальных 0,4·MMF. Тогда в Марте, Июле, Августе
+    и Сентябре бралось бы 0,4·MMF вместо удержания 0,4·MAF.
+    """
+    result = tessman_1980(MODEL_MAF, [m["MMF"] for m in MODEL_MONTHS])
+    floor = 0.4 * MODEL_MAF
+    naive = [
+        m["MMF"] if m["MMF"] < floor else 0.4 * m["MMF"] for m in MODEL_MONTHS
+    ]
+    assert naive != pytest.approx(result["monthly_Q_eco"], abs=0.005), (
+        "фикстур не отличает верное правило от наивного прочтения — он бесполезен"
+    )
+    # и расхождение приходится ровно на месяцы второй ветки
+    differing = {
+        m["month"][:3]
+        for m, naive_value in zip(MODEL_MONTHS, naive, strict=True)
+        if abs(naive_value - m["Q_eco"]) > 0.005
+    }
+    assert differing == {"Мар", "Июл", "Авг", "Сен"}
+
+
+def test_independent_model_is_not_claimed_as_primary_source() -> None:
+    """Подтверждение реализации не должно превращаться в новый статус."""
+    prov = MODEL["provenance"]
+    assert prov["is_primary_source"] is False
+    assert prov["kind"] == "independent_restatement"
+    assert "Tessman S.A. 1980" in prov["note"], (
+        "в провенансе должно называться, кто настоящий первоисточник"
+    )
+
