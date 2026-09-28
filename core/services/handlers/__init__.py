@@ -438,7 +438,11 @@ def handle_intra_annual(context: CalculationContext) -> dict[str, Any]:
 
 
 def handle_snowmelt(context: CalculationContext) -> dict[str, Any]:
-    """Снеговой баланс бассейна за период таяния (СП 33-101-2003 п. 8.1)."""
+    """Снеговой баланс бассейна за период таяния (инженерная реализация).
+
+    Прежняя ссылка «СП 33-101-2003 п. 8.1» ошибочна: такого пункта нет, и
+    градусно-суточного метода стандарт не содержит. См. core/hydrorash/snowmelt.py.
+    """
     from core.hydrorash.snowmelt import snowmelt_balance
 
     w_initial = _param(context, "W_initial", None)
