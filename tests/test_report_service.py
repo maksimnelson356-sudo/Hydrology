@@ -300,3 +300,34 @@ def test_conclusion_fills_when_calculations_present():
     section = result["report"].get("conclusion")
     assert section is not None and section.has_data
     assert "1 из 2" in section.content
+
+
+def test_warnings_section_publishes_the_method_evidence_caveat():
+    """Оговорка метода о доказательности ряда обязана попасть в раздел 12."""
+    result = build(
+        calculations=[
+            make_result(
+                {
+                    "evidence_status": "partial",
+                    "evidence_note": "Доказательность сценария частичная: "
+                    "восстановленный ряд не является независимо верифицированным.",
+                }
+            )
+        ]
+    )
+
+    section = result["report"].get("warnings")
+    assert section is not None and section.has_data
+    assert "Доказательность сценария частичная" in section.content, (
+        "оговорка о доказательности не дошла до раздела предупреждений"
+    )
+
+
+def test_warnings_section_stays_empty_without_evidence_caveat():
+    """Проверенный ряд не должен получать пустую оговорку — раздел остаётся «нет данных»."""
+    result = build(calculations=[make_result({"evidence_status": "published_target_series"})])
+
+    section = result["report"].get("warnings")
+    assert section is None or not section.has_data, (
+        "отчёт не должен изображать предупреждение там, где доказательность полная"
+    )

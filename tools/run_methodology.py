@@ -6,6 +6,7 @@ Examples:
     python tools/run_methodology.py --list
     python tools/run_methodology.py --method stats_parameters --file data.xlsx --post "Пост 1"
     python tools/run_methodology.py --method frequency_pearson3 --demo
+    python tools/run_methodology.py --method series_extension_staged --file primary.xlsx --staged-config stages.json
 
 Runs without GUI: builds the service container via build_container(), reads the
 series with core.stats.sheet_reader and delegates to CalculationService.
@@ -31,16 +32,52 @@ from core.domain.models import Dataset, DatasetType  # noqa: E402
 from core.services.bootstrap import build_container  # noqa: E402
 
 
+def _load_json_dataset(path: Path) -> Dataset:
+    """Read a normalized JSON dataset produced by the A.8 importer."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise SystemExit(f"Не удалось прочитать JSON-файл {path}") from error
+    if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+        raise SystemExit(f"JSON-файл {path} должен содержать объект с полем data")
+
+    data: dict[int, float] = {}
+    for raw_year, raw_value in payload["data"].items():
+        if raw_value is None:
+            continue
+        try:
+            data[int(raw_year)] = float(raw_value)
+        except (TypeError, ValueError) as error:
+            raise SystemExit(f"Некорректные данные года {raw_year} в {path}") from error
+    if not data:
+        raise SystemExit(f"В JSON-файле {path} не найдено числовых данных")
+
+    name = str(payload.get("name") or path.stem)
+    unit = str(payload.get("unit") or "m³/s")
+    area = payload.get("catchment_area_km2")
+    return Dataset(
+        name=name,
+        data=data,
+        dataset_type=DatasetType.OBSERVED,
+        unit=unit,
+        catchment_area_km2=float(area) if area is not None else None,
+    )
+
+
 def load_dataset(path: str | None, post: str | None) -> Dataset:
-    """Read a yearly series from an Excel file (sheet_reader) or raise."""
+    """Read a yearly series from JSON/Excel (sheet_reader) or raise."""
+    if not path:
+        raise SystemExit("Не указан --file: путь к данным (.json/.xlsx/.xls)")
+    path_object = Path(path)
+    if path_object.suffix.lower() == ".json":
+        return _load_json_dataset(path_object)
+
     from core.stats.sheet_reader import read_hydro_data
 
-    if not path:
-        raise SystemExit("Не указан --file: путь к файлу данных (.xlsx/.xls)")
     data, _ = read_hydro_data(path, post or None)
     if not data:
         raise SystemExit(f"В файле {path} не найдено данных для поста «{post or '(первый)'}»")
-    name = post or Path(path).stem
+    name = post or path_object.stem
     return Dataset(name=name, data=data, dataset_type=DatasetType.OBSERVED)
 
 
@@ -92,11 +129,42 @@ def run_methodology(container, methodology_id: str, dataset: Dataset, parameters
     return 0
 
 
+def load_staged_config(path: str) -> dict:
+    """Load and validate the JSON stage configuration for the staged method."""
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+    except OSError as error:
+        raise SystemExit(f"Не удалось прочитать staged-конфигурацию: {path}") from error
+    try:
+        config = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise SystemExit(f"Некорректный JSON staged-конфигурации: {path}") from error
+    if not isinstance(config, dict) or not isinstance(config.get("stages"), list):
+        raise SystemExit("staged-конфигурация должна содержать непустой список stages")
+    if not config["stages"]:
+        raise SystemExit("staged-конфигурация должна содержать непустой список stages")
+    return config
+
+
 def _build_parameters(args, dataset: Dataset) -> dict:
     """Map CLI options to the selected methodology's parameter names."""
     parameters: dict = {}
     if args.demand is not None:
         parameters["demand_m3_s"] = args.demand
+
+    if args.method == "series_extension_staged":
+        if args.staged_config is None:
+            raise SystemExit("Для series_extension_staged требуется --staged-config")
+        config = load_staged_config(args.staged_config)
+        parameters["stages"] = config["stages"]
+        parameters["exclude_negative"] = config.get("exclude_negative", True)
+        # Статус доказательности из манифеста источника: без него потребитель не
+        # отличит частично подтверждённый ряд от проверенного.
+        metadata = config.get("metadata")
+        if isinstance(metadata, dict):
+            status = metadata.get("evidence_status")
+            if isinstance(status, str) and status.strip():
+                parameters["evidence_status"] = status.strip()
 
     if args.method == "series_extension":
         if args.analog_file:
@@ -145,6 +213,7 @@ def main() -> int:
     parser.add_argument("--analog-file", help="файл ряда-аналога для series_extension")
     parser.add_argument("--analog-post", help="имя поста-аналога")
     parser.add_argument("--extension-method", choices=["regression", "proportional"], help="метод series_extension")
+    parser.add_argument("--staged-config", help="JSON-конфигурация этапов для series_extension_staged")
     parser.add_argument("--q-peak", type=float, help="пиковый расход flood_hydrograph")
     parser.add_argument("--t-peak", type=float, help="время нарастания flood_hydrograph, ч")
     parser.add_argument("--t-base", type=float, help="длительность паводка flood_hydrograph, ч")

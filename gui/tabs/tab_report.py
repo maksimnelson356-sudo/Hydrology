@@ -267,8 +267,15 @@ class ReportTab(QWidget):
         self._worker.start()
 
     def _on_report_ready(self, report: object) -> None:
-        self._report = report  # type: ignore[assignment]
-        assert isinstance(report, Report)
+        # Раньше здесь стоял assert: под python -O он вырезается, и неверный тип
+        # проходил дальше. Проверка остаётся рабочей при любых флагах оптимизации.
+        if not isinstance(report, Report):
+            self._on_report_failed(
+                t("report_bad_type",
+                  f"Отчёт имеет неверный тип: {type(report).__name__}")
+            )
+            return
+        self._report = report
         text = ReportService.render_text(report)
         self.preview.setPlainText(text)
         self.btn_save.setEnabled(True)
@@ -288,7 +295,6 @@ class ReportTab(QWidget):
         if self._report is None:
             return
         default_dir = self._default_reports_dir()
-        default_dir.mkdir(parents=True, exist_ok=True)
         path, _ = QFileDialog.getSaveFileName(
             self,
             t("report_save_title", "Сохранить отчёт"),
@@ -296,7 +302,10 @@ class ReportTab(QWidget):
             "Текстовые файлы (*.txt);;Все файлы (*)",
         )
         if not path:
+            # Каталог создаётся только после подтверждения: отмена в диалоге
+            # не должна оставлять на диске пустую папку.
             return
+        default_dir.mkdir(parents=True, exist_ok=True)
         try:
             target = ReportService.save_report(self._report, path)
         except OSError as exc:

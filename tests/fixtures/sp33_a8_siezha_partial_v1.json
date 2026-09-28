@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "evidence_status": "partial",
+  "source_fixture": "sp33_a8_manifest_v1.json",
+  "subject": "seja_d_stan",
+  "unit_q": "l/s/km2",
+  "unit_q_derived": "m3/s",
+  "catchment_area_km2": 407,
+  "records": [
+    {"year": 1971, "q_published_l_s_km2": 3.77, "q_derived_m3_s": 1.53439, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1972, "q_published_l_s_km2": 3.12, "q_derived_m3_s": 1.26984, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1973, "q_published_l_s_km2": 3.78, "q_derived_m3_s": 1.53846, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1974, "q_published_l_s_km2": 6.28, "q_derived_m3_s": 2.55596, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1975, "q_published_l_s_km2": 5.95, "q_derived_m3_s": 2.42165, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1976, "q_published_l_s_km2": 8.27, "q_derived_m3_s": 3.36589, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1977, "q_published_l_s_km2": 13.0, "q_derived_m3_s": 5.291, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1978, "q_published_l_s_km2": 11.7, "q_derived_m3_s": 4.7619, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1979, "q_published_l_s_km2": 8.7, "q_derived_m3_s": 3.5409, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1980, "q_published_l_s_km2": 9.15, "q_derived_m3_s": 3.72405, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1981, "q_published_l_s_km2": 11.3, "q_derived_m3_s": 4.5991, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1982, "q_published_l_s_km2": 8.18, "q_derived_m3_s": 3.32926, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1983, "q_published_l_s_km2": 9.78, "q_derived_m3_s": 3.98046, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1984, "q_published_l_s_km2": 12.0, "q_derived_m3_s": 4.884, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1985, "q_published_l_s_km2": 9.15, "q_derived_m3_s": 3.72405, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1986, "q_published_l_s_km2": 9.01, "q_derived_m3_s": 3.66707, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1987, "q_published_l_s_km2": 10.4, "q_derived_m3_s": 4.2328, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1988, "q_published_l_s_km2": 8.48, "q_derived_m3_s": 3.45136, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1989, "q_published_l_s_km2": 8.45, "q_derived_m3_s": 3.43915, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1990, "q_published_l_s_km2": 13.6, "q_derived_m3_s": 5.5352, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1991, "q_published_l_s_km2": 10.7, "q_derived_m3_s": 4.3549, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null},
+    {"year": 1992, "q_published_l_s_km2": 5.65, "q_derived_m3_s": 2.29955, "q1": null, "q2": null, "q3": null, "q4": null, "q5": null, "q6": null, "q7": null}
+  ]
+}

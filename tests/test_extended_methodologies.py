@@ -105,8 +105,8 @@ def test_p14_ids_are_registered():
 
 def test_p14_grows_registered_list_by_ten():
     container = make_container()
-    # P0 + P1.4 + P1.7 + three newly wired service handlers = 23.
-    assert len(container.registered_methodology_ids()) == 23
+    # P0 + P1.4 + P1.7 + four newly wired service handlers = 24.
+    assert len(container.registered_methodology_ids()) == 24
     assert "storage_yield" in container.registered_methodology_ids()
     assert len(P14_IDS) == 10
 

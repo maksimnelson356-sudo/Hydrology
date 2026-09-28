@@ -1,0 +1,31 @@
+{
+  "id": "sp33_stats_parameters_hand_calc_v1",
+  "standard": "СП 33-101-2003",
+  "clauses": ["5.1", "5.26", "5.27"],
+  "source_note": "Independent hand-calculated benchmark; not an official certified example.",
+  "input": {
+    "unit": "m3/s",
+    "values": [10.0, 11.0, 13.0, 12.0, 15.0, 14.0, 17.0, 16.0]
+  },
+  "calculation": {
+    "sample_standard_deviation": "ddof=1",
+    "lag1_autocorrelation": 0.6721936196477039,
+    "formula_for_r_ge_0_5": "Cv / sqrt(n) * sqrt(A / B) * 100",
+    "relative_rms_error_percent": 15.361832366309494
+  },
+  "expected": {
+    "n": 8,
+    "mean": 13.5,
+    "std": 2.449489742783178,
+    "cv": 0.18144368465060576,
+    "cs": 0.0,
+    "corrected_cv": 0.18144368465060576,
+    "corrected_cs": 0.0,
+    "r1": 0.6721936196477039,
+    "lambda2": 0.8750000000000002,
+    "lambda3": 0.0,
+    "length_warnings": [
+      "⚠️ СП 33-101-2003 п. 5.1: относительная среднеквадратическая погрешность 15.4% превышает предел 10% для ряда n=8"
+    ]
+  }
+}

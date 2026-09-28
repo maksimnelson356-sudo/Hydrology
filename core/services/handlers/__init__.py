@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 
 from core.services.calculation_service import CalculationContext
+from core.services.handlers.staged_series_extension import handle_series_extension_staged
 
 VERSION = "1.0"
 
@@ -437,7 +438,11 @@ def handle_intra_annual(context: CalculationContext) -> dict[str, Any]:
 
 
 def handle_snowmelt(context: CalculationContext) -> dict[str, Any]:
-    """Снеговой баланс бассейна за период таяния (СП 33-101-2003 п. 8.1)."""
+    """Снеговой баланс бассейна за период таяния (инженерная реализация).
+
+    Прежняя ссылка «СП 33-101-2003 п. 8.1» ошибочна: такого пункта нет, и
+    градусно-суточного метода стандарт не содержит. См. core/hydrorash/snowmelt.py.
+    """
     from core.hydrorash.snowmelt import snowmelt_balance
 
     w_initial = _param(context, "W_initial", None)
@@ -456,7 +461,11 @@ def handle_snowmelt(context: CalculationContext) -> dict[str, Any]:
 
 
 def handle_spillway(context: CalculationContext) -> dict[str, Any]:
-    """Проверка пропускной способности ППУ (СП 58.13330.2019 п. 6)."""
+    """Проверка пропускной способности ППУ (СП 290.1325800.2016 п. 6.3).
+
+    Прежняя ссылка «СП 58.13330.2019 п. 6» ошибочна: раздел 6 СП 58 — общие
+    требования безопасности при эксплуатации, а не расчёт водосброса.
+    """
     from core.hydrorash.spillway import spillway_capacity_check
 
     q_design = _param(context, "Q_design", None)
@@ -478,7 +487,12 @@ def handle_spillway(context: CalculationContext) -> dict[str, Any]:
 
 
 def handle_ecological_flow(context: CalculationContext) -> dict[str, Any]:
-    """Экологический сток: сезонный Тессман (СП 32.13330.2018, прил. 8)."""
+    """Экологический сток: сезонный Тессман.
+
+    Ссылка «СП 32.13330.2018, прил. 8» ОШИБОЧНА: это «Канализация. Наружные сети
+    и сооружения», предмет не совпадает. Атрибуция «Тессман» не подтверждается ни
+    одним доступным документом (см. шапку core/hydrorash/ecological_flow.py).
+    """
     from core.hydrorash.ecological_flow import tessmann_seasonal
 
     q_annual = _param(context, "Q_annual_mean", None)
@@ -493,7 +507,12 @@ def handle_ecological_flow(context: CalculationContext) -> dict[str, Any]:
 
 
 def handle_ice_phenomena(context: CalculationContext) -> dict[str, Any]:
-    """Оценка максимальной толщины льда (РД 52-26-2008; СП 58.13330.2019, табл. 7.1)."""
+    """Оценка максимальной толщины льда.
+
+    РД 52-26-2008 не проверен. Ссылка «СП 58.13330.2019, табл. 7.1» ошибочна:
+    в СП 58 раздел 7 — требования безопасности при реконструкции, таблицы 7.1
+    в стандарте нет, а приложение Б — «Классы ответственности», не климатические зоны.
+    """
     from core.hydrorash.ice_phenomena import ClimateZone, estimate_max_ice_thickness
 
     latitude = _param(context, "latitude", None)
@@ -519,6 +538,7 @@ def handle_ice_phenomena(context: CalculationContext) -> dict[str, Any]:
 HANDLERS: dict[str, Any] = {
     "stats_parameters": handle_stats_parameters,
     "series_extension": handle_series_extension,
+    "series_extension_staged": handle_series_extension_staged,
     "flood_hydrograph": handle_flood_hydrograph,
     "backwater": handle_backwater,
     "frequency_pearson3": handle_frequency_pearson3,

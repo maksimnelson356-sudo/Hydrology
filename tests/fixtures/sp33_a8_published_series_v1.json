@@ -1,0 +1,925 @@
+{
+ "schema_version": "1.0",
+ "evidence_status": "published_target_series",
+ "is_normative_validation": false,
+ "source_fixture": "sp33_a8_manifest_v1.json",
+ "source": {
+  "standard": "СП 33-101-2003",
+  "edition": "Москва, 2004",
+  "section": "Приложение А, таблица А.8",
+  "source_url": "https://files.stroyinf.ru/Data2/1/4294815/4294815038.htm",
+  "note": "Таблица А.8 публикует полный ряд 1882-1992: 89 восстановленных и 22 наблюдённых значения. Это цель для сверки, а не независимое воспроизведение: первичные годовые ряды аналогов в стандарте не опубликованы."
+ },
+ "subject": "seja_d_stan",
+ "unit_q": "l/s/km2",
+ "unit_q_derived": "m3/s",
+ "catchment_area_km2": 407,
+ "observed_period": [
+  1971,
+  1992
+ ],
+ "restored_period": [
+  1882,
+  1970
+ ],
+ "equivalent_independent_info": {
+  "n_years": 111,
+  "n_ei_mean": 66.7,
+  "n_ei_variance": 54.6,
+  "note": "Объём эквивалентно-независимой информации для всего ряда по таблице А.7."
+ },
+ "open_questions": [
+  "1950: значение 8,55 помечено сноской 'I' в первоисточнике; текст сноски не извлекается из публичной HTML-версии и требует оригинальной вёрстки.",
+  "Таблица А.7: смысл третьего корреляционного значения для уравнений с двумя аналогами установлен как корреляция между аналогами (r12) по косвенным признакам, но требует подтверждения оригинальной вёрсткой таблицы."
+ ],
+ "records": [
+  {
+   "year": 1882,
+   "q_published_l_s_km2": 2.99,
+   "q_derived_m3_s": 1.21693,
+   "status": "restored",
+   "restored_by_equation": "a8_1882_1890_q5",
+   "footnote": null
+  },
+  {
+   "year": 1883,
+   "q_published_l_s_km2": 5.73,
+   "q_derived_m3_s": 2.33211,
+   "status": "restored",
+   "restored_by_equation": "a8_1882_1890_q5",
+   "footnote": null
+  },
+  {
+   "year": 1884,
+   "q_published_l_s_km2": 6.48,
+   "q_derived_m3_s": 2.63736,
+   "status": "restored",
+   "restored_by_equation": "a8_1882_1890_q5",
+   "footnote": null
+  },
+  {
+   "year": 1885,
+   "q_published_l_s_km2": 5.73,
+   "q_derived_m3_s": 2.33211,
+   "status": "restored",
+   "restored_by_equation": "a8_1882_1890_q5",
+   "footnote": null
+  },
+  {
+   "year": 1886,
+   "q_published_l_s_km2": 2.99,
+   "q_derived_m3_s": 1.21693,
+   "status": "restored",
+   "restored_by_equation": "a8_1882_1890_q5",
+   "footnote": null
+  },
+  {
+   "year": 1887,
+   "q_published_l_s_km2": 6.61,
+   "q_derived_m3_s": 2.69027,
+   "status": "restored",
+   "restored_by_equation": "a8_1882_1890_q5",
+   "footnote": null
+  },
+  {
+   "year": 1888,
+   "q_published_l_s_km2": 10.7,
+   "q_derived_m3_s": 4.3549,
+   "status": "restored",
+   "restored_by_equation": "a8_1882_1890_q5",
+   "footnote": null
+  },
+  {
+   "year": 1889,
+   "q_published_l_s_km2": 8.11,
+   "q_derived_m3_s": 3.30077,
+   "status": "restored",
+   "restored_by_equation": "a8_1882_1890_q5",
+   "footnote": null
+  },
+  {
+   "year": 1890,
+   "q_published_l_s_km2": 5.05,
+   "q_derived_m3_s": 2.05535,
+   "status": "restored",
+   "restored_by_equation": "a8_1882_1890_q5",
+   "footnote": null
+  },
+  {
+   "year": 1891,
+   "q_published_l_s_km2": 2.84,
+   "q_derived_m3_s": 1.15588,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1892,
+   "q_published_l_s_km2": 7.61,
+   "q_derived_m3_s": 3.09727,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1893,
+   "q_published_l_s_km2": 7.41,
+   "q_derived_m3_s": 3.01587,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1894,
+   "q_published_l_s_km2": 14.4,
+   "q_derived_m3_s": 5.8608,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1895,
+   "q_published_l_s_km2": 9.51,
+   "q_derived_m3_s": 3.87057,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1896,
+   "q_published_l_s_km2": 7.15,
+   "q_derived_m3_s": 2.91005,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1897,
+   "q_published_l_s_km2": 3.95,
+   "q_derived_m3_s": 1.60765,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1898,
+   "q_published_l_s_km2": 7.69,
+   "q_derived_m3_s": 3.12983,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1899,
+   "q_published_l_s_km2": 12.6,
+   "q_derived_m3_s": 5.1282,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1900,
+   "q_published_l_s_km2": 7.94,
+   "q_derived_m3_s": 3.23158,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1901,
+   "q_published_l_s_km2": 7.06,
+   "q_derived_m3_s": 2.87342,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1902,
+   "q_published_l_s_km2": 12.5,
+   "q_derived_m3_s": 5.0875,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1903,
+   "q_published_l_s_km2": 13.0,
+   "q_derived_m3_s": 5.291,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1904,
+   "q_published_l_s_km2": 6.83,
+   "q_derived_m3_s": 2.77981,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1905,
+   "q_published_l_s_km2": 10.8,
+   "q_derived_m3_s": 4.3956,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1906,
+   "q_published_l_s_km2": 7.26,
+   "q_derived_m3_s": 2.95482,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1907,
+   "q_published_l_s_km2": 6.79,
+   "q_derived_m3_s": 2.76353,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1908,
+   "q_published_l_s_km2": 13.2,
+   "q_derived_m3_s": 5.3724,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1909,
+   "q_published_l_s_km2": 8.91,
+   "q_derived_m3_s": 3.62637,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1910,
+   "q_published_l_s_km2": 5.6,
+   "q_derived_m3_s": 2.2792,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1911,
+   "q_published_l_s_km2": 8.06,
+   "q_derived_m3_s": 3.28042,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1912,
+   "q_published_l_s_km2": 5.04,
+   "q_derived_m3_s": 2.05128,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1913,
+   "q_published_l_s_km2": 5.85,
+   "q_derived_m3_s": 2.38095,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1914,
+   "q_published_l_s_km2": 6.25,
+   "q_derived_m3_s": 2.54375,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1915,
+   "q_published_l_s_km2": 8.17,
+   "q_derived_m3_s": 3.32519,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1916,
+   "q_published_l_s_km2": 9.36,
+   "q_derived_m3_s": 3.80952,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1917,
+   "q_published_l_s_km2": 9.46,
+   "q_derived_m3_s": 3.85022,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1918,
+   "q_published_l_s_km2": 10.0,
+   "q_derived_m3_s": 4.07,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1919,
+   "q_published_l_s_km2": 5.59,
+   "q_derived_m3_s": 2.27513,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1920,
+   "q_published_l_s_km2": 3.18,
+   "q_derived_m3_s": 1.29426,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1921,
+   "q_published_l_s_km2": 2.71,
+   "q_derived_m3_s": 1.10297,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1922,
+   "q_published_l_s_km2": 7.88,
+   "q_derived_m3_s": 3.20716,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1923,
+   "q_published_l_s_km2": 9.79,
+   "q_derived_m3_s": 3.98453,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1924,
+   "q_published_l_s_km2": 7.69,
+   "q_derived_m3_s": 3.12983,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1925,
+   "q_published_l_s_km2": 6.88,
+   "q_derived_m3_s": 2.80016,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1926,
+   "q_published_l_s_km2": 9.2,
+   "q_derived_m3_s": 3.7444,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1927,
+   "q_published_l_s_km2": 9.28,
+   "q_derived_m3_s": 3.77696,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1928,
+   "q_published_l_s_km2": 11.0,
+   "q_derived_m3_s": 4.477,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1929,
+   "q_published_l_s_km2": 7.54,
+   "q_derived_m3_s": 3.06878,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1930,
+   "q_published_l_s_km2": 6.54,
+   "q_derived_m3_s": 2.66178,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1931,
+   "q_published_l_s_km2": 7.76,
+   "q_derived_m3_s": 3.15832,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1932,
+   "q_published_l_s_km2": 10.2,
+   "q_derived_m3_s": 4.1514,
+   "status": "restored",
+   "restored_by_equation": "a8_1891_1932_q5_q7",
+   "footnote": null
+  },
+  {
+   "year": 1933,
+   "q_published_l_s_km2": 8.91,
+   "q_derived_m3_s": 3.62637,
+   "status": "restored",
+   "restored_by_equation": "a8_1933_1934_q4",
+   "footnote": null
+  },
+  {
+   "year": 1934,
+   "q_published_l_s_km2": 8.26,
+   "q_derived_m3_s": 3.36182,
+   "status": "restored",
+   "restored_by_equation": "a8_1933_1934_q4",
+   "footnote": null
+  },
+  {
+   "year": 1935,
+   "q_published_l_s_km2": 12.7,
+   "q_derived_m3_s": 5.1689,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1936,
+   "q_published_l_s_km2": 7.51,
+   "q_derived_m3_s": 3.05657,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1937,
+   "q_published_l_s_km2": 3.66,
+   "q_derived_m3_s": 1.48962,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1938,
+   "q_published_l_s_km2": 4.74,
+   "q_derived_m3_s": 1.92918,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1939,
+   "q_published_l_s_km2": 3.15,
+   "q_derived_m3_s": 1.28205,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1940,
+   "q_published_l_s_km2": 3.6,
+   "q_derived_m3_s": 1.4652,
+   "status": "restored",
+   "restored_by_equation": "a8_1940_q3",
+   "footnote": null
+  },
+  {
+   "year": 1941,
+   "q_published_l_s_km2": 6.53,
+   "q_derived_m3_s": 2.65771,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1942,
+   "q_published_l_s_km2": 8.04,
+   "q_derived_m3_s": 3.27228,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1943,
+   "q_published_l_s_km2": 5.95,
+   "q_derived_m3_s": 2.42165,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1944,
+   "q_published_l_s_km2": 3.88,
+   "q_derived_m3_s": 1.57916,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1945,
+   "q_published_l_s_km2": 5.54,
+   "q_derived_m3_s": 2.25478,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1946,
+   "q_published_l_s_km2": 7.86,
+   "q_derived_m3_s": 3.19902,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1947,
+   "q_published_l_s_km2": 8.49,
+   "q_derived_m3_s": 3.45543,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1948,
+   "q_published_l_s_km2": 6.95,
+   "q_derived_m3_s": 2.82865,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1949,
+   "q_published_l_s_km2": 5.8,
+   "q_derived_m3_s": 2.3606,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1950,
+   "q_published_l_s_km2": 8.55,
+   "q_derived_m3_s": 3.47985,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": "I"
+  },
+  {
+   "year": 1951,
+   "q_published_l_s_km2": 8.96,
+   "q_derived_m3_s": 3.64672,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1952,
+   "q_published_l_s_km2": 11.8,
+   "q_derived_m3_s": 4.8026,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1953,
+   "q_published_l_s_km2": 14.1,
+   "q_derived_m3_s": 5.7387,
+   "status": "restored",
+   "restored_by_equation": "a8_1935_1939_1941_1953",
+   "footnote": null
+  },
+  {
+   "year": 1954,
+   "q_published_l_s_km2": 8.02,
+   "q_derived_m3_s": 3.26414,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1955,
+   "q_published_l_s_km2": 14.6,
+   "q_derived_m3_s": 5.9422,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1956,
+   "q_published_l_s_km2": 10.4,
+   "q_derived_m3_s": 4.2328,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1957,
+   "q_published_l_s_km2": 13.7,
+   "q_derived_m3_s": 5.5759,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1958,
+   "q_published_l_s_km2": 13.6,
+   "q_derived_m3_s": 5.5352,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1959,
+   "q_published_l_s_km2": 9.55,
+   "q_derived_m3_s": 3.88685,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1960,
+   "q_published_l_s_km2": 6.69,
+   "q_derived_m3_s": 2.72283,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1961,
+   "q_published_l_s_km2": 10.1,
+   "q_derived_m3_s": 4.1107,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1962,
+   "q_published_l_s_km2": 11.4,
+   "q_derived_m3_s": 4.6398,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1963,
+   "q_published_l_s_km2": 4.58,
+   "q_derived_m3_s": 1.86406,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1964,
+   "q_published_l_s_km2": 5.47,
+   "q_derived_m3_s": 2.22629,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1965,
+   "q_published_l_s_km2": 8.37,
+   "q_derived_m3_s": 3.40659,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1966,
+   "q_published_l_s_km2": 12.9,
+   "q_derived_m3_s": 5.2503,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1967,
+   "q_published_l_s_km2": 7.97,
+   "q_derived_m3_s": 3.24379,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1968,
+   "q_published_l_s_km2": 9.13,
+   "q_derived_m3_s": 3.71591,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1969,
+   "q_published_l_s_km2": 7.96,
+   "q_derived_m3_s": 3.23972,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1970,
+   "q_published_l_s_km2": 7.14,
+   "q_derived_m3_s": 2.90598,
+   "status": "restored",
+   "restored_by_equation": "a8_1954_1970",
+   "footnote": null
+  },
+  {
+   "year": 1971,
+   "q_published_l_s_km2": 3.77,
+   "q_derived_m3_s": 1.53439,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1972,
+   "q_published_l_s_km2": 3.12,
+   "q_derived_m3_s": 1.26984,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1973,
+   "q_published_l_s_km2": 3.78,
+   "q_derived_m3_s": 1.53846,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1974,
+   "q_published_l_s_km2": 6.28,
+   "q_derived_m3_s": 2.55596,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1975,
+   "q_published_l_s_km2": 5.95,
+   "q_derived_m3_s": 2.42165,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1976,
+   "q_published_l_s_km2": 8.27,
+   "q_derived_m3_s": 3.36589,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1977,
+   "q_published_l_s_km2": 13.0,
+   "q_derived_m3_s": 5.291,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1978,
+   "q_published_l_s_km2": 11.7,
+   "q_derived_m3_s": 4.7619,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1979,
+   "q_published_l_s_km2": 8.7,
+   "q_derived_m3_s": 3.5409,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1980,
+   "q_published_l_s_km2": 9.15,
+   "q_derived_m3_s": 3.72405,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1981,
+   "q_published_l_s_km2": 11.3,
+   "q_derived_m3_s": 4.5991,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1982,
+   "q_published_l_s_km2": 8.18,
+   "q_derived_m3_s": 3.32926,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1983,
+   "q_published_l_s_km2": 9.78,
+   "q_derived_m3_s": 3.98046,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1984,
+   "q_published_l_s_km2": 12.0,
+   "q_derived_m3_s": 4.884,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1985,
+   "q_published_l_s_km2": 9.15,
+   "q_derived_m3_s": 3.72405,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1986,
+   "q_published_l_s_km2": 9.01,
+   "q_derived_m3_s": 3.66707,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1987,
+   "q_published_l_s_km2": 10.4,
+   "q_derived_m3_s": 4.2328,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1988,
+   "q_published_l_s_km2": 8.48,
+   "q_derived_m3_s": 3.45136,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1989,
+   "q_published_l_s_km2": 8.45,
+   "q_derived_m3_s": 3.43915,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1990,
+   "q_published_l_s_km2": 13.6,
+   "q_derived_m3_s": 5.5352,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1991,
+   "q_published_l_s_km2": 10.7,
+   "q_derived_m3_s": 4.3549,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  },
+  {
+   "year": 1992,
+   "q_published_l_s_km2": 5.65,
+   "q_derived_m3_s": 2.29955,
+   "status": "observed",
+   "restored_by_equation": null,
+   "footnote": null
+  }
+ ]
+}

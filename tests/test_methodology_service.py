@@ -85,6 +85,7 @@ def test_container_registers_all_p0_handlers():
         "min_runoff",
         "reservoir_regulation",
         "series_extension",
+        "series_extension_staged",
         "snowmelt",
         "spectral_hurst",
         "spillway",
