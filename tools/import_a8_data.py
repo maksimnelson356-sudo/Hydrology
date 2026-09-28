@@ -24,7 +24,15 @@ from core.services.a8_import import (  # noqa: E402
     A8ImportError,
     build_import_artifacts,
     load_manifest,
+    required_analog_coverage,
 )
+from core.services.a8_import_manifest import A8Manifest  # noqa: E402
+
+TEMPLATE_COLUMNS = ("series_id", "year", "value", "unit", "analog_name", "fill")
+DEFAULT_PUBLISHED_SERIES = (
+    PROJECT_ROOT / "tests" / "fixtures" / "sp33_a8_published_series_v1.json"
+)
+Q_UNIT = "л/с·км²"
 
 
 def read_observations(path: Path) -> pd.DataFrame:
@@ -67,15 +75,100 @@ def build_provenance(
     }
 
 
+def load_published_subject(path: Path) -> dict[int, float]:
+    """Load the published observed subject values from the A.8 target series.
+
+    The subject series is published in table A.8, so it must not be requested
+    from the user. Only analogs are left blank in the emitted template.
+    """
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    subject = payload.get("subject")
+    if not isinstance(subject, str):
+        raise A8ImportError("published_series", "отсутствует поле subject")
+    values: dict[int, float] = {}
+    for record in payload.get("records", []):
+        if record.get("status") != "observed":
+            continue
+        value = record.get("q_published_l_s_km2")
+        if value is None:
+            continue
+        values[int(record["year"])] = float(value)
+    if not values:
+        raise A8ImportError("published_series", "не найдено наблюдённых значений")
+    return values
+
+
+def build_template_rows(
+    manifest: A8Manifest,
+    subject: dict[int, float],
+) -> list[dict[str, object]]:
+    """Build the blank analog template implied by the manifest equations."""
+    rows: list[dict[str, object]] = []
+    for year in sorted(subject):
+        rows.append(
+            {
+                "series_id": manifest.subject_id,
+                "year": year,
+                "value": subject[year],
+                "unit": Q_UNIT,
+                "analog_name": manifest.subject_name,
+                "fill": "из А.8, заполнено",
+            }
+        )
+    for number, years in required_analog_coverage(manifest).items():
+        for year in years:
+            rows.append(
+                {
+                    "series_id": f"q{number}",
+                    "year": year,
+                    "value": "",
+                    "unit": Q_UNIT,
+                    "analog_name": manifest.analog_names.get(number, ""),
+                    "fill": "ВПИШИТЕ q",
+                }
+            )
+    return rows
+
+
+def write_template(path: Path, rows: list[dict[str, object]]) -> None:
+    """Write the template as CSV (utf-8-sig) or XLSX."""
+    frame = pd.DataFrame(rows, columns=list(TEMPLATE_COLUMNS))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    suffix = path.suffix.lower()
+    if suffix in {".xlsx", ".xls"}:
+        frame.to_excel(path, index=False)
+        return
+    if suffix == ".csv":
+        frame.to_csv(path, index=False, encoding="utf-8-sig")
+        return
+    raise A8ImportError("output_template", "поддерживаются только .csv, .xlsx и .xls")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line parser."""
     parser = argparse.ArgumentParser(
         description="Импорт наблюдений для СП 33-101-2003, приложение А.8"
     )
-    parser.add_argument("--input", required=True, help="CSV/Excel с колонками series_id, year, value, unit")
+    parser.add_argument("--input", help="CSV/Excel с колонками series_id, year, value, unit")
     parser.add_argument("--manifest", required=True, help="JSON manifest A.8")
-    parser.add_argument("--output-config", required=True, help="JSON staged-конфигурация")
-    parser.add_argument("--output-primary", required=True, help="JSON основного ряда")
+    parser.add_argument("--output-config", help="JSON staged-конфигурация")
+    parser.add_argument("--output-primary", help="JSON основного ряда")
+    parser.add_argument(
+        "--emit-template",
+        action="store_true",
+        help="сгенерировать шаблон ввода analog-рядов из manifest; --input не нужен",
+    )
+    parser.add_argument(
+        "--output-template",
+        help="куда записать шаблон (.csv/.xlsx); по умолчанию DOCS/A8_analog_series_TEMPLATE.csv",
+    )
+    parser.add_argument(
+        "--published-series",
+        help=(
+            "JSON с опубликованным рядом А.8 для предзаполнения основного ряда; "
+            f"по умолчанию {DEFAULT_PUBLISHED_SERIES.name}"
+        ),
+    )
     parser.add_argument(
         "--allow-missing",
         action="store_true",
@@ -89,13 +182,42 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def emit_template(args: argparse.Namespace, manifest: A8Manifest) -> int:
+    """Write the blank analog template derived from the manifest."""
+    series_path = Path(args.published_series or DEFAULT_PUBLISHED_SERIES)
+    subject = load_published_subject(series_path)
+    rows = build_template_rows(manifest, subject)
+    target = Path(
+        args.output_template
+        or PROJECT_ROOT / "DOCS" / "A8_analog_series_TEMPLATE.csv"
+    )
+    write_template(target, rows)
+    blank = sum(1 for row in rows if row["value"] == "")
+    print(f"Шаблон: {target}")
+    print(f"Строк: {len(rows)}; предзаполнено основным рядом: {len(subject)}; ждут ввода: {blank}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the importer command."""
     args = build_parser().parse_args(argv)
     try:
-        input_path = Path(args.input)
         manifest_path = Path(args.manifest)
         manifest = load_manifest(manifest_path)
+        if args.emit_template:
+            return emit_template(args, manifest)
+        missing = [
+            name
+            for name, value in (
+                ("--input", args.input),
+                ("--output-config", args.output_config),
+                ("--output-primary", args.output_primary),
+            )
+            if not value
+        ]
+        if missing:
+            raise A8ImportError("cli", f"требуются аргументы: {', '.join(missing)}")
+        input_path = Path(args.input)
         observations = read_observations(input_path)
         strict = not args.allow_missing
         config, primary = build_import_artifacts(

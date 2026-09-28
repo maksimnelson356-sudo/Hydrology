@@ -72,6 +72,7 @@ class A8Manifest:
     analog_aliases: Mapping[str, str]
     equations: tuple[A8Equation, ...]
     analog_observation_years: Mapping[int, int]
+    analog_names: Mapping[int, str]
 
 
 def _error(field: str, reason: str) -> A8ImportError:
@@ -171,6 +172,7 @@ def parse_manifest(payload: Mapping[str, Any]) -> A8Manifest:
     analog_areas: dict[int, float] = {}
     analog_aliases: dict[str, str] = {}
     analog_observation_years: dict[int, int] = {}
+    analog_names: dict[int, str] = {}
     for index, raw_analog in enumerate(payload.get("analogs", [])):
         analog = _mapping(raw_analog, f"analogs[{index}]")
         number = int(analog.get("number", -1))
@@ -195,6 +197,7 @@ def parse_manifest(payload: Mapping[str, Any]) -> A8Manifest:
         canonical = f"q{number}"
         analog_areas[number] = area
         analog_observation_years[number] = observed_years
+        analog_names[number] = name
         analog_aliases[canonical] = canonical
         analog_aliases[identifier] = canonical
         if name:
@@ -249,6 +252,7 @@ def parse_manifest(payload: Mapping[str, Any]) -> A8Manifest:
         analog_aliases=analog_aliases,
         equations=tuple(equations),
         analog_observation_years=analog_observation_years,
+        analog_names=analog_names,
     )
 
 
