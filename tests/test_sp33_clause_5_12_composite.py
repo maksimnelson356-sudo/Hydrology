@@ -25,8 +25,8 @@ import numpy as np
 import pytest
 
 from core.stats.composite_curves import (
-    compute_composite_curve_rodzhestvensky,
     compute_composite_curve,
+    compute_composite_curve_rodzhestvensky,
 )
 
 
@@ -98,7 +98,6 @@ def test_composite_uses_the_weighted_mean_not_the_probabilistic_sum() -> None:
         {"name": "B", "data": rng.normal(100.0, 20.0, 20)},
     ]
     result = compute_composite_curve_rodzhestvensky(categories)
-    total = result["total_years"]
     mean_of_means = np.mean([c["P_values"] for c in result["category_curves"]], axis=0)
     assert result["P_composite"] == pytest.approx(mean_of_means, abs=1e-9)
     # при равных весах (5.23) — это ровно среднее арифметическое
