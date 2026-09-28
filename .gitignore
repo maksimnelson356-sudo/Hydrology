@@ -20,10 +20,17 @@ venv/
 installer_output/
 *.spec
 
+# --- покрытие и отчёты о тестах ---
+# Появилось вместе с прогонами coverage при поиске непокрытых путей.
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+coverage.xml
+
 # --- OpenCode / local artifacts ---
 .omo/
 .opencode/
-.cline/
 *.bak
 _independent_validation.py
 TOOL_TEST.md
