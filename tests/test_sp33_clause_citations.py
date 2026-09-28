@@ -229,3 +229,75 @@ def test_unverified_standards_are_not_presented_as_normative() -> None:
         "поля normative выдают непроверенные стандарты за источники:\n"
         + "\n".join(offenders)
     )
+
+
+# СП 32.13330.2018 — «Канализация. Наружные сети и сооружения» (официальное
+# название получено из метаданных docs.cntd.ru). Речные гидрологические
+# характеристики к канализации не относятся.
+SEWERAGE_STANDARD = "32.13330.2018"
+RIVER_HYDROLOGY_IDS = {
+    "min_runoff",
+    "ecological_flow",
+    "flow_duration",
+    "drought_spi",
+    "reservoir_regulation",
+    "storage_yield",
+}
+DESCRIPTOR_FIELDS = ("standard", "clause", "scope", "notes", "limitations")
+
+
+def _descriptors() -> dict[str, dict[str, str]]:
+    """Extract user-visible string fields of every methodology descriptor."""
+    tree = ast.parse(REGISTRY.read_text(encoding="utf-8"))
+    found: dict[str, dict[str, str]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if getattr(node.func, "id", "") != "MethodologyDescriptor":
+            continue
+        fields: dict[str, str] = {}
+        for keyword in node.keywords:
+            if keyword.arg not in DESCRIPTOR_FIELDS:
+                continue
+            if isinstance(keyword.value, ast.Constant) and isinstance(
+                keyword.value.value, str
+            ):
+                fields[keyword.arg] = keyword.value.value
+        identifier = next(
+            (
+                keyword.value.value
+                for keyword in node.keywords
+                if keyword.arg == "id"
+                and isinstance(keyword.value, ast.Constant)
+            ),
+            None,
+        )
+        if identifier:
+            found[identifier] = fields
+    return found
+
+
+def test_registry_does_not_cite_sewerage_standard_for_river_hydrology() -> None:
+    """Descriptor fields reach the report's "Нормативная база" line.
+
+    The 2026-09-28 audit found СП 32.13330.2018 cited as the source of river
+    ecological flow, FDC, drought indices and the water balance. The reference
+    is legitimate only for sewerage hydrology (the rational method and IDF
+    curves), so river methodologies must not name it as their source.
+    """
+    descriptors = _descriptors()
+    assert descriptors, "дескрипторы реестра не распознаны — проверка бессмысленна"
+
+    offenders: list[str] = []
+    for identifier in RIVER_HYDROLOGY_IDS & set(descriptors):
+        for field, value in descriptors[identifier].items():
+            if SEWERAGE_STANDARD not in value:
+                continue
+            if QUALIFIER.search(value):
+                continue
+            offenders.append(f"{identifier}.{field}: {value[:80]}")
+
+    assert not offenders, (
+        "речные методики ссылаются на СП 32.13330.2018 (документ о канализации):\n"
+        + "\n".join(offenders)
+    )
