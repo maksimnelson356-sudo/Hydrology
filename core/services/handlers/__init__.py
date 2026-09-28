@@ -487,7 +487,12 @@ def handle_spillway(context: CalculationContext) -> dict[str, Any]:
 
 
 def handle_ecological_flow(context: CalculationContext) -> dict[str, Any]:
-    """Экологический сток: сезонный Тессман (СП 32.13330.2018, прил. 8)."""
+    """Экологический сток: сезонный Тессман.
+
+    Ссылка «СП 32.13330.2018, прил. 8» ОШИБОЧНА: это «Канализация. Наружные сети
+    и сооружения», предмет не совпадает. Атрибуция «Тессман» не подтверждается ни
+    одним доступным документом (см. шапку core/hydrorash/ecological_flow.py).
+    """
     from core.hydrorash.ecological_flow import tessmann_seasonal
 
     q_annual = _param(context, "Q_annual_mean", None)
