@@ -301,3 +301,48 @@ def test_registry_clause_does_not_claim_unimplemented_formula() -> None:
     assert not offenders, (
         f"clause выдаёт нереализованную формулу за действующую: {offenders}"
     )
+
+
+# СП 482.1325800.2020 проверен по полному тексту 2026-09-28 (155 252 символа):
+# раздела 9 НЕТ (оглавление обрывается на разделе 8 и приложениях А–Ж);
+# п. 8.2 — «Изыскания при реконструкции», а не минимальная длина ряда;
+# п. 8.4 не существует; «восстановление пропусков», «доверительные интервалы»,
+# «50/25/30 лет» — ноль совпадений. Состав отчёта предписан п. 4.13, который
+# делегирует его СП 47.13330.2016 (пункты 4.39 и 7.1.21).
+SP482_STATEMENT_FILES = (
+    "core/stats/report_export.py",
+    "core/stats/confidence_bands.py",
+)
+DISCLAIMED = re.compile(
+    r"ОПРОВЕРГНУТ|опровергнут|не подтверждена|НЕ подтверждена|НЕ воспроизвед|"
+    r"не воспроизвед|4\.13|0 совпадени|нулев|не существует",
+    re.I,
+)
+
+
+def test_no_live_claim_on_disproved_sp482_attributions() -> None:
+    """Live claims must not name СП 482 where the full text disproves them.
+
+    Three separate claims shipped live: «Раздел 9» for the report composition
+    (no section 9 exists), confidence intervals (zero matches for
+    «доверительн* интервал»), and the reference in the Excel «Информация»
+    sheet — that last one reached the user's exported file. A line counts as
+    disclaimed only if the disclaimer appears in it or on the line above, since
+    these docstrings carry the correction on a following line.
+    """
+    root = Path(__file__).parents[1]
+    offenders: list[str] = []
+
+    for relative in SP482_STATEMENT_FILES:
+        lines = (root / relative).read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            if "482.1325800" not in line:
+                continue
+            window = "\n".join(lines[max(0, index - 1):index + 1])
+            if DISCLAIMED.search(window):
+                continue
+            offenders.append(f"{relative}:{index + 1}: {line.strip()[:90]}")
+
+    assert not offenders, (
+        f"Живая ссылка на опровергнутую атрибуцию СП 482: {offenders}"
+    )
