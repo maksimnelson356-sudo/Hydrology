@@ -12,6 +12,7 @@ are allowed; a live claim is not.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -22,6 +23,12 @@ CORE = ROOT / "core"
 REGISTRY = CORE / "services" / "methodology_registry.py"
 ICEPHENOMENA = CORE / "hydrorash" / "ice_phenomena.py"
 SNOWMELT = CORE / "hydrorash" / "snowmelt.py"
+CLAUSE_INDEX = ROOT / "tests" / "fixtures" / "sp33_clause_index_v1.json"
+
+# A citation of a clause number, as it appears next to the standard name.
+CITED_CLAUSE = re.compile(
+    r"СП\s*33(?:-101-2003)?[^.;\n]{0,60}?п\.\s*([0-9]\.[0-9]{1,2})"
+)
 
 # A citation of a clause that СП 33-101-2003 does not contain.
 FALSE_CLAUSE = re.compile(r"(?:п\.\s*|раздел\s*)8(?:\.\d+)*")
@@ -107,3 +114,58 @@ def test_returned_normative_fields_do_not_claim_dead_clauses() -> None:
     ]
 
     assert live == [], f"поля normative всё ещё ссылаются на мёртвые пункты: {live}"
+
+
+def _clause_index() -> dict:
+    return json.loads(CLAUSE_INDEX.read_text(encoding="utf-8"))
+
+
+def test_clause_index_records_that_section_eight_is_absent() -> None:
+    index = _clause_index()
+
+    assert index["section_8_exists"] is False
+    assert index["sections_present"] == [1, 2, 3, 4, 5, 6, 7]
+    assert index["clause_count"] == len(index["clauses"]) > 100
+    assert all(
+        not clause.startswith("8.") for clause in index["clauses"]
+    ), "в индексе не должно быть пунктов раздела 8"
+
+
+def test_every_sp33_clause_cited_in_core_exists_in_the_standard() -> None:
+    """Any clause number cited next to СП 33 must be a real clause of the standard."""
+    known = set(_clause_index()["clauses"])
+    unknown: list[str] = []
+    checked = 0
+
+    for path in _python_files():
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if NEGATION.search(line):
+                continue
+            for clause in CITED_CLAUSE.findall(line):
+                checked += 1
+                if clause not in known:
+                    unknown.append(
+                        f"{path.relative_to(ROOT)}:{number}: п.{clause} -> {line.strip()[:80]}"
+                    )
+
+    assert unknown == [], "ссылки на несуществующие пункты СП 33:\n" + "\n".join(unknown)
+    assert checked > 0, "цитаты СП 33 не найдены — проверка бессмысленна"
+
+
+def test_cited_clauses_are_topically_plausible() -> None:
+    """Spot-check that key citations point at clauses about the expected subject."""
+    clauses = _clause_index()["clauses"]
+
+    expectations = {
+        "5.26": "максимальн",
+        "5.32": "гидрограф",
+        "5.45": "уровн",
+        "6.17": "дисперс",
+        "7.70": "затор",
+        "7.72": "затор",
+    }
+    for clause, expected in expectations.items():
+        assert clause in clauses, f"п.{clause} отсутствует в индексе"
+        assert expected in clauses[clause].lower(), (
+            f"п.{clause} не содержит ожидаемого «{expected}»: {clauses[clause][:80]}"
+        )
