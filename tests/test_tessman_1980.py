@@ -69,6 +69,33 @@ def test_three_branches_are_all_exercised() -> None:
     assert len(branches) == 3, f"ожидались все три ветки правила, встречено {branches}"
 
 
+@pytest.mark.parametrize(
+    ("mmf", "expected_label", "expected_value"),
+    [
+        (0.10, "весь естественный сток (MMF < 0,4·MAF)", 0.10),
+        (0.39, "весь естественный сток (MMF < 0,4·MAF)", 0.39),
+        (0.40, "0,4·MAF", 0.40),   # ровно на пороге 0,4·MAF
+        (0.60, "0,4·MAF", 0.40),   # 0,4·MMF=0,24 < 0,4 <= 0,6 -> вторая
+        (0.99, "0,4·MAF", 0.40),   # 0,4·MMF=0,396 ещё меньше порога
+        (1.00, "0,4·MMF", 0.40),   # MMF == MAF: третья
+        (2.00, "0,4·MMF", 0.80),
+    ],
+)
+def test_branch_boundaries(mmf: float, expected_label: str, expected_value: float) -> None:
+    """Границы веток: третья ветка срабатывает ТОЛЬКО при MMF >= MAF.
+
+    Условие negation третьей ветки - «0,4·MMF >= 0,4·MAF», то есть месяц не
+    суше среднегодового. Поэтому при MMF = 0,99·MAF ещё вторая ветка, а при
+    MMF = MAF ровно третья. Путаница между этими двумя случаями легко
+    проскакивает и при чтении, и при написании теста - этот параметризованный
+    тест написан именно потому, что такая ошибка была допущена.
+    """
+    result = tessman_1980(1.0, [mmf] * 12)
+    row = result["monthly"][0]
+    assert row["ветка"] == expected_label
+    assert row["Q_эколог"] == pytest.approx(expected_value, abs=0.011)
+
+
 def test_even_regime_uses_forty_percent_of_month() -> None:
     result = tessman_1980(1.0, [1.0] * 12)
     assert all(v == pytest.approx(0.4) for v in result["monthly_Q_eco"])
