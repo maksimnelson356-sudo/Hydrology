@@ -96,13 +96,13 @@ def test_measured_mu_overrides_the_table() -> None:
 
 
 def test_result_declares_its_normative_basis() -> None:
-    """Структура формулы уточнена по печатной формуле; единица I остаётся открытой."""
+    """Структура формулы и обозначения сверены с п. 7.72; единица I — ‰."""
     result = ice_jam_level_772(1.0, 2.0, 3.0)
     assert "7.72" in result["formula"]
     assert "(7.51)" in result["formula"]
     assert "I^0,3" in result["formula"]
     assert "показатель степени" in result["normative"]
-    assert "Открытым остаётся единица уклона" in result["normative"]
+    assert "I задаётся в ‰" in result["normative"]
 
 
 @pytest.mark.parametrize(
