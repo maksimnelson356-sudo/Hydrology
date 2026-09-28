@@ -35,9 +35,21 @@ class A8Period:
 class A8PublishedFit:
     """Published regression-fit parameters from СП 33 table A.7.
 
-    These are the standard's own values. They allow an independent check of the
-    fitted correlation and error once raw analog observations become available;
-    they are not produced by this project.
+    These are the standard's own values, not produced by this project. They are
+    carried for traceability only.
+
+    The audit of 2026-09-28 showed the A.7 quality figures are not self-consistent
+    with A.8: the published values of A.8 are reproduced by these equations at
+    R >= 0.9999, while A.7 reports R = 0.68-0.96 and sigma_R = 0.85-2.15 for the
+    same equations. The published coefficients are also not the least-squares fit
+    of those relations, and the deviations grow monotonically toward the older
+    windows.
+
+    Consequence: R, sigma_R and N_ei must NOT be used as an independent check or
+    as an acceptance threshold. Reproducibility of the restored series is to be
+    judged against A.8 directly. The only A.7 figure confirmed against data is
+    n_restored, which equals the number of years in target_periods. The full
+    audit is recorded under `a7_full_audit` in the manifest.
     """
 
     correlation: float

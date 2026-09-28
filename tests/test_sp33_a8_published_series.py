@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from core.services.a8_import_manifest import load_manifest
+from core.services.a8_import_manifest import A8PublishedFit, load_manifest
 
 ROOT = Path(__file__).parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -194,3 +194,90 @@ def test_series_is_not_claimed_as_normative_validation(series: dict) -> None:
     assert series["is_normative_validation"] is False
     assert series["evidence_status"] == "published_target_series"
     assert "не опубликованы" in series["source"]["note"]
+
+
+# ---------------------------------------------------------------------------
+# Аудит А.7 от 2026-09-28.
+#
+# Значения А.7 не самосогласованы с собственной А.8: опубликованный ряд А.8
+# воспроизводится уравнениями А.7 с R >= 0.9999, тогда как А.7 заявляет
+# R = 0.68-0.96 и sigma_R = 0.85-2.15 для тех же уравнений. Из этого следует
+# запрет на использование R, sigma_R и N_ei как независимой проверки или порога
+# приёмки. Ниже три охранника, удерживающих именно этот вывод.
+# ---------------------------------------------------------------------------
+
+
+def test_a7_fit_docstring_does_not_promise_independent_check() -> None:
+    """Раньше докстринг обещал «independent check», что аудит опроверг.
+
+    Проверка точечная: запрещённое утверждение и обязательное предупреждение
+    ищутся как точные фразы, а не по слову «independent», которое встречается
+    и в формулировке запрета.
+    """
+    doc = A8PublishedFit.__doc__ or ""
+
+    assert "allow an independent check" not in doc, (
+        "докстринг A8PublishedFit снова обещает независимую проверку по А.7, "
+        "хотя аудит 2026-09-28 доказал, что значения А.7 для этого непригодны"
+    )
+    assert "must NOT be used as an independent check" in doc, (
+        "докстринг A8PublishedFit должен содержать прямой запрет на "
+        "использование R, sigma_R и N_ei как независимой проверки"
+    )
+
+
+def test_a7_audit_is_recorded_in_manifest() -> None:
+    """Аудит А.7 обязан быть зафиксирован, иначе выводы из него разъедутся."""
+    manifest = _load(MANIFEST_PATH)
+    audit = manifest.get("a7_full_audit")
+    assert audit, "аудит А.7 не зафиксирован в манифесте (ключ a7_full_audit)"
+
+    summary = audit.get("verdict_summary", {})
+    assert summary.get("restored_count") == "ПОДТВЕРЖДЕНО"
+    assert summary.get("regression_coefficients") == "НЕ СОВПАДАЮТ"
+    assert summary.get("N_ei_q") == "НЕ СОВПАДАЮТ"
+
+    # Единственная подтверждённая величина А.7 обязана оставаться верной:
+    # N_restored == число лет в периодах уравнения.
+    for equation in manifest["equations"]:
+        years = sum(p["end"] - p["start"] + 1 for p in equation["target_periods"])
+        assert equation["published_fit"]["N_restored"] == years, (
+            f"{equation['id']}: N_restored разошёлся с периодами уравнения"
+        )
+
+
+# Поля А.7 в рабочем коде. Единственное допустимое место — парсер манифеста.
+_A7_FIT_FIELDS = (
+    "published_fit",
+    "rmse_l_s_km2",
+    "n_equivalent_mean",
+    "n_equivalent_sigma",
+    "sigma_correlation",
+)
+_A7_PARSER = Path("core") / "services" / "a8_import_manifest.py"
+
+
+def test_a7_fit_values_are_not_used_as_acceptance_threshold() -> None:
+    """Значения А.7 — только для трассировки, не для приёмки расчётов.
+
+    Сейчас у них нет ни одного потребителя в рабочем коде: парсер заполняет
+    поля, и всё. Охранник фиксирует именно это. Если кто-то введёт сравнение
+    вроде `if rmse <= fit.rmse_l_s_km2: accept(...)`, тест упадёт и потребует
+    сначала перечитать аудит А.7.
+    """
+    offenders: list[str] = []
+    for path in sorted(ROOT.rglob("*.py")):
+        relative = path.relative_to(ROOT)
+        if not relative.parts or relative.parts[0] not in {"core", "tools", "gui"}:
+            continue
+        if relative == _A7_PARSER:
+            continue
+        text = path.read_text(encoding="utf-8")
+        hits = [field for field in _A7_FIT_FIELDS if field in text]
+        if hits:
+            offenders.append(f"{relative.as_posix()}: {', '.join(hits)}")
+
+    assert not offenders, (
+        "поля А.7 используются в рабочем коде, хотя аудит 2026-09-28 запретил "
+        "применять их как порог приёмки:\n" + "\n".join(offenders)
+    )
