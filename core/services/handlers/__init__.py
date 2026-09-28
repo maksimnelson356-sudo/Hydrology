@@ -461,7 +461,11 @@ def handle_snowmelt(context: CalculationContext) -> dict[str, Any]:
 
 
 def handle_spillway(context: CalculationContext) -> dict[str, Any]:
-    """Проверка пропускной способности ППУ (СП 58.13330.2019 п. 6)."""
+    """Проверка пропускной способности ППУ (СП 290.1325800.2016 п. 6.3).
+
+    Прежняя ссылка «СП 58.13330.2019 п. 6» ошибочна: раздел 6 СП 58 — общие
+    требования безопасности при эксплуатации, а не расчёт водосброса.
+    """
     from core.hydrorash.spillway import spillway_capacity_check
 
     q_design = _param(context, "Q_design", None)
@@ -498,7 +502,12 @@ def handle_ecological_flow(context: CalculationContext) -> dict[str, Any]:
 
 
 def handle_ice_phenomena(context: CalculationContext) -> dict[str, Any]:
-    """Оценка максимальной толщины льда (РД 52-26-2008; СП 58.13330.2019, табл. 7.1)."""
+    """Оценка максимальной толщины льда.
+
+    РД 52-26-2008 не проверен. Ссылка «СП 58.13330.2019, табл. 7.1» ошибочна:
+    в СП 58 раздел 7 — требования безопасности при реконструкции, таблицы 7.1
+    в стандарте нет, а приложение Б — «Классы ответственности», не климатические зоны.
+    """
     from core.hydrorash.ice_phenomena import ClimateZone, estimate_max_ice_thickness
 
     latitude = _param(context, "latitude", None)

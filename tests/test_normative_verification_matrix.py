@@ -141,3 +141,82 @@ def test_spillway_registry_points_at_sp290() -> None:
 
 def test_spillway_status_is_source_checked_and_matches_registry() -> None:
     assert _matrix_statuses()["spillway"] == "SOURCE_CHECKED"
+
+
+GTS_REFERENCE_PATH = Path(__file__).parents[1] / "core" / "gts_reference.py"
+
+
+def test_gts_probabilities_match_verified_sp58_table_8_2() -> None:
+    """Lock the GTS class probabilities to СП 58.13330.2019 table 8.2.
+
+    Verified against the full standard text on 2026-09-28. The code previously
+    carried 0.3 / 1.0 / 3.0 % for the main case of classes II–IV and 0.3 / 1.0 %
+    for the check case of III–IV, none of which appear in the standard, and the
+    whole table had no test at all - which is how five wrong values survived.
+    """
+    from core.gts_reference import GTS_PROBABILITIES, GTSClass
+
+    # (class, case) -> annual exceedance probability, %, per table 8.2
+    verified = {
+        (GTSClass.CLASS_I, "osnovnoy"): 0.001,
+        (GTSClass.CLASS_II, "osnovnoy"): 0.01,
+        (GTSClass.CLASS_III, "osnovnoy"): 0.03,
+        (GTSClass.CLASS_IV, "osnovnoy"): 0.05,
+        (GTSClass.CLASS_I, "proverochniy"): 0.0001,
+        (GTSClass.CLASS_II, "proverochniy"): 0.001,
+        (GTSClass.CLASS_III, "proverochniy"): 0.005,
+        (GTSClass.CLASS_IV, "proverochniy"): 0.01,
+    }
+
+    actual = {
+        (gts_class, case): GTS_PROBABILITIES[gts_class]["max_discharge"][case]
+        for gts_class in GTSClass
+        for case in ("osnovnoy", "proverochniy")
+    }
+
+    assert actual == verified
+
+
+def test_no_live_reference_to_nonexistent_sp58_table_6_1() -> None:
+    """«Таблица 6.1» does not exist in СП 58.13330.2019 - probabilities are 8.2.
+
+    A blanket substring check would fire on the module docstring that
+    explicitly records the table's non-existence, so the scan keeps only lines
+    that still *use* the citation rather than discuss it. The marker match is
+    case-insensitive on purpose: the docstring says «НЕТ» in capitals, and a
+    case-sensitive filter silently let it through when this test was first
+    written.
+    """
+    offenders: list[str] = []
+    for line in GTS_REFERENCE_PATH.read_text(encoding="utf-8").splitlines():
+        if not re.search(r"[Тт]абл\w*\s*6\.1", line):
+            continue
+        lowered = line.lower()
+        if any(marker in lowered for marker in ("нет", "опровергнут", "не существует")):
+            continue
+        offenders.append(line.strip())
+    assert not offenders, f"Возвращена ссылка на несуществующую Таблицу 6.1: {offenders}"
+
+
+def test_sp58_min_discharge_is_labelled_unverified() -> None:
+    """СП 58 has no min-discharge probability table - say so in the code.
+
+    The standard only requires «обеспечения минимального расхода, необходимого
+    для санитарного попуска» without figures; the values kept in code are an
+    engineering estimate and must not be presented as normative. The marker
+    lives in the source comments, so the source is what gets scanned - the
+    first version of this test inspected the float values and could never pass.
+    """
+    text = GTS_REFERENCE_PATH.read_text(encoding="utf-8")
+    block = text.split("GTS_PROBABILITIES", 1)[1]
+
+    assert "'min_discharge'" in block
+    engineering = block.count("инженерная оценка")
+    assert engineering >= 8, (
+        f"Пометок «инженерная оценка» у min_discharge: {engineering}, ожидалось >= 8 "
+        "(по две на каждый из четырёх классов)"
+    )
+    assert "в СП 58 нет" in block, (
+        "В блоке GTS_PROBABILITIES нет прямого указания, что min_discharge "
+        "в СП 58 отсутствует"
+    )
