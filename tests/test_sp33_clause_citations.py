@@ -12,6 +12,7 @@ are allowed; a live claim is not.
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 from pathlib import Path
@@ -169,3 +170,62 @@ def test_cited_clauses_are_topically_plausible() -> None:
         assert expected in clauses[clause].lower(), (
             f"п.{clause} не содержит ожидаемого «{expected}»: {clauses[clause][:80]}"
         )
+
+
+# СП 33-101-2003 — единственный стандарт, чей текст проверен. Любой другой,
+# упомянутый в поле normative, обязан нести пометку о непроверенности.
+VERIFIED_STANDARD = "33-101-2003"
+UNVERIFIED_STANDARD = re.compile(r"(СП|ГОСТ|РД)\s*((?!33-101-2003)[\d][\d.\-]*)")
+QUALIFIER = re.compile(
+    r"не провере|не подтвержд|не существует|не содержит|не реализована|"
+    r"ошибочн|инженерн|ранее|не встреч|не найден",
+    re.IGNORECASE,
+)
+
+
+def _normative_values() -> list[tuple[str, str]]:
+    """Extract (location, literal value) of every `"normative"` dict entry in core/.
+
+    Uses the AST rather than a text window: a window of neighbouring lines lets an
+    unrelated qualifier word mask a false claim, which is exactly how the first
+    version of this check passed while broken.
+    """
+    found: list[tuple[str, str]] = []
+    for path in _python_files():
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:  # pragma: no cover - would fail the import test anyway
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Dict):
+                continue
+            for key, value in zip(node.keys, node.values, strict=True):
+                if not isinstance(key, ast.Constant) or key.value != "normative":
+                    continue
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    found.append((f"{path.relative_to(ROOT)}:{node.lineno}", value.value))
+    return found
+
+
+def test_unverified_standards_are_not_presented_as_normative() -> None:
+    """A `normative` field may not assert a standard whose text was never checked.
+
+    These strings reach the engineering report and the GUI. The 2026-09-28 audit
+    found eleven such fields claiming СП 32/58, РД 52-26-2008 and СП 529 as
+    established sources; all are paywalled or absent. Only СП 33-101-2003 has been
+    verified against its public text, so only it may stand unqualified.
+    """
+    values = _normative_values()
+    assert values, "не найдено ни одного поля normative — проверка бессмысленна"
+
+    offenders: list[str] = []
+    for location, value in values:
+        for match in UNVERIFIED_STANDARD.finditer(value):
+            if not QUALIFIER.search(value):
+                offenders.append(f"{location}: {match.group(1)} {match.group(2)}")
+                break
+
+    assert not offenders, (
+        "поля normative выдают непроверенные стандарты за источники:\n"
+        + "\n".join(offenders)
+    )
