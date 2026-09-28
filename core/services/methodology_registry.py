@@ -9,9 +9,17 @@ requirements, parameters and applicability limits.
 No mathematics lives here. Formulas stay in the calculation core
 (`core.stats`, `core.hydrorash`) and are invoked through `core.services.handlers`.
 
-Normative references in DEFAULT_METHODOLOGIES are copied verbatim from the
-docstrings of the corresponding core modules - no references are invented.
-See DOCS/ROADMAP.md, section 12 ("Нормативная база").
+Normative references in DEFAULT_METHODOLOGIES were NOT all taken from the core
+module docstrings, and several were invented outright. A 2026-09-28 audit
+against the printed texts refuted eight of them: СП 33 has no section 8,
+its chapter 7 has 74 clauses, not 53; СП 290 (not СП 58) prescribes the
+spillway formula; СП 32 is "Канализация" and does not cover ecological flow;
+СП 58 has no table 6.1; and РД 52-26-2008 could not be found in any of the
+thirteen catalogue collections. Those references were corrected.
+
+The `evidence_status` field records what was verified, per method, and is the
+machine-readable counterpart of DOCS/normative_verification_matrix.md. Read it
+rather than `is_normative` when the question is "how solid is this?".
 """
 
 from __future__ import annotations
@@ -21,6 +29,18 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.domain.models import Dataset, Methodology, ValidationResult, ValidationSeverity
+
+# What was actually verified against a primary source. Deliberately orthogonal
+# to is_normative: that flag says "a standard prescribes this", these say
+# "we went and looked at the text".
+#
+#   source_checked - calculation checked against the printed source
+#   partial        - source confirmed, only part of the formula checked
+#   engineering    - works, but no standard backs it
+#   unverified     - claimed source is absent or refuted
+EVIDENCE_STATUSES: frozenset[str] = frozenset(
+    {"source_checked", "partial", "engineering", "unverified"}
+)
 
 
 @dataclass(frozen=True)
@@ -41,6 +61,14 @@ class MethodologyDescriptor:
         limitations: Known applicability limits.
         is_normative: True when the method is prescribed by a normative document,
             False when it is an engineering implementation or recommendation.
+        evidence_status: What was actually verified against a primary source.
+            One of EVIDENCE_STATUSES. This is deliberately separate from
+            is_normative: that flag answers "does a standard prescribe this?",
+            while this one answers "did we check?". A method can have a verified
+            source and still not be normative (spillway: СП 290 п. 6.3, checked
+            against the printed text, but not a mandatory design basis), and a
+            method can be non-normative with a refuted source (ecological_flow:
+            СП 32 turned out to be "Канализация").
         notes: Free-form notes (additional documents, caveats).
     """
 
@@ -55,6 +83,7 @@ class MethodologyDescriptor:
     required_parameters: tuple[str, ...] = ()
     limitations: tuple[str, ...] = ()
     is_normative: bool = True
+    evidence_status: str = "unverified"
     notes: str = ""
 
     def __post_init__(self) -> None:
@@ -66,6 +95,19 @@ class MethodologyDescriptor:
             raise ValueError("Methodology version cannot be empty")
         if self.min_points < 0:
             raise ValueError("Methodology min_points cannot be negative")
+        if self.evidence_status not in EVIDENCE_STATUSES:
+            raise ValueError(
+                f"Methodology '{self.id}' has evidence_status "
+                f"'{self.evidence_status}'; allowed: {sorted(EVIDENCE_STATUSES)}"
+            )
+        # A refuted source cannot be advertised as normative. This is the one
+        # hard invariant between the two flags, and it is enforced here so a
+        # descriptor can never be built in a self-contradictory state.
+        if self.evidence_status == "unverified" and self.is_normative:
+            raise ValueError(
+                f"Methodology '{self.id}' is is_normative=True while its source is "
+                f"unverified. A refuted or absent source must set is_normative=False."
+            )
 
     @property
     def qualified_name(self) -> str:
@@ -91,6 +133,7 @@ class MethodologyDescriptor:
                 "scope": self.scope,
                 "limitations": list(self.limitations),
                 "is_normative": self.is_normative,
+                "evidence_status": self.evidence_status,
             },
         )
 
@@ -246,6 +289,7 @@ class MethodologyRegistry:
 DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     MethodologyDescriptor(
         id="stats_parameters",
+        evidence_status="partial",
         name="Статистические параметры ряда (Qср, Cv, Cs, ε)",
         category="statistics",
         standard="СП 33-101-2003",
@@ -258,6 +302,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="frequency_pearson3",
+        evidence_status="source_checked",
         name="Кривая обеспеченности (Пирсон III)",
         category="statistics",
         standard="СП 33-101-2003",
@@ -268,6 +313,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="frequency_kritsky_menkel",
+        evidence_status="source_checked",
         name="Кривая обеспеченности (Крицкий-Менкель, ординаты)",
         category="statistics",
         standard="СП 33-101-2003",
@@ -277,6 +323,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="homogeneity_full",
+        evidence_status="source_checked",
         name="Проверка однородности ряда (12 критериев)",
         category="statistics",
         standard="СП 33-101-2003",
@@ -286,6 +333,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="series_extension",
+        evidence_status="partial",
         name="Удлинение (восстановление) ряда по аналогу",
         category="statistics",
         standard="СП 33-101-2003",
@@ -301,6 +349,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="series_extension_staged",
+        evidence_status="partial",
         name="Ступенчатое восстановление ряда по этапам",
         category="statistics",
         standard="СП 33-101-2003",
@@ -317,6 +366,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="composite_curves",
+        evidence_status="partial",
         name="Составная кривая обеспеченности (Рождественский)",
         category="statistics",
         standard="СП 33-101-2003",
@@ -326,6 +376,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="max_runoff",
+        evidence_status="partial",
         name="Максимальный сток (паводки)",
         category="runoff",
         standard="СП 33-101-2003",
@@ -339,6 +390,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="flood_hydrograph",
+        evidence_status="source_checked",
         name="Гидрограф паводка (форма паводочной кривой)",
         category="runoff",
         standard="СП 33-101-2003",
@@ -350,6 +402,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="ice_phenomena",
+        evidence_status="engineering",
         name="Ледовые явления (ледостав, толщина льда, заторы)",
         category="runoff",
         standard="СП 33-101-2003",
@@ -367,6 +420,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="flow_duration",
+        evidence_status="engineering",
         name="Кривая длительностей (FDC)",
         category="statistics",
         standard="Инженерный метод FDC",
@@ -376,6 +430,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="reservoir_regulation",
+        evidence_status="engineering",
         name="Многолетнее регулирование стока",
         category="reservoir",
         standard="Метод Риппла (инженерный метод)",
@@ -387,6 +442,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="storage_yield",
+        evidence_status="engineering",
         name="Кривая «объём — гарантированная отдача»",
         category="reservoir",
         standard="Метод Риппла (инженерный метод)",
@@ -397,6 +453,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="trends_full",
+        evidence_status="engineering",
         name="Анализ тренда (линейный, Манн-Кендалл, Сен, Pettitt)",
         category="statistics",
         standard="Манн—Кендалл / Сен / Pettitt",
@@ -410,6 +467,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="min_runoff",
+        evidence_status="partial",
         name="Минимальный сток (30-суточные зимние минимумы)",
         category="runoff",
         standard="СП 33-101-2003",
@@ -426,6 +484,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="backwater",
+        evidence_status="source_checked",
         name="Кривые подпора (ГВП)",
         category="hydraulics",
         standard="СП 33-101-2003",
@@ -442,6 +501,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     # ----------------------------------------------------------------------
     MethodologyDescriptor(
         id="spectral_hurst",
+        evidence_status="engineering",
         name="Экспонента Хёрста (метод R/S)",
         category="statistics",
         standard="Метод R/S (экспонента Хёрста)",
@@ -453,6 +513,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="drought_spi",
+        evidence_status="partial",
         name="Стандартный индекс осадков (SPI)",
         category="statistics",
         standard="McKee et al. (1993) / WMO SPI",
@@ -467,6 +528,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="baseflow",
+        evidence_status="engineering",
         name="Разделение базового стока (baseflow separation)",
         category="statistics",
         standard="Boughton (1968), Eckhardt (2005), Lyne & Hollick (1979)",
@@ -478,6 +540,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="confidence_bands",
+        evidence_status="engineering",
         name="Доверительные полосы кривой обеспеченности",
         category="statistics",
         standard="Bootstrap-метод (инженерная оценка)",
@@ -490,6 +553,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
 
     MethodologyDescriptor(
         id="intra_annual",
+        evidence_status="engineering",
         name="Внутригодовое распределение стока",
         category="runoff",
         standard="HydroRash",
@@ -501,6 +565,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="snowmelt",
+        evidence_status="engineering",
         name="Снеговой баланс за период таяния",
         category="runoff",
         standard="Градусно-суточный метод (инженерный расчёт, источник не подтверждён)",
@@ -516,6 +581,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="spillway",
+        evidence_status="source_checked",
         name="Пропускная способность ППУ (водосброс)",
         category="reservoir",
         standard="СП 290.1325800.2016",
@@ -533,6 +599,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
     ),
     MethodologyDescriptor(
         id="ecological_flow",
+        evidence_status="unverified",
         name="Экологический сток (сезонный Тессман)",
         category="runoff",
         standard="Метод Тессмана (инженерный метод)",

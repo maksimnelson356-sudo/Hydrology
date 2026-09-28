@@ -998,6 +998,40 @@ R² ≈ 0.9998 и R ≈ 1.0000 гарантированы по построен�
 `ENGINEERING` — расчёт инженерный, нормативной привязки нет; `UNVERIFIED` —
 заявленный источник опровергнут или отсутствует.
 
+### Каноническая таблица статусов
+
+Машинно-читаемый источник правды. Синхронизирована с полем
+`evidence_status` в `core/services/methodology_registry.py` и проверяется
+тестом `tests/test_evidence_status_consistency.py` — расхождение роняет
+сборку. Названия категорий в прозе ниже означают ровно то же:
+
+| Методика | `evidence_status` | Источник | Что сверено |
+|---|---|---|---|
+| `frequency_pearson3` | `source_checked` | СП 33 п. 5.1–5.3 | аппарат кривой |
+| `frequency_kritsky_menkel` | `source_checked` | СП 33 п. 5.1–5.6 | табличные ординаты |
+| `homogeneity_full` | `source_checked` | СП 33 п. 4.7, прил. А.1–А.3 | 12 критериев |
+| `flood_hydrograph` | `source_checked` | СП 33 п. 5.32–5.40, 7.28–7.49, табл. Б.10 | форма паводочной кривой |
+| `backwater` | `source_checked` | СП 33 п. 5.45, 7.69, формула (7.50) | кривая подпора |
+| `spillway` | `source_checked` | СП 290.1325800.2016 п. 6.3, формула (4) | структура формулы; Cd не подтверждены |
+| `stats_parameters` | `partial` | СП 33 п. 5.1, 5.4–5.15 | формулы 5.4–5.15 не сверены |
+| `series_extension` | `partial` | СП 33 п. 6.2–6.7, 6.17 | формулы 6.2–6.7 не сверены |
+| `series_extension_staged` | `partial` | СП 33 п. 6.2–6.7, прил. А.8 | А.8 сверено; 23 значения 1986–1992 нет в МДС |
+| `composite_curves` | `partial` | СП 33 п. 5.12, формулы 5.21–5.25 | формулы 5.21–5.25 не сверены |
+| `max_runoff` | `partial` | СП 33 п. 5.26–5.31 | формулы 5.26–5.31 не сверены |
+| `min_runoff` | `partial` | СП 33 п. 5.41–5.43 | формулы 5.41–5.43 не сверены |
+| `drought_spi` | `partial` | McKee et al. 1993 / WMO | первоисточник не получен; z-нормировка упрощена |
+| `ice_phenomena` | `engineering` | СП 33 п. 7.70–7.72 | формула затора (7.51) п. 7.72 не реализована |
+| `flow_duration` | `engineering` | — | FDC, перцентили Q10/Q50/Q90 |
+| `reservoir_regulation` | `engineering` | — | метод Риппла |
+| `storage_yield` | `engineering` | — | кривая «объём — отдача» |
+| `trends_full` | `engineering` | — | Манн—Кендалл, Сен, Pettitt |
+| `spectral_hurst` | `engineering` | — | метод R/S |
+| `baseflow` | `engineering` | — | Boughton, Eckhardt, Lyne–Hollick |
+| `confidence_bands` | `engineering` | — | bootstrap |
+| `intra_annual` | `engineering` | — | HydroRash |
+| `snowmelt` | `engineering` | — | градусно-суточный метод; в СП 33 его нет |
+| `ecological_flow` | `unverified` | СП 32 — опровергнут | СП 32 = «Канализация», предмет не совпадает |
+
 ### Подтверждено сверкой с первоисточником
 
 | Методика | Что сверено | Дата |

@@ -223,7 +223,8 @@ def compute_ice_cover_stats(
     end_mean = float(end.mean())
     end_std = float(end.std(ddof=1)) if len(end) > 1 else 0.0
 
-    # Ранняя/поздняя дата = средняя ± СКО (по РД 52-26-2008)
+    # Ранняя/поздняя дата = средняя ± СКО. Первоисточник не подтверждён:
+    # прежняя ссылка «по РД 52-26-2008» удалена как недоказуемая.
     start_early = max(1.0, start_mean - start_std)
     start_late = min(366.0, start_mean + start_std)
     end_early = max(1.0, end_mean - end_std)
@@ -304,7 +305,8 @@ def estimate_max_ice_thickness(
     mean_jan_temp = abs(mean_jan_temp)
     a = THICKNESS_COEFF_A.get(zone, 0.32)
 
-    # Формула по РД 52-26-2008
+    # Инженерная оценка: a = f(зона), толщина = a·√|T_янв|. Первоисточник
+    # не подтверждён — прежняя ссылка «по РД 52-26-2008» удалена.
     thickness_formula = a * np.sqrt(mean_jan_temp)
 
     # Табличная оценка по зоне
@@ -340,8 +342,8 @@ def estimate_max_ice_thickness(
         "formula_used": f"d = {a:.2f} * sqrt(|T_jan|) = {thickness_formula:.3f} м",
         "confidence": confidence,
         "normative": (
-            "инженерная оценка; «таблица 7.1» СП 58.13330.2019 и РД 52-26-2008 "
-            "ОПРОВЕРГНУТЫ по полному тексту СП 58"
+            "инженерная оценка; «таблица 7.1» СП 58 и РД 52-26-2008 ОПРОВЕРГНУТЫ "
+            "по полному тексту СП 58"
         ),
     }
 

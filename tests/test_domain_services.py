@@ -284,7 +284,9 @@ def test_default_registry_catalogue_is_complete():
 
 def test_registry_rejects_duplicates_and_unknown_ids():
     registry = MethodologyRegistry()
-    descriptor = MethodologyDescriptor(id="demo", name="Демонстрационная методика")
+    descriptor = MethodologyDescriptor(
+        id="demo", name="Демонстрационная методика", is_normative=False
+    )
     registry.register(descriptor)
 
     with pytest.raises(ValueError):
@@ -306,6 +308,7 @@ def test_registry_applicability_checks():
             standard="СП 33-101-2003",
             min_points=30,
             required_parameters=("Cs",),
+            evidence_status="partial",
         )
     )
     short_series = make_series()  # 20 лет
@@ -335,6 +338,7 @@ def test_descriptor_converts_to_methodology():
         id="frequency_pearson3",
         name="Кривая обеспеченности (Пирсон III)",
         standard="СП 33-101-2003",
+        evidence_status="partial",
     )
 
     methodology = descriptor.to_methodology()
@@ -342,6 +346,7 @@ def test_descriptor_converts_to_methodology():
     assert methodology.qualified_name == "frequency_pearson3@1.0"
     assert methodology.standard == "СП 33-101-2003"
     assert methodology.description == descriptor.name
+    assert methodology.parameters["evidence_status"] == "partial"
 
 
 def test_descriptor_validates_input():
@@ -351,6 +356,35 @@ def test_descriptor_validates_input():
         MethodologyDescriptor(id="demo", name="")
     with pytest.raises(ValueError):
         MethodologyDescriptor(id="demo", name="Имя", min_points=-1)
+
+
+def test_descriptor_rejects_unverified_source_claimed_as_normative():
+    """A refuted or absent source may not be advertised as prescribed.
+
+    This pair is the one contradiction the registry refuses to store: the
+    descriptor would say "СП 33 prescribes this" and "we never found what it
+    says" at the same time. It shipped once in the real catalogue, where
+    `snowmelt` named РД 52-26-2008 in `standard` while `notes` admitted the
+    document was never checked.
+    """
+    with pytest.raises(ValueError, match="unverified"):
+        MethodologyDescriptor(
+            id="bogus",
+            name="Методика с неподтверждённым источником",
+            standard="РД 52-26-2008",  # не подтверждён — намеренный отрицательный пример
+            is_normative=True,
+            evidence_status="unverified",
+        )
+
+
+def test_descriptor_rejects_unknown_evidence_status():
+    with pytest.raises(ValueError, match="evidence_status"):
+        MethodologyDescriptor(
+            id="bogus",
+            name="Методика с выдуманным статусом",
+            is_normative=False,
+            evidence_status="looks_fine_to_me",
+        )
 
 
 # ----------------------------------------------------------------------
