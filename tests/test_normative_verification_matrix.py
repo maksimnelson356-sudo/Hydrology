@@ -346,3 +346,93 @@ def test_no_live_claim_on_disproved_sp482_attributions() -> None:
     assert not offenders, (
         f"Живая ссылка на опровергнутую атрибуцию СП 482: {offenders}"
     )
+
+
+# Проверено 2026-09-28 по полным текстам:
+# СП 33-101-2003 (282 887 символов) — приложения ТОЛЬКО буквенные (А, Б, В, Г),
+#   нумерованных нет ни одного; «водный баланс» — 0, «P = E» — 0, «E + R» — 0.
+# СП 529.1325800.2023 (237 016 символов) — «Определение основных расчётных
+#   гидрологических характеристик», преемник темы СП 33, а НЕ «Инженерно-геодезические
+#   изыскания», как записано в старом отчёте; «природно-климатическ» — 0,
+#   «осадки…испарение» — 0; единственное «водный баланс» (п. 5.1.16) — про русловой
+#   баланс при боковой приточности.
+WATER_BALANCE_PATH = Path(__file__).parents[1] / "core" / "hydrorash" / "water_balance.py"
+# Строгие маркеры, проверка НА ТОЙ ЖЕ строке. Окно ±1 и общее «не подтвержд»
+# были ловушками: дисклеймер выше оправдывал живую цитату ниже, а «не подтвержд»
+# на одной строке гасил цитату рядом с ним. Обе ловушки пойманы инъекциями.
+_BALANCE_DISCLAIM = re.compile(
+    r"ОПРОВЕРГНУТ|приложения буквенные|нумерованных нет|нет ни\b|"
+    r"0 совпадени|не существует|не содержит|не совпадает|не является",
+    re.I,
+)
+
+
+def test_water_balance_does_not_claim_sp33_appendix_4() -> None:
+    """«СП 33-101-2003, приложение 4» never existed as a water-balance source.
+
+    The claim was false twice over: the standard has only lettered appendices
+    (А, Б, В, Г) with no numbered one, and the balance equation itself appears
+    nowhere in the text. A live claim would hand users a citation to a clause
+    that does not exist.
+    """
+    lines = WATER_BALANCE_PATH.read_text(encoding="utf-8").splitlines()
+    offenders = [
+        f"{index + 1}: {line.strip()[:90]}"
+        for index, line in enumerate(lines)
+        if re.search(r"приложени\w*\s*4", line, re.I)
+        and not _BALANCE_DISCLAIM.search(line)
+    ]
+
+    assert not offenders, (
+        f"Живая ссылка на несуществующее «приложение 4» СП 33-101-2003: {offenders}"
+    )
+
+
+def test_water_balance_does_not_claim_sp529_for_nature_climatic_zones() -> None:
+    """СП 529.1325800.2023 contains no «природно-климатическая зона» concept."""
+    lines = WATER_BALANCE_PATH.read_text(encoding="utf-8").splitlines()
+    offenders = [
+        f"{index + 1}: {line.strip()[:90]}"
+        for index, line in enumerate(lines)
+        if "529.1325800" in line
+        and not _BALANCE_DISCLAIM.search(line)
+    ]
+
+    assert not offenders, (
+        f"Живая ссылка на СП 529 для природно-климатических зон: {offenders}"
+    )
+
+
+# Заголовок СП 529.1325800.2023 — «Определение основных расчётных гидрологических
+# характеристик». В отчётах он был назван «Инженерно-геодезические изыскания», и
+# вердикт «не применимо» вытекал из этой ошибки. Геодезическая формулировка
+# допустима ТОЛЬКО как цитата прежней ошибки в пометке об исправлении.
+_SURVEY_REPORTS = (
+    Path(__file__).parents[1] / "ИТОГОВЫЙ_ОТЧЕТ_СП.md",
+    Path(__file__).parents[1] / "Анализ_соответствия_СП.md",
+)
+_CORRECTION_MARK = re.compile(
+    r"Исправление|раньше|ранее|неверн|аннулирован|был указан неверно|было указан",
+    re.I,
+)
+
+
+def test_sp529_is_never_titled_as_a_survey_standard() -> None:
+    """СП 529 is a hydrological standard, never «Инженерно-геодезические изыскания»."""
+    offenders: list[str] = []
+    for report in _SURVEY_REPORTS:
+        for index, line in enumerate(
+            report.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            if "529" not in line:
+                continue
+            if not re.search("геодезич", line, re.I):
+                continue
+            if _CORRECTION_MARK.search(line):
+                continue
+            offenders.append(f"{report.name}:{index}: {line.strip()[:90]}")
+
+    assert not offenders, (
+        "СП 529 назван геодезическим стандартом вне пометки об исправлении:\n"
+        + "\n".join(offenders)
+    )
