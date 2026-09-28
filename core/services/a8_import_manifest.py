@@ -36,20 +36,30 @@ class A8PublishedFit:
     """Published regression-fit parameters from СП 33 table A.7.
 
     These are the standard's own values, not produced by this project. They are
-    carried for traceability only.
+    carried for traceability and for cross-checking.
 
-    The audit of 2026-09-28 showed the A.7 quality figures are not self-consistent
-    with A.8: the published values of A.8 are reproduced by these equations at
-    R >= 0.9999, while A.7 reports R = 0.68-0.96 and sigma_R = 0.85-2.15 for the
-    same equations. The published coefficients are also not the least-squares fit
-    of those relations, and the deviations grow monotonically toward the older
-    windows.
+    What the 2026-09-28 audit established, after the primary analog series were
+    obtained from MDS:
 
-    Consequence: R, sigma_R and N_ei must NOT be used as an independent check or
-    as an acceptance threshold. Reproducibility of the restored series is to be
-    judged against A.8 directly. The only A.7 figure confirmed against data is
-    n_restored, which equals the number of years in target_periods. The full
-    audit is recorded under `a7_full_audit` in the manifest.
+    - R and sigma_R are SUBSTANTIATED. Measured on the observed segment
+      1971-1985, which the equations do not generate, our own R is 0.9754 and
+      0.7989 against the published 0.96 and 0.78, and our RMSE 0.723 and 1.980
+      against the published 0.85 and 1.85. An earlier reading of this project -
+      that A.7 "contradicts A.8" because the restored series is reproduced at
+      R >= 0.9999 - was WRONG: reproducing the restored series is tautological,
+      since both quantities are linear functions of the same primary data, so
+      R ~ 1 is guaranteed and measures nothing.
+    - The published coefficients are NOT the least-squares fit of these
+      relations, and the deviations grow monotonically toward older windows.
+    - N_ei_q does not reconcile with the actual lag-1 autocorrelation of the
+      published A.8 series (deltas 0.107-0.330).
+
+    Consequences. R and sigma_R may serve as a cross-check on an observed
+    segment, but NOT as an acceptance threshold: they belong to the restored
+    windows, not to whatever segment is being validated. The reproducibility of
+    the restored series must be judged against A.8 directly, and must NOT be
+    compared with the published R. The audit is recorded under
+    `a7_interpretation` and `a7_full_audit` in the manifest.
     """
 
     correlation: float
