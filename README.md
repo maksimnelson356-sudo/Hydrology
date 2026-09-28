@@ -21,7 +21,8 @@
 | 6 | Инженерный отчёт: report_service (13 секций), вкладка «Отчёт» (QThread-воркер), 15 тестов | — |
 | 7 | Санитария GUI/сборки: tab_data.py, i18n report_*, hidden imports, сборка PyInstaller (exe запускается) | — |
 
-Всего тестов (pytest): **117 passed** (плюс 135 в корневых `test_*.py` регрессиях).
+Всего тестов (pytest): **510 passed** в `tests/` (плюс 135 в корневых `test_*.py` регрессиях —
+полный набор **645 passed**).
 
 Этапы 0–7 ROADMAP (P0) выполнены. Подробности: `DOCS/changelog.md`, `.planning/STATE.md`.
 
@@ -89,7 +90,7 @@ python tools/run_methodology.py --method frequency_pearson3 --file path/to/data.
 python -m pytest tests -q
 ```
 
-Ожидаемый результат: **117 passed**.
+Ожидаемый результат: **510 passed** в `tests/`.
 
 ## Методики P0
 
