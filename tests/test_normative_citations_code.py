@@ -66,6 +66,14 @@ FALSE_REFERENCES: list[tuple[str, re.Pattern[str], str]] = [
         "таблицы 6.1 в СП 58.13330.2019 нет: вероятности классов ГТС — таблица 8.2",
     ),
     (
+        "sp482_clause_82_series_length",
+        re.compile(
+            r"СП\s*482(?:\.\d+)?[^|\n]{0,40}?п\.\s*8\.2", re.IGNORECASE
+        ),
+        "п. 8.2 СП 482 — «Изыскания при реконструкции зданий и сооружений»; "
+        "требований к длине ряда в стандарте нет вообще",
+    ),
+    (
         "rd_52_26_2008",
         re.compile(r"РД\s*52[-.]?26[-.]?2008", re.IGNORECASE),
         "РД 52-26-2008 не найден ни в одной из 13 доступных коллекций",
@@ -79,6 +87,7 @@ NEGATION = re.compile(
     r"не существует|не содержит|не найден|не подтвержд|не проверен|не воспроизвед|"
     r"не реализован|не реализована|не повторя|ошибочн|опровергнут|ранее|прежн|удал|"
     r"приписыв|исправлено|0 раз|нет\b|не установлен|не обоснован|не воспроизведен|"
+    r"запрещ|неприменим|не может быть основанием|тождественн|противоречит|изъят|ИЗЪЯТ|"
     r"could not be|cannot be|does not exist|no such|previously|attribut|"
     r"claiming|admitting|admitted|admit|wrong|false|removed|deleted|never existed",
     re.IGNORECASE,
@@ -131,6 +140,7 @@ def test_pattern_is_detectable(name: str, pattern: re.Pattern[str], why: str) ->
         "sp33_section_eight": "СП 33-101-2003, раздел 8",
         "sp482_section_nine": "состав отчёта по разделу 9 СП 482.1325800.2020",
         "sp58_table_six_one": "Пороги по СП 58.13330.2019, Таблица 6.1",
+        "sp482_clause_82_series_length": "Валидация длины ряда (СП 482.1325800.2020 п. 8.2)",
         "rd_52_26_2008": "формула по РД 52-26-2008",
     }[name]
     lines = probe.splitlines()
@@ -146,6 +156,7 @@ def test_correction_wording_is_allowed(name: str, pattern: re.Pattern[str], why:
         "sp33_section_eight": "Ранее модуль приписывал «СП 33-101-2003 раздел 8.5» - ошибочно",
         "sp482_section_nine": "Раздел 9 СП 482 не существует, перечень - в п. 4.13",
         "sp58_table_six_one": "таблицы 6.1 в СП 58 нет; вероятности - таблица 8.2",
+        "sp482_clause_82_series_length": "СП 482 п. 8.2 не содержит требований к длине ряда",
         "rd_52_26_2008": "РД 52-26-2008 не найден ни в одной из 13 коллекций",
     }[name]
     lines = probe.splitlines()
