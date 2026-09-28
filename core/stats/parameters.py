@@ -119,17 +119,34 @@ def calculate_statistical_parameters(
         for warning in length_warnings:
             warnings.warn(warning, UserWarning, stacklevel=2)
 
-    # === Поправки ===
-    # СП 33-101-2003: поправка на автокорреляцию применяется к
-    # стандартной ошибке параметров, НЕ к самим коэффициентам.
-    # Убираем некорректный множитель на Cv/Cs.
-    # Сохраняем r1 для анализа, но НЕ применяем autocorr_factor к cv/cs.
+    # === Поправки на смещение (5.6)-(5.9) ===
+    # ПОПРАВКИ НЕ РЕАЛИЗОВАНЫ. Ключи corrected_cv/corrected_cs оставлены как
+    # «значения, идущие в расчётные кривые», и в них лежат ровно cv и cs без
+    # всякой коррекции: corrected_cv == cv, corrected_cs == cs всегда.
+    # Исторически сюда применялся множитель sqrt((1+r1)/(1-r1)) — это было
+    # математически неверно, множитель убран, но и правильный путь (поправки
+    # по коэффициентам a1..a6 и b1..b6 из Приложения Б, табл. Б.1) не сделан.
+    #
+    # СП 33 п. 5.6 разрешает отказ от поправок ЛИШЬ при Cv < 0,6 и Cs < 1,0:
+    #    «При Cv < 0,6 и Cs < 1,0 коэффициенты вариации и асимметрии допускается
+    #    определять по формулам (5.8) и (5.9) без введения поправок».
+    # То есть отказ — исключение с проверяемым условием, а не режим по
+    # умолчанию. Раньше условие не проверялось вовсе: на реке с Cv = 0,9
+    # код молча отдавал неверный Cv под именем corrected_cv.
     corrected_cv = cv
     corrected_cs = cs
-
-    # Примечание: ранее использовался autocorr_factor = sqrt((1+r1)/(1-r1))
-    # для корректировки Cv/Cs — это было математически некорректно.
-    # Правильный подход — корректировка SE (standard error) параметров.
+    bias_corrections_applied = False
+    corrections_required = bool(cv >= 0.6 or cs >= 1.0)
+    if corrections_required and show_warnings:
+        warnings.warn(
+            "СП 33-101-2003 п. 5.6: при Cv >= 0,6 или Cs >= 1,0 поправки на "
+            f"смещение обязательны, а не применяются (Cv={cv:.3f}, Cs={cs:.3f}). "
+            "Коэффициенты a1..a6, b1..b6 из Приложения Б, табл. Б.1 в проекте "
+            "не реализованы. Значения Cv и Cs — моментные оценки без поправок, "
+            "проектным применением как расчётные параметры не являются.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     # Статистики для Крицкого-Менкеля
     if std == 0:
@@ -144,8 +161,16 @@ def calculate_statistical_parameters(
         'std': round(std, 4),
         'cv': round(cv, 4),
         'cs': round(cs, 4),
+        # Отношение Cs/Cv — нормативный параметр по п. 5.4 и (5.7);
+        # раньше в выводе его не было вовсе, только сырая асимметрия.
+        'cs_cv': round(float(cs / cv), 4) if cv else float('nan'),
         'corrected_cv': round(corrected_cv, 4),
         'corrected_cs': round(corrected_cs, 4),
+        # Поправки на смещение по (5.6)-(5.9) НЕ применяются. corrected_*
+        # равны cv/cs тождественно; названия сохранены ради шести
+        # потребителей (frequency, gts_integration, confidence_bands и др.).
+        'bias_corrections_applied': bias_corrections_applied,
+        'corrections_required': corrections_required,
         'r1': round(r1, 4),
         'lambda2': round(lambda2, 4),
         'lambda3': round(lambda3, 4),
