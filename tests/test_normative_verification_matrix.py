@@ -2,11 +2,31 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from core.services.methodology_registry import build_default_registry
 
 MATRIX_PATH = Path(__file__).parents[1] / "DOCS" / "normative_verification_matrix.md"
+
+VALID_STATUSES = {"SOURCE_CHECKED", "PARTIAL", "ENGINEERING", "UNVERIFIED"}
+
+
+def _matrix_statuses() -> dict[str, str]:
+    """Map methodology id to its verification status from the matrix table."""
+    table = re.search(
+        r"## Матрица\n(.*?)\n## ", MATRIX_PATH.read_text(encoding="utf-8"), re.S
+    )
+    assert table is not None, "в матрице нет раздела «Матрица»"
+    statuses: dict[str, str] = {}
+    for line in table.group(1).splitlines():
+        if not line.startswith("| `"):
+            continue
+        cells = [cell.strip() for cell in line.split("|")]
+        if len(cells) < 8:
+            continue
+        statuses[cells[1].strip("`")] = cells[6]
+    return statuses
 
 
 def test_matrix_has_a_row_for_every_registered_methodology() -> None:
@@ -18,6 +38,42 @@ def test_matrix_has_a_row_for_every_registered_methodology() -> None:
     ]
 
     assert not missing, f"Matrix rows missing for: {missing}"
+
+
+def test_every_matrix_status_is_a_known_value() -> None:
+    unknown = {
+        methodology_id: status
+        for methodology_id, status in _matrix_statuses().items()
+        if status not in VALID_STATUSES
+    }
+
+    assert not unknown, f"Неизвестный статус в матрице: {unknown}"
+
+
+def test_no_method_claims_normative_status_while_unverified() -> None:
+    """A method marked is_normative must not be UNVERIFIED or ENGINEERING.
+
+    This is the failure mode the 2026-09-28 audit found repeatedly: code that
+    presented an unchecked result as standard-backed. The registry flag reaches
+    the report and the GUI, so the matrix must never contradict it.
+    """
+    statuses = _matrix_statuses()
+    registry = build_default_registry()
+    offending: dict[str, str] = {}
+
+    for methodology_id in registry.ids():
+        descriptor = registry.get(methodology_id)
+        if getattr(descriptor, "is_normative", False) is not True:
+            continue
+        status = statuses.get(methodology_id, "— нет строки в матрице —")
+        if status in {"UNVERIFIED", "ENGINEERING", "— нет строки в матрице —"}:
+            offending[methodology_id] = status
+
+    assert not offending, (
+        "Методики помечены нормативными, но по матрице не проверены: "
+        f"{offending}. Либо снимите флаг is_normative, либо поднимите статус."
+    )
+
 
 
 def test_matrix_distinguishes_tests_from_normative_validation() -> None:
