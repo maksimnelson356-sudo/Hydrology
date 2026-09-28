@@ -254,7 +254,10 @@ def compute_ice_cover_stats(
             "max_days": int(np.max(durations)) if len(durations) > 0 else 0,
             "n_years": len(durations),
         },
-        "normative": "СП 58.13330.2019, РД 52-26-2008",
+        "normative": (
+            "инженерная оценка; СП 58.13330.2019 и РД 52-26-2008 НЕ проверены "
+            "по тексту (доступ платный)"
+        ),
     }
 
 
@@ -319,7 +322,10 @@ def estimate_max_ice_thickness(
         "zone": zone.value,
         "formula_used": f"d = {a:.2f} * sqrt(|T_jan|) = {thickness_formula:.3f} м",
         "confidence": confidence,
-        "normative": "РД 52-26-2008; СП 58.13330.2019, таблица 7.1",
+        "normative": (
+            "инженерная оценка; «таблица 7.1» СП 58.13330.2019 и РД 52-26-2008 "
+            "НЕ проверены по тексту (доступ платный)"
+        ),
     }
 
 
@@ -673,7 +679,10 @@ def freeze_up_date_analysis(
         "p95_day": round(p95, 1),
         "n_years": len(values),
         "period": period,
-        "normative": "СП 58.13330.2019, РД 52-26-2008",
+        "normative": (
+            "инженерная оценка; СП 58.13330.2019 и РД 52-26-2008 НЕ проверены "
+            "по тексту (доступ платный)"
+        ),
     }
 
 
@@ -746,7 +755,10 @@ def ice_breakup_date_analysis(
         "p95_day": round(p95, 1),
         "timing": timing,
         "n_years": len(values),
-        "normative": "СП 58.13330.2019, РД 52-26-2008",
+        "normative": (
+            "инженерная оценка; СП 58.13330.2019 и РД 52-26-2008 НЕ проверены "
+            "по тексту (доступ платный)"
+        ),
     }
 
 
@@ -787,5 +799,8 @@ def get_ice_parameters_by_zone(
         "zone_coefficient": params["zone_coefficient"],
         "snow_correction": params["snow_correction"],
         "description": params["description"],
-        "normative": "СП 58.13330.2019, таблица 7.1, приложение Б",
+        "normative": (
+            "инженерная оценка; «таблица 7.1» и «приложение Б» СП 58.13330.2019 "
+            "НЕ проверены по тексту (доступ платный)"
+        ),
     }

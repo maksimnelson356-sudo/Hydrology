@@ -59,7 +59,10 @@ def water_balance(
         "R": runoff_mm,
         "delta_S": storage_change_mm,
         "delta_G": groundwater_change_mm,
-        "normative": "СП 33-101-2003, прил. 4"
+        "normative": (
+            "СП 33-101-2003 (существование подтверждено); ссылка на «прил. 4» "
+            "НЕ проверена - соответствие приложения водному балансу не сверено"
+        )
     }
 
 

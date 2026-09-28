@@ -96,7 +96,10 @@ def compute_basic_stats(
         "relative_rms_error_limit": relative_rms_error_limit,
         "warnings": warnings,
         "reliability_class": reliability_class,
-        "normative": "СП 33-101-2003, СП 529.1325800.2023"
+        "normative": (
+            "СП 33-101-2003 (существование подтверждено); СП 529.1325800.2023 "
+            "НЕ проверен по тексту (доступ платный)"
+        )
     }
 
 
