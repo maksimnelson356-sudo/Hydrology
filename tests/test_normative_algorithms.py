@@ -124,7 +124,7 @@ EXPECTED_NORMATIVE_METADATA = {
     "storage_yield": ("Метод Риппла (инженерный метод)", None, False),
     "ecological_flow": ("Метод Тессмана (инженерный метод)", None, False),
     "flood_hydrograph": ("СП 33-101-2003", "п. 5.32", True),
-    "ice_phenomena": ("СП 33-101-2003", "п. 5.44, п. 7.70–7.71, прил. А.14", False),
+    "ice_phenomena": ("СП 33-101-2003", "п. 7.70, п. 7.71, п. 7.72 (формула 7.51)", False),
     "intra_annual": ("HydroRash", None, False),
     "max_runoff": ("СП 33-101-2003", "п. 5.26–5.31", True),
     "min_runoff": ("СП 33-101-2003", "п. 5.41–5.43", True),
