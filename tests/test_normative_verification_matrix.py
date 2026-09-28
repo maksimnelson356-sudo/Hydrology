@@ -90,3 +90,54 @@ def test_matrix_distinguishes_tests_from_normative_validation() -> None:
     assert "--dry-run" in text
     assert "provenance" in text
     assert "не является доказательством корректности" in text
+
+
+SPILLWAY_PATH = Path(__file__).parents[1] / "core" / "hydrorash" / "spillway.py"
+
+
+def test_spillway_cites_the_verified_sp290_clause() -> None:
+    """The spillway formula was checked against СП 290.1325800.2016 п. 6.3, формула (4).
+
+    The code previously cited СП 58.13330.2019 п. 6, but that clause is «Общие
+    требования безопасности ... при эксплуатации» — the full text disproves it.
+
+    The clause is required in two specific places on purpose: the module header
+    and ``spillway_capacity_check``. A bare ``"6.3" in text`` check passes as
+    long as the digits survive anywhere in the file, and an occurrence count
+    passes while either site is silently stripped. Both weaknesses were found
+    here on 2026-09-28.
+    """
+    text = SPILLWAY_PATH.read_text(encoding="utf-8")
+    verified = "СП 290.1325800.2016 п. 6.3"
+
+    module_header = text.split("\ndef ", 1)[0]
+    assert verified in module_header, (
+        "Проверенный пункт 6.3 пропал из шапки модуля"
+    )
+
+    # The clause must actually reach the function that performs the check.
+    body = text.split("def spillway_capacity_check", 1)[1]
+    assert verified in body.split('"""', 2)[1], (
+        "Проверенный пункт 6.3 пропал из докстринга spillway_capacity_check"
+    )
+
+    # The disproved attribution must not come back as a live citation.
+    live = [
+        line
+        for line in text.splitlines()
+        if re.search(r"СП\s*58", line)
+        and "ОШИБОЧНА" not in line
+        and "ошибочна" not in line
+        and not line.lstrip().startswith(("#", "*"))
+    ]
+    assert not live, f"Возвращена опровергнутая ссылка на СП 58: {live}"
+
+
+def test_spillway_registry_points_at_sp290() -> None:
+    descriptor = build_default_registry().get("spillway")
+
+    assert descriptor.standard == "СП 290.1325800.2016"
+
+
+def test_spillway_status_is_source_checked_and_matches_registry() -> None:
+    assert _matrix_statuses()["spillway"] == "SOURCE_CHECKED"
