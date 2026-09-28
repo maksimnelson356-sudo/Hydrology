@@ -335,7 +335,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
             "метод индексных годов, кривая Q = f(H)"
         ),
         required_parameters=("daily_df",),
-        notes="РД 52-26-2008; реализация: core/hydrorash/max_runoff.py",
+        notes="Реализация: core/hydrorash/max_runoff.py. Ранее в notes значился «РД 52-26-2008» — документ не найден ни в одной из 13 доступных коллекций, номер не соответствует шаблону РД 52.XX.XXX-YYYY каталога; атрибуция удалена как недоказуемая.",
     ),
     MethodologyDescriptor(
         id="flood_hydrograph",
@@ -353,7 +353,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         name="Ледовые явления (ледостав, толщина льда, заторы)",
         category="runoff",
         standard="СП 33-101-2003",
-        clause="п. 7.70, п. 7.71, п. 7.72 (формула 7.51)",
+        clause="п. 7.70, п. 7.71 (п. 7.72 / формула 7.51 в коде НЕ реализована)",
         scope="Сроки ледостава и вскрытия, заторные явления",
         required_parameters=("latitude", "mean_jan_temp"),
         is_normative=False,
@@ -503,7 +503,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         id="snowmelt",
         name="Снеговой баланс за период таяния",
         category="runoff",
-        standard="РД 52-26-2008",
+        standard="Градусно-суточный метод (инженерный расчёт, источник не подтверждён)",
         scope="Объём талых вод и сток с бассейна: W_end = W_init + P − M",
         required_parameters=("W_initial", "precipitation_mm", "T_air"),
         is_normative=False,
@@ -511,7 +511,7 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
             "Проверено 2026-09-28 по публичному тексту СП 33-101-2003: градусно-суточного "
             "метода стандарт не содержит (слово встречается 0 раз), п. 8.1 не существует. "
             "Ранее модуль core/hydrorash/snowmelt.py ошибочно ссылался на «СП 33 п. 8.1». "
-            "РД 52-26-2008 не проверен — требуется первоисточник."
+            "Ранее полем standard значился «РД 52-26-2008»: документ не найден, номер не соответствует шаблону каталога, существование не опровергнуто. Подтверждённого источника для градусно-суточного метода нет — поле standard переведено на честную формулировку."
         ),
     ),
     MethodologyDescriptor(

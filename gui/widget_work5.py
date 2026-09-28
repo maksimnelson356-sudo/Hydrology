@@ -209,7 +209,7 @@ class Work5Widget(QWidget):
             items = [
                 (tr("item_weighted", "Взвешенная оценка"), f"{thickness.get('thickness_m', 'Н/Д')} м"),
                 (tr("item_kondratiev", "Формула Кондратьева"), f"{formula_thick:.3f} м"),
-                (tr("item_rd", "Формула РД 52-26-2008"), thickness.get("formula_used", "Н/Д")),
+                (tr("item_rd", "Формула (источник не подтверждён)"), thickness.get("formula_used", "Н/Д")),
                 (tr("label_width", "Ширина русла"), f"{width} м"),
                 (tr("label_velocity", "Скорость течения"), f"{velocity} м/с")
             ]

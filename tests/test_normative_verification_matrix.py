@@ -220,3 +220,84 @@ def test_sp58_min_discharge_is_labelled_unverified() -> None:
         "В блоке GTS_PROBABILITIES нет прямого указания, что min_discharge "
         "в СП 58 отсутствует"
     )
+
+
+# Документы и таблицы, которые не подтверждены, опровергнуты или не существуют.
+# Проверено по полным текстам 2026-09-28 — см. DOCS/normative_verification_matrix.md.
+UNSUBSTANTIATED = (
+    "РД 52-26-2008",  # не найден ни в одной из 13 коллекций
+    "СП 32.13330.2018",  # «Канализация» — предмет не совпадает
+    "Таблица 6.1",  # в СП 58 её нет; вероятности — табл. 8.2
+    "табл. 6.1",
+    "Таблица 7.1",  # в СП 58 её нет; раздел 7 — реконструкция
+    "табл. 7.1",
+)
+
+
+def test_registry_never_presents_unsubstantiated_source_as_standard() -> None:
+    """A record must not name a document in `standard`/`clause` that notes call unverified.
+
+    This exact self-contradiction shipped in the registry: `snowmelt` declared
+    `standard="РД 52-26-2008"` three lines above a `notes` field admitting the
+    document was never checked, and `ice_phenomena` claimed clause 7.72 while its
+    notes stated formula 7.51 is not implemented. `standard` and `clause` reach the
+    report and the GUI, so a note is not enough to neutralise a false claim there.
+    """
+    offenders: list[str] = []
+
+    for methodology_id in build_default_registry().ids():
+        descriptor = build_default_registry().get(methodology_id)
+        live = f"{descriptor.standard} | {descriptor.clause or ''}"
+        for marker in UNSUBSTANTIATED:
+            if marker in live:
+                offenders.append(f"{methodology_id}: «{marker}» в standard/clause")
+
+    assert not offenders, (
+        "Неподтверждённый источник вынесен в живое поле реестра, хотя notes "
+        f"признаёт его неподтверждённым: {offenders}"
+    )
+
+
+def test_registry_clause_does_not_claim_unimplemented_formula() -> None:
+    """A clause must not present a formula as implemented when notes say it is not.
+
+    The marker-list scan in the companion test cannot catch this: «п. 7.72
+    (формула 7.51)» contains no string from that list, so reinstating the original
+    `ice_phenomena` clause passed silently. Injection 3 of the non-vacuity run
+    exposed exactly this, which is why the check is derived from the record's own
+    notes rather than from a hand-written list.
+    """
+    offenders: list[str] = []
+    registry = build_default_registry()
+    extracted: list[str] = []
+
+    for methodology_id in registry.ids():
+        descriptor = registry.get(methodology_id)
+        notes = descriptor.notes or ""
+        clause = descriptor.clause or ""
+
+        # Формулы, которые notes прямо называет нереализованными.
+        # Разделитель — «;», а не точка: между «формула (7.51)» и «не реализована»
+        # лежит «из п. 7.72 в core/hydrorash/ice_phenomena.py», где точек много.
+        # Регекс с [^.]* молча давал 0 совпадений и тест проходил вхолостую.
+        for match in re.finditer(
+            r"формул\w*\s*\(?(\d+\.\d+)\)?[^;]{0,200}?не\s+реализован", notes, re.I
+        ):
+            number = match.group(1)
+            extracted.append(f"{methodology_id}:{number}")
+            if number not in clause:
+                continue
+            if re.search(r"НЕ\s+реализован|не\s+реализован", clause):
+                continue
+            offenders.append(f"{methodology_id}: формула {number} в clause без пометки")
+
+    # Защита от вакуумности: если регекс перестанет извлекать формулы, тест обязан
+    # упасть, а молча пропустить всё. Первая версия именно так и молчала.
+    assert extracted, (
+        "Из notes не извлечено ни одной формулы, объявленной нереализованной - "
+        "регекс разъехался с текстом и проверка стала вакуумной"
+    )
+
+    assert not offenders, (
+        f"clause выдаёт нереализованную формулу за действующую: {offenders}"
+    )
