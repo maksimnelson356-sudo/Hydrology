@@ -76,11 +76,13 @@ def test_formation_aliases_resolve_to_one_row(alias: str) -> None:
 
 
 def test_formula_751_reproduces_the_manual_calculation() -> None:
-    """H = (μ/(3,0·I) − 1)·h + ΔH при μ=14,9, I=1 ‰, h=2 м, ΔH=3 м."""
+    """H = (μ·I^0,3 − 1)·h + H при μ=14,9, I=1 ‰, h=2 м, H=3 м."""
     result = ice_jam_level_772(1.0, 2.0, 3.0, BOTH, 0.4)
     assert result["mu"] == pytest.approx(14.9)
-    assert result["rise_m"] == pytest.approx((14.9 / 3.0 - 1.0) * 2.0, abs=0.001)
-    assert result["level_m"] == pytest.approx(3.0 + (14.9 / 3.0 - 1.0) * 2.0, abs=0.001)
+    assert result["rise_m"] == pytest.approx((14.9 * 1.0**0.3 - 1.0) * 2.0, abs=0.001)
+    assert result["level_m"] == pytest.approx(
+        3.0 + (14.9 * 1.0**0.3 - 1.0) * 2.0, abs=0.001
+    )
 
 
 def test_measured_mu_overrides_the_table() -> None:
@@ -93,23 +95,25 @@ def test_measured_mu_overrides_the_table() -> None:
     assert measured["rise_m"] != from_table["rise_m"]
 
 
-def test_result_declares_its_provisional_reading() -> None:
-    """Чтение формулы реконструировано по текстовому слою PDF — это нельзя терять."""
+def test_result_declares_its_normative_basis() -> None:
+    """Структура формулы уточнена по печатной формуле; единица I остаётся открытой."""
     result = ice_jam_level_772(1.0, 2.0, 3.0)
     assert "7.72" in result["formula"]
     assert "(7.51)" in result["formula"]
-    assert "реконструировано" in result["normative"]
-    assert "печатным оригиналом" in result["normative"]
+    assert "I^0,3" in result["formula"]
+    assert "показатель степени" in result["normative"]
+    assert "Открытым остаётся единица уклона" in result["normative"]
 
 
 @pytest.mark.parametrize(
     ("kwargs", "why"),
     [
-        ({"slope_per_mille": 0.0}, "нулевой уклон: формула делит на 3,0·I"),
+        ({"slope_per_mille": 0.0}, "нулевой уклон: входит в степень 0,3"),
         ({"slope_per_mille": -1.0}, "отрицательный уклон"),
         ({"mean_depth": 0.0}, "нулевая глубина"),
         ({"mu": 0.0}, "нулевой μ"),
         ({"mu": -3.0}, "отрицательный μ"),
+        ({"slope_per_mille": 0.1, "mu": 1.0}, "μ·I^0,3 < 1: уровень ниже исходного"),
     ],
 )
 def test_formula_rejects_unusable_input(kwargs: dict, why: str) -> None:
