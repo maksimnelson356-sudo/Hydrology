@@ -288,7 +288,6 @@ class ReportTab(QWidget):
         if self._report is None:
             return
         default_dir = self._default_reports_dir()
-        default_dir.mkdir(parents=True, exist_ok=True)
         path, _ = QFileDialog.getSaveFileName(
             self,
             t("report_save_title", "Сохранить отчёт"),
@@ -296,7 +295,10 @@ class ReportTab(QWidget):
             "Текстовые файлы (*.txt);;Все файлы (*)",
         )
         if not path:
+            # Каталог создаётся только после подтверждения: отмена в диалоге
+            # не должна оставлять на диске пустую папку.
             return
+        default_dir.mkdir(parents=True, exist_ok=True)
         try:
             target = ReportService.save_report(self._report, path)
         except OSError as exc:
