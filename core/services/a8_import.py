@@ -58,6 +58,10 @@ def _q_value(value: Any, unit: Any, area_km2: float, field: str) -> float:
         raise _error(field, "значение должно быть числом") from error
     if not math.isfinite(numeric):
         raise _error(field, "значение должно быть конечным")
+    # Отрицательные значения НЕ отклоняются: пайплайн штатно выбрасывает их
+    # через exclude_negative, и синтетические ряды в тестах их дают. Отказ здесь
+    # ломал бы замысел. Проблема была не в допуске, а в молчании — поэтому
+    # отрицательные перечисляются в observation_report.
     if unit_kind == "Q":
         return numeric * 1000.0 / area_km2
     return numeric
@@ -192,10 +196,23 @@ def observation_report(
             continue
         series_counts[canonical] = series_counts.get(canonical, 0) + 1
         unit_counts[_unit_kind(row["unit"])] += 1
+    # Пайплайн выбрасывает отрицательные значения (exclude_negative), поэтому
+    # они должны быть видны: раньше они исчезали молча, и опечатку в знаке
+    # заподозрить было негде.
+    negative_values = {
+        series_id: sorted(year for year, value in by_year.items() if value < 0.0)
+        for series_id, by_year in normalized.items()
+    }
+    negative_values = {
+        series_id: years
+        for series_id, years in sorted(negative_values.items())
+        if years
+    }
     return {
         "input_rows": len(frame),
         "series_counts": dict(sorted(series_counts.items())),
         "unit_counts": unit_counts,
+        "negative_values_excluded": negative_values,
         "missing_required_years": required_year_gaps(normalized, manifest),
         "published_coverage_conflicts": {
             f"q{number}": detail
@@ -280,6 +297,7 @@ def build_import_artifacts(
         "source_manifest": "sp33_a8_manifest_v1.json",
         "normalized_variable": "q",
         "strict": strict,
+        "evidence_status": manifest.evidence_status,
         "observation_report": report,
     }
     primary = build_primary_payload(observations, manifest)

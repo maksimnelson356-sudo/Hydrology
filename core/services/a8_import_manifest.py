@@ -95,6 +95,10 @@ class A8Manifest:
     equations: tuple[A8Equation, ...]
     analog_observation_years: Mapping[int, int]
     analog_names: Mapping[int, str]
+    # Статус доказательности сценария из манифеста ("partial", "published_target_series"
+    # и т.п.). Нужен потребителям артефакта, чтобы не выдавать частично
+    # подтверждённый ряд за полностью проверенный.
+    evidence_status: str = "unknown"
 
 
 def _error(field: str, reason: str) -> A8ImportError:
@@ -275,6 +279,7 @@ def parse_manifest(payload: Mapping[str, Any]) -> A8Manifest:
         equations=tuple(equations),
         analog_observation_years=analog_observation_years,
         analog_names=analog_names,
+        evidence_status=str(payload.get("evidence_status", "unknown")).strip() or "unknown",
     )
 
 

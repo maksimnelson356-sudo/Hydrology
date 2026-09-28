@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -13,6 +14,7 @@ from core.services.a8_import import (
     build_import_artifacts,
     load_manifest,
     normalize_observations,
+    parse_manifest,
 )
 from core.services.bootstrap import build_container
 from tools import import_a8_data
@@ -196,3 +198,82 @@ def test_cli_dry_run_reports_provenance_without_writing(tmp_path, capsys) -> Non
     assert report["dry_run"] is True
     assert len(report["provenance"]["input_sha256"]) == 64
     assert report["observation_report"]["input_rows"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Находка ревью 2026-09-28: отрицательные значения выбрасывались пайплайном
+# (exclude_negative) молча. Первая попытка — отклонить их во входе — сломала 11
+# тестов, потому что синтетические аналоги в фикстурах их дают намеренно.
+# Правильное решение — не отказ, а отчётность.
+# ---------------------------------------------------------------------------
+
+
+def test_negative_observations_are_reported_not_silently_dropped() -> None:
+    """Каждое отрицательное значение обязано попасть в отчёт импорта."""
+    manifest = _manifest()
+    frame = _complete_frame()
+    config, primary = build_import_artifacts(frame, manifest, strict=True)
+    report = config["metadata"]["observation_report"]
+
+    assert "negative_values_excluded" in report, (
+        "в observation_report нет negative_values_excluded: отрицательные "
+        "значения выбрасываются пайплайном и исчезают без следа"
+    )
+    assert "negative_values_excluded" in primary["observation_report"]
+
+    # Отчёт обязан совпадать с фактом, а не быть декоративным пустым словарём.
+    normalized = normalize_observations(frame, manifest)
+    expected = {
+        series_id: sorted(year for year, value in by_year.items() if value < 0.0)
+        for series_id, by_year in normalized.items()
+        if any(value < 0.0 for value in by_year.values())
+    }
+    assert report["negative_values_excluded"] == expected, (
+        "negative_values_excluded не совпадает с фактическими отрицательными"
+    )
+
+    # Пустой список допустим, но ключ обязан присутствовать всегда.
+    assert isinstance(report["negative_values_excluded"], dict)
+
+
+def test_known_negative_is_listed_with_its_year() -> None:
+    """Точечная проверка: подставленное отрицательное видно по году."""
+    manifest = _manifest()
+    frame = _complete_frame()
+    target = frame.index[frame["series_id"] == "q5"][0]
+    frame.loc[target, "value"] = -2.5
+    year = int(frame.loc[target, "year"])
+
+    config, _ = build_import_artifacts(frame, manifest, strict=True)
+    listed = config["metadata"]["observation_report"]["negative_values_excluded"]
+
+    assert "q5" in listed, "отрицательное значение q5 не попало в отчёт"
+    assert year in listed["q5"], (
+        f"год {year} отрицательного q5 отсутствует в отчёте: {listed['q5']}"
+    )
+
+
+def test_evidence_status_reaches_import_artifact() -> None:
+    """Статус из манифеста обязан попасть в metadata артефакта импорта."""
+    manifest = _manifest()
+    assert manifest.evidence_status == "partial", (
+        f"ожидался evidence_status=partial из фикстуры, получено "
+        f"{manifest.evidence_status!r}"
+    )
+
+    frame = _complete_frame()
+    config, _ = build_import_artifacts(frame, manifest, strict=True)
+    metadata = config["metadata"]
+
+    assert metadata["evidence_status"] == manifest.evidence_status, (
+        "статус доказательности потерян при сборке артефакта: пользователь не может "
+        "отличить частично подтверждённый ряд от проверенного"
+    )
+
+
+def test_evidence_status_defaults_to_unknown_when_absent() -> None:
+    """Манифест без статуса не должен ронять импорт, а давать явный дефолт."""
+    payload = json.loads(Path(MANIFEST).read_text(encoding="utf-8"))
+    payload.pop("evidence_status", None)
+    manifest = parse_manifest(payload)
+    assert manifest.evidence_status == "unknown"

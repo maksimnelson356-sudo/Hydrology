@@ -267,8 +267,15 @@ class ReportTab(QWidget):
         self._worker.start()
 
     def _on_report_ready(self, report: object) -> None:
-        self._report = report  # type: ignore[assignment]
-        assert isinstance(report, Report)
+        # Раньше здесь стоял assert: под python -O он вырезается, и неверный тип
+        # проходил дальше. Проверка остаётся рабочей при любых флагах оптимизации.
+        if not isinstance(report, Report):
+            self._on_report_failed(
+                t("report_bad_type",
+                  f"Отчёт имеет неверный тип: {type(report).__name__}")
+            )
+            return
+        self._report = report
         text = ReportService.render_text(report)
         self.preview.setPlainText(text)
         self.btn_save.setEnabled(True)
