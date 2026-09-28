@@ -24,7 +24,7 @@ def test_manifest_records_partial_a8_source_and_analog_metadata() -> None:
     assert manifest["evidence_status"] == "partial"
     assert manifest["is_normative_validation"] is False
     assert manifest["source"]["standard"] == "СП 33-101-2003"
-    assert manifest["source"]["section"] == "Приложение А, А.6–А.8"
+    assert manifest["source"]["section"] == "Приложение А, таблицы А.6–А.8"
     assert subject["observed_period"] == [1971, 1992]
     assert subject["observed_count"] == 22
     assert subject["restored_period"] == [1882, 1970]
