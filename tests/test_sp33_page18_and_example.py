@@ -81,13 +81,46 @@ def test_contradiction_resolved_not_deferred() -> None:
 
 
 def test_b4_transcription_confirmed_by_printed_number() -> None:
-    """phi(0,52) = 0,715 по печати; наша транскрипция даёт 0,7146."""
+    """phi(0,52) = 0,715 по печати; наша транскрипция даёт 0,7152.
+
+    Расхождение 0,0002. После исправления ячейки phi(0,6): раньше там стояло
+    ошибочное 0,685 вместо печатного 0,688, и расхождение было 0,0004.
+    """
     rows = TABLES["B4"]["rows"]
     phi_050 = rows["0.5"][0]
     phi_060 = rows["0.6"][0]
     interp = phi_050 + 0.2 * (phi_060 - phi_050)
-    assert interp == pytest.approx(0.7146, abs=1e-4)
-    assert abs(interp - 0.715) < 0.001, "расхождение с печатью в пределах 0,001"
+    assert interp == pytest.approx(0.7152, abs=1e-4)
+    assert abs(interp - 0.715) < 0.0005, "расхождение с печатью в пределах 0,0005"
+
+
+def test_b4_reading_errors_are_recorded() -> None:
+    """Пять ошибок в первой транскрипции Б.4 зафиксированы, включая сдвиг строки.
+
+    Строка C_v = 0,9 была сдвинута целиком, и в C_v = 1,8 дефект тиража 0,155 я
+    не заметил и записал осмысленное 0,516. Обе ошибки нашли только сравнение
+    слой/изображение.
+    """
+    c = TABLES["B4"]["corrections_2026_09_29"]
+    text = " ".join(c.values())
+    assert "0,685" in text and "0,688" in text
+    assert "0,9" in text
+    assert "0,155" in text
+    assert "Пять ошибок из 200" in text
+
+
+def test_b5_column_headers_are_missing_and_not_guessed() -> None:
+    """Шапка Б.5 в печати пуста — и это зафиксировано, а не домыслено.
+
+    Значения lambda под подписью «lambda_2n/2 (значения отрицательные)» не
+    напечатаны, сверху только номера колонок 0…9. Подставлять «наверное 0,01,
+    0,02…» было бы той же подменой догадки, что дала неверные (7.51) и (Б.1).
+    """
+    c = TABLES["B5"]["column_header_missing"]
+    assert "ОТСУТСТВУЮТ" in c["finding"]
+    assert c["confirmed_twice"]
+    assert "0,0176" in c["consequence"] and "0,52" in c["consequence"]
+    assert "НЕ домысливались" in c["not_guessed"]
 
 
 def test_b4_and_b5_are_keyed_by_cv() -> None:
