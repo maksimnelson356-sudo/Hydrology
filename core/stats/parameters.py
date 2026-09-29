@@ -77,6 +77,97 @@ def relative_mean_error_percent(
     return float(cv / np.sqrt(n) * factor * 100.0)
 
 
+# Поправки на смещение по (5.6), (5.7) СП 33-101-2003.
+#
+# Источник: СП 33-101-2003, п. 5.6, таблица Б.1 приложения Б (обязательное),
+# печатный экземпляр, стр. 74. Копия проверена тестами в
+# tests/test_sp33_table_b1_bias_coefficients.py, разбор строк однозначен.
+#
+# Сетка таблицы: a-коэффициенты заданы для Cs/Cv ∈ {2, 3, 4} и r(1) ∈ {0, 0.3, 0.5};
+# b-коэффициенты — только по r(1).
+SP33_B1_A: dict[float, dict[float, tuple[float, ...]]] = {
+    2.0: {
+        0.0: (0.0, 0.19, 0.99, -0.88, 0.01, 1.54),
+        0.3: (0.0, 0.22, 0.99, -0.41, 0.01, 1.51),
+        0.5: (0.0, 0.18, 0.98, 0.41, 0.02, 1.47),
+    },
+    3.0: {
+        0.0: (0.0, 0.69, 0.98, -4.34, 0.01, 6.78),
+        0.3: (0.0, 1.15, 1.02, -7.53, -0.04, 12.38),
+        0.5: (0.0, 1.75, 1.00, -11.79, -0.05, 21.13),
+    },
+    4.0: {
+        0.0: (0.0, 1.36, 1.02, -9.68, -0.05, 15.55),
+        0.3: (-0.02, 2.61, 1.13, -19.85, -0.22, 34.15),
+        0.5: (-0.02, 3.47, 1.18, -29.71, -0.41, 58.08),
+    },
+}
+SP33_B1_B: dict[float, tuple[float, ...]] = {
+    0.0: (0.03, 2.00, 0.92, -5.09, 0.03, 8.10),
+    0.3: (0.03, 1.77, 0.93, -3.45, 0.03, 8.03),
+    0.5: (0.03, 1.63, 0.92, -0.97, 0.03, 7.94),
+}
+
+
+def _nearest_node(value: float, nodes) -> float:
+    """Ближайший узел таблицы; при равенстве расстояний берётся нижний.
+
+    Интерполяция по (5.6), (5.7) стандартом НЕ предписана, поэтому она не
+    вводится: используется прямой выбор строки таблицы, а выбранные узлы
+    возвращаются наружу, чтобы решение можно было проверить по первоисточнику.
+    """
+    return min(nodes, key=lambda node: (abs(value - node), node))
+
+
+def sp33_bias_correction_56_57(
+    chat_v: float,
+    chat_s: float,
+    n: int,
+    lag1_autocorrelation: float,
+) -> dict:
+    """Поправки на смещение по формулам (5.6) и (5.7) СП 33-101-2003.
+
+    Формулы стандарта:
+
+        (5.6)  Cv = (a1 + a2/n) + (a3 + a4/n)·Ĉv + (a5 + a6/n)·Ĉv²
+        (5.7)  Cs = (b1 + b2/n) + (b3 + b4/n)·Ĉs + (b5 + b6/n)·Ĉs²
+
+    Коэффициенты берутся из таблицы Б.1 по узлам Cs/Cv и r(1). Отношение
+    Cs/Cv считается по смещённым оценкам (5.8) и (5.9) и используется один
+    раз, без итераций: стандарт итерацию не оговаривает.
+
+    Returns:
+        Словарь со скорректированными Cv и Cs и выбранными узлами таблицы.
+    """
+    if n < 3:
+        raise ValueError("Для поправок по (5.6)-(5.7) нужно минимум 3 наблюдения")
+    if chat_v <= 0.0:
+        raise ValueError("Смещённая оценка Ĉv должна быть положительной")
+
+    cs_cv = chat_s / chat_v
+    ratio_node = _nearest_node(cs_cv, SP33_B1_A)
+    r1 = float(np.clip(lag1_autocorrelation, -0.99, 0.99))
+    r1_node = _nearest_node(r1, SP33_B1_B)
+
+    a = SP33_B1_A[ratio_node][r1_node]
+    b = SP33_B1_B[r1_node]
+
+    cv = ((a[0] + a[1] / n)
+          + (a[2] + a[3] / n) * chat_v
+          + (a[4] + a[5] / n) * chat_v**2)
+    cs = ((b[0] + b[1] / n)
+          + (b[2] + b[3] / n) * chat_s
+          + (b[4] + b[5] / n) * chat_s**2)
+
+    return {
+        "cv": float(cv),
+        "cs": float(cs),
+        "table_ratio_node": ratio_node,
+        "table_r1_node": r1_node,
+        "cs_cv": float(cs_cv),
+    }
+
+
 def calculate_statistical_parameters(
     data: np.ndarray,
     apply_autocorr_correction: bool = True,
@@ -119,13 +210,13 @@ def calculate_statistical_parameters(
         for warning in length_warnings:
             warnings.warn(warning, UserWarning, stacklevel=2)
 
-    # === Поправки на смещение (5.6)-(5.9) ===
-    # ПОПРАВКИ НЕ РЕАЛИЗОВАНЫ. Ключи corrected_cv/corrected_cs оставлены как
-    # «значения, идущие в расчётные кривые», и в них лежат ровно cv и cs без
-    # всякой коррекции: corrected_cv == cv, corrected_cs == cs всегда.
-    # Исторически сюда применялся множитель sqrt((1+r1)/(1-r1)) — это было
-    # математически неверно, множитель убран, но и правильный путь (поправки
-    # по коэффициентам a1..a6 и b1..b6 из Приложения Б, табл. Б.1) не сделан.
+    # === Поправки на смещение (5.6), (5.7) ===
+    # Поправки РЕАЛИЗОВАНЫ 2026-09-28 по таблице Б.1 печатного экземпляра.
+    # До этого ключи corrected_cv/corrected_cs были тождественны cv/cs: поправок
+    # не было никогда, а имена обещали, что были. Исторически сюда применялся
+    # множитель sqrt((1+r1)/(1-r1)) — к Cv и Cs, что математически неверно:
+    # по (5.26)-(5.27) этот множитель относится к стандартной ошибке среднего,
+    # а не к коэффициентам, и он реализован в relative_mean_error_percent.
     #
     # СП 33 п. 5.6 разрешает отказ от поправок ЛИШЬ при Cv < 0,6 и Cs < 1,0:
     #    «При Cv < 0,6 и Cs < 1,0 коэффициенты вариации и асимметрии допускается
@@ -133,20 +224,65 @@ def calculate_statistical_parameters(
     # То есть отказ — исключение с проверяемым условием, а не режим по
     # умолчанию. Раньше условие не проверялось вовсе: на реке с Cv = 0,9
     # код молча отдавал неверный Cv под именем corrected_cv.
-    corrected_cv = cv
-    corrected_cs = cs
-    bias_corrections_applied = False
-    corrections_required = bool(cv >= 0.6 or cs >= 1.0)
-    if corrections_required and show_warnings:
-        warnings.warn(
-            "СП 33-101-2003 п. 5.6: при Cv >= 0,6 или Cs >= 1,0 поправки на "
-            f"смещение обязательны, а не применяются (Cv={cv:.3f}, Cs={cs:.3f}). "
-            "Коэффициенты a1..a6, b1..b6 из Приложения Б, табл. Б.1 в проекте "
-            "не реализованы. Значения Cv и Cs — моментные оценки без поправок, "
-            "проектным применением как расчётные параметры не являются.",
-            UserWarning,
-            stacklevel=2,
+    # === Поправки на смещение (5.6), (5.7) ===
+    #
+    # Смещённые оценки Ĉv и Ĉs, вычисленные выше, — это в точности (5.8) и
+    # (5.9) СП 33: коду они достаются из std(ddof=1)/mean и
+    # scipy.stats.skew(bias=False), сверено численно.
+    #
+    # СП 33 п. 5.6 разрешает отказ от поправок ЛИШЬ при Cv < 0,6 и Cs < 1,0:
+    #    «При Cv < 0,6 и Cs < 1,0 коэффициенты вариации и асимметрии допускается
+    #    определять по формулам (5.8) и (5.9) без введения поправок».
+    # Отказ — исключение с проверяемым условием, а не режим по умолчанию.
+    #
+    # ОТДЕЛЬНО вырожденный случай. Для ряда из одинаковых значений Cv = 0, а
+    # scipy.stats.skew на нём даёт NaN (деление на нулевую дисперсию). Сравнение
+    # NaN < 1.0 ложно, поэтому прежняя проверка считала такой ряд требующим
+    # поправок и уходила в (5.6) с Ĉv = 0 — к исключению. Поправка при Ĉv = 0
+    # неприменима в принципе: отношение Cs/Cv не определено, и вместо 0/0
+    # получается деление на ноль в самой формуле.
+    degenerate = not (np.isfinite(cs) and cv > 0.0)
+    if degenerate:
+        corrections_exempt = True
+        correction_note = (
+            "поправки (5.6)-(5.7) неприменимы: Cv = 0 либо Cs не определена "
+            "(ряд из одинаковых значений), отношение Cs/Cv не существует"
         )
+    else:
+        corrections_exempt = bool(cv < 0.6 and cs < 1.0)
+        correction_note = (
+            "п. 5.6: Cv < 0,6 и Cs < 1,0 — поправки не вводятся по прямому "
+            "допущению стандарта"
+        )
+    if corrections_exempt:
+        corrected_cv = cv
+        corrected_cs = cs
+        bias_corrections_applied = False
+        table_ratio_node = None
+        table_r1_node = None
+    else:
+        correction = sp33_bias_correction_56_57(cv, cs, n, r1)
+        corrected_cv = correction["cv"]
+        corrected_cs = correction["cs"]
+        bias_corrections_applied = True
+        table_ratio_node = correction["table_ratio_node"]
+        table_r1_node = correction["table_r1_node"]
+        correction_note = (
+            "п. 5.6, (5.6) и (5.7) по таблице Б.1; выбранные узлы указаны "
+            "в table_ratio_node и table_r1_node, интерполяция не применяется"
+        )
+        if show_warnings:
+            warnings.warn(
+                "СП 33-101-2003 п. 5.6: Cv >= 0,6 или Cs >= 1,0, поэтому поправки "
+                f"на смещение обязательны и применены (Cv={cv:.3f} -> "
+                f"{corrected_cv:.3f}, Cs={cs:.3f} -> {corrected_cs:.3f}). "
+                f"Коэффициенты взяты из табл. Б.1 для Cs/Cv = {table_ratio_node} "
+                f"и r(1) = {table_r1_node} — ближайшие узлы, интерполяция "
+                "стандартом не предписана.",
+                UserWarning,
+                stacklevel=2,
+            )
+    corrections_required = not corrections_exempt
 
     # Статистики для Крицкого-Менкеля
     if std == 0:
@@ -171,6 +307,9 @@ def calculate_statistical_parameters(
         # потребителей (frequency, gts_integration, confidence_bands и др.).
         'bias_corrections_applied': bias_corrections_applied,
         'corrections_required': corrections_required,
+        'correction_note': correction_note,
+        'table_ratio_node': table_ratio_node,
+        'table_r1_node': table_r1_node,
         'r1': round(r1, 4),
         'lambda2': round(lambda2, 4),
         'lambda3': round(lambda3, 4),

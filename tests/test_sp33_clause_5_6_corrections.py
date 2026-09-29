@@ -1,117 +1,279 @@
-"""п. 5.6 СП 33-101-2003: поправки на смещение обязательны вне Cv < 0,6 и Cs < 1,0.
+"""п. 5.6 СП 33-101-2003: поправки на смещение РЕАЛИЗОВАНЫ по таблице Б.1.
 
-Находка 2026-09-28. Функция `calculate_statistical_parameters` отдавала ключи
-`corrected_cv` и `corrected_cs`, которые тождественно равны `cv` и `cs`: поправок
-не было никогда, но имена обещали, что они есть. СП 33 п. 5.6 разрешает отказ
-от поправок только при Cv < 0,6 и Cs < 1,0 — то есть как исключение с
-проверяемым условием. Условие не проверялось, и на реке с Cv = 0,9 код молча
-выдавал неверный Cv под именем `corrected_cv`.
+История файла. До 2026-09-28 `calculate_statistical_parameters` отдавала ключи
+`corrected_cv` и `corrected_cs`, тождественно равные `cv` и `cs`: поправок не
+было никогда, а имена обещали, что были. Первая версия этого файла фиксировала
+именно это расхождение и требовала, чтобы оно было видимым.
 
-Ключи `corrected_*` сохранены: их читают шесть production-потребителей
-(`frequency.py`, `gts_integration.py`, `confidence_bands.py`, `run_stats_demo.py`,
-тест бенчмарков и фикстур). Удаление сломало бы их API. Поэтому ложь убрана
-другим способом — явными ключами `bias_corrections_applied` и
-`corrections_required` плюс предупреждением, когда поправки обязательны, но не
-применены.
+Сейчас поправки реализованы:
 
-Настоящие поправки (коэффициенты a1..a6 и b1..b6 из Приложения Б, табл. Б.1) в
-проекте не реализованы, и эти тесты фиксируют именно факт их отсутствия, а не
-правильность вычисления поправок.
+* смещённые оценки Ĉv и Ĉs уже совпадали с (5.8) и (5.9) — проверено численно;
+* коэффициенты взяты из таблицы Б.1 печатного экземпляра, стр. 74;
+* отказ от поправок применяется только при Cv < 0,6 и Cs < 1,0 — как предписывает
+  п. 5.6, а не по умолчанию;
+* интерполяция НЕ вводится: стандарт её не предписывает, берётся ближайший узел,
+  а выбранные узлы возвращаются в выводе, чтобы выбор был проверяемым.
+
+Формулы стандарта:
+
+    (5.6)  Cv = (a1 + a2/n) + (a3 + a4/n)·Ĉv + (a5 + a6/n)·Ĉv²
+    (5.7)  Cs = (b1 + b2/n) + (b3 + b4/n)·Ĉs + (b5 + b6/n)·Ĉs²
 """
 
 from __future__ import annotations
 
+import json
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pytest
 
-from core.stats.parameters import calculate_statistical_parameters
+from core.stats.parameters import (
+    SP33_B1_A,
+    SP33_B1_B,
+    calculate_statistical_parameters,
+    sp33_bias_correction_56_57,
+)
+
+FIXTURE = (
+    Path(__file__).resolve().parents[1]
+    / "tests" / "fixtures"
+    / "sp33_bias_corrections_Б1_v1.json"
+)
+TABLE = json.loads(FIXTURE.read_text(encoding="utf-8"))
 
 
 def low_variability(n: int = 40) -> np.ndarray:
-    """Ряд с малым Cv и малой асимметрией: поправки по п. 5.6 не нужны."""
+    """Ряд с малым Cv и малой асимметрией — поправки не требуются."""
     rng = np.random.default_rng(20260928)
     return 10.0 + rng.normal(0.0, 0.1, size=n)
 
 
 def high_variability(n: int = 40) -> np.ndarray:
-    """Экспоненциальный ряд: Cv ≈ 1, Cs ≈ 2, поправки обязательны."""
+    """Экспоненциальный ряд: Cv ≈ 1, Cs ≈ 2 — поправки обязательны."""
     rng = np.random.default_rng(20260928)
     return rng.exponential(1.0, size=n)
 
 
-def test_low_variability_needs_no_corrections_and_warns_not() -> None:
-    data = low_variability()
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", UserWarning)
-        result = calculate_statistical_parameters(data, show_warnings=False)
+# --- коэффициенты в коде совпадают с первоисточником -----------------------
+
+def test_module_table_matches_fixture_a() -> None:
+    """Копия таблицы Б.1 в коде совпадает с проверенным фикстуром."""
+    for row in TABLE["a_coefficients"]:
+        node = (row["cs_cv"], row["r1"])
+        assert SP33_B1_A[row["cs_cv"]][row["r1"]] == pytest.approx(
+            row["a"], abs=1e-12
+        ), f"a-коэффициенты разошлись для {node}"
+
+
+def test_module_table_matches_fixture_b() -> None:
+    for row in TABLE["b_coefficients"]:
+        assert SP33_B1_B[row["r1"]] == pytest.approx(row["b"], abs=1e-12), (
+            f"b-коэффициенты разошлись для r(1)={row['r1']}"
+        )
+
+
+def test_module_table_covers_the_full_grid() -> None:
+    assert sorted(SP33_B1_A) == [2.0, 3.0, 4.0]
+    for regime, by_r1 in SP33_B1_A.items():
+        assert sorted(by_r1) == [0.0, 0.3, 0.5], regime
+    assert sorted(SP33_B1_B) == [0.0, 0.3, 0.5]
+
+
+# --- режим отказа от поправок ---------------------------------------------
+
+def test_low_variability_is_exempt_and_keeps_raw_values() -> None:
+    result = calculate_statistical_parameters(low_variability(), show_warnings=False)
     assert result["corrections_required"] is False
     assert result["bias_corrections_applied"] is False
+    assert result["corrected_cv"] == result["cv"]
+    assert result["corrected_cs"] == result["cs"]
+    assert result["table_ratio_node"] is None
+    assert "5.6" in result["correction_note"]
 
 
-def test_high_variability_marks_corrections_as_required() -> None:
+def test_exempt_series_does_not_warn_about_corrections() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        calculate_statistical_parameters(low_variability(), show_warnings=False)
+
+
+# --- поправки применяются --------------------------------------------------
+
+def test_high_variability_gets_corrections_applied() -> None:
     result = calculate_statistical_parameters(high_variability(), show_warnings=False)
-    assert result["corrections_required"] is True, (
-        "при Cv около 1 поправки по п. 5.6 обязательны, а флаг этого не отметил"
+    assert result["corrections_required"] is True
+    assert result["bias_corrections_applied"] is True
+    assert result["corrected_cv"] != result["cv"]
+    assert result["table_ratio_node"] in (2.0, 3.0, 4.0)
+    assert result["table_r1_node"] in (0.0, 0.3, 0.5)
+
+
+def test_corrections_match_hand_computation_from_table_b1() -> None:
+    """Поправка совпадает с независимым расчётом по (5.6) и (5.7)."""
+    data = high_variability()
+    result = calculate_statistical_parameters(data, show_warnings=False)
+    n = result["n"]
+    chat_v, chat_s = result["cv"], result["cs"]
+
+    a = SP33_B1_A[result["table_ratio_node"]][result["table_r1_node"]]
+    b = SP33_B1_B[result["table_r1_node"]]
+    expect_cv = ((a[0] + a[1] / n)
+                + (a[2] + a[3] / n) * chat_v
+                + (a[4] + a[5] / n) * chat_v**2)
+    expect_cs = ((b[0] + b[1] / n)
+                 + (b[2] + b[3] / n) * chat_s
+                 + (b[4] + b[5] / n) * chat_s**2)
+
+    assert result["corrected_cv"] == pytest.approx(expect_cv, abs=1e-4)
+    assert result["corrected_cs"] == pytest.approx(expect_cs, abs=1e-4)
+
+
+def test_correction_function_is_directly_verifiable() -> None:
+    """Сама функция поправок проверяется на числах из таблицы Б.1."""
+    out = sp33_bias_correction_56_57(chat_v=0.5, chat_s=1.0, n=30, lag1_autocorrelation=0.0)
+    a = SP33_B1_A[2.0][0.0]
+    b = SP33_B1_B[0.0]
+    assert out["table_ratio_node"] == 2.0
+    assert out["table_r1_node"] == 0.0
+    assert out["cs_cv"] == pytest.approx(2.0)
+    assert out["cv"] == pytest.approx(
+        (a[0] + a[1] / 30) + (a[2] + a[3] / 30) * 0.5 + (a[4] + a[5] / 30) * 0.25,
+        abs=1e-12,
+    )
+    assert out["cs"] == pytest.approx(
+        (b[0] + b[1] / 30) + (b[2] + b[3] / 30) * 1.0 + (b[4] + b[5] / 30) * 1.0,
+        abs=1e-12,
     )
 
 
-def test_high_variability_warns_about_missing_corrections() -> None:
-    """Главное: нарушение условия п. 5.6 обязано быть видно пользователю."""
-    with pytest.warns(UserWarning, match="5\\.6"):
-        calculate_statistical_parameters(high_variability(), show_warnings=True)
+def test_nearest_node_selection_is_deterministic() -> None:
+    """Узел выбирается из таблицы, а не выдумывается."""
+    out = sp33_bias_correction_56_57(1.2, 2.5, n=20, lag1_autocorrelation=0.45)
+    assert out["table_ratio_node"] in SP33_B1_A
+    assert out["table_r1_node"] in SP33_B1_B
+    # при r(1) = 0,45 ближайший узел — 0,5
+    assert out["table_r1_node"] == 0.5
 
 
-def test_warning_names_the_missing_source() -> None:
-    """Предупреждение должно называть, чего именно не хватает.
-
-    Ищем нужное среди всех предупреждений, а не по индексу: функция сначала
-    предупреждает о длине ряда (п. 5.1) и лишь затем о поправках, так что
-    порядок выдачи не задан условиями теста.
-    """
+def test_warning_reports_the_coefficients_actually_used() -> None:
+    """Предупреждение называет не «отсутствующие», а применённые коэффициенты."""
     with pytest.warns(UserWarning) as caught:
         calculate_statistical_parameters(high_variability(), show_warnings=True)
     texts = [str(w.message) for w in caught]
     matching = [t for t in texts if "5.6" in t]
     assert matching, f"нет предупреждения о поправках среди: {texts}"
     text = matching[0]
-    assert "Приложения Б" in text, "не названы коэффициенты поправок"
-    assert "a1..a6" in text and "b1..b6" in text, "не названы сами коэффициенты"
+    assert "применены" in text
+    assert "табл. Б.1" in text
+    assert "интерполяция" in text
+    assert "не реализованы" not in text, "старое сообщение об отсутствии поправок"
 
 
-def test_corrected_keys_stay_identical_to_raw() -> None:
-    """Документируемый факт: поправок нет, corrected_* тождественны cv/cs.
+# --- невакуумность --------------------------------------------------------
 
-    Это осознанно оставлено как поведение — потребители читают эти ключи, и
-    менять их значение без реализации поправок (5.6)-(5.9) было бы подменой
-    одного несоответствия другим.
+def test_corrections_actually_change_the_result() -> None:
+    """Фикстур не вакуумный: без поправок результат был бы тем же.
+
+    Направление поправки НЕ проверяется как «вниз». Ожидание, что поправка на
+    смещение обязана уменьшать Cv, было моей гидрологической интуицией, а не
+    требованием стандарта, и оно неверно: (5.6) — эмпирическая аппроксимирующая
+    поверхность, где положительный вклад a3, a5, a6 перевешивает отрицательный
+    a4, и при умеренном Ĉv поправка увеличивает и Cv, и Cs по всем девяти узлам
+    таблицы Б.1. Проверяется поэтому соответствие формуле, а не знак поправки.
     """
-    result = calculate_statistical_parameters(high_variability(), show_warnings=False)
-    assert result["corrected_cv"] == result["cv"]
-    assert result["corrected_cs"] == result["cs"]
-    assert result["bias_corrections_applied"] is False
+    data = high_variability()
+    result = calculate_statistical_parameters(data, show_warnings=False)
+    assert result["corrected_cv"] != result["cv"], (
+        "поправка обязана менять Cv, иначе её применение бессмысленно"
+    )
+    assert result["corrected_cs"] != result["cs"]
+
+
+def test_correction_direction_is_not_assumed_downward() -> None:
+    """Фиксирует проверенный факт: (5.6) увеличивает оценку в этой области.
+
+    Число 0,9498 получено из (5.6) при Ĉv = 0,9327, n = 40, узел Cs/Cv = 2,
+    r(1) = 0. Если бы формула вдруг стала уменьшать, тест это заметил бы —
+    значит отслеживает изменение, а не подгоняет ожидание.
+    """
+    out = sp33_bias_correction_56_57(
+        chat_v=0.9327, chat_s=1.4559, n=40, lag1_autocorrelation=0.0
+    )
+    assert out["table_ratio_node"] == 2.0
+    assert out["table_r1_node"] == 0.0
+    assert out["cv"] == pytest.approx(0.9498, abs=1e-4)
+    assert out["cv"] > 0.9327, "в проверенной точке (5.6) увеличивает Cv"
+
+
+def test_correction_is_not_applied_when_conditions_are_met() -> None:
+    """Два режима различаются, а не выглядят одинаково."""
+    low = calculate_statistical_parameters(low_variability(), show_warnings=False)
+    high = calculate_statistical_parameters(high_variability(), show_warnings=False)
+    assert low["bias_corrections_applied"] is False
+    assert high["bias_corrections_applied"] is True
+    assert low["corrected_cv"] == low["cv"]
+    assert high["corrected_cv"] != high["cv"]
 
 
 def test_ratio_cs_cv_is_exposed() -> None:
-    """П. 5.4 задаёт набор параметров как {среднее, Cv, Cs/Cv}, а не {Cs}.
-
-    Отношения в выводе не было вовсе — только сырая асимметрия, тогда как
-    формула (5.7) заканчивается именно на Cs/Cv, и расчётные кривые
-    используют отношение, а не Cs.
-    """
+    """П. 5.4 задаёт набор параметров как {среднее, Cv, Cs/Cv}."""
     result = calculate_statistical_parameters(high_variability(), show_warnings=False)
     assert result["cs_cv"] == pytest.approx(result["cs"] / result["cv"], abs=5e-4)
-    assert "cs_cv" in result
 
 
-def test_guard_is_not_vacuous() -> None:
-    """Флаг обязан различать два режима, а не всегда возвращать одно и то же."""
-    low = calculate_statistical_parameters(low_variability(), show_warnings=False)
-    high = calculate_statistical_parameters(high_variability(), show_warnings=False)
-    assert low["corrections_required"] is False
-    assert high["corrections_required"] is True
-    # и он выключаемым, как и прочие предупреждения
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", UserWarning)
-        calculate_statistical_parameters(high_variability(), show_warnings=False)
+def test_constant_series_does_not_crash_the_correction() -> None:
+    """Регрессия, внесённая при реализации поправок, и её причина.
+
+    Ряд из одинаковых значений даёт Cv = 0, а scipy.stats.skew на нём
+    возвращает NaN. Сравнение NaN < 1.0 ложно, поэтому наивная проверка
+    отказа считала такой ряд требующим поправок и уходила в (5.6) с Ĉv = 0 —
+    к исключению во время сбора корневых тестов. Теперь поправки при Ĉv = 0
+    неприменимы и корректно пропускаются.
+    """
+    constant = np.full(40, 5.0)
+    result = calculate_statistical_parameters(constant, show_warnings=False)
+    assert result["cv"] == 0.0
+    assert result["bias_corrections_applied"] is False
+    assert result["corrected_cv"] == 0.0
+    assert "неприменимы" in result["correction_note"]
+
+
+def test_constant_series_flows_through_the_frequency_curve() -> None:
+    """Тот же случай должен проходить и через публичный путь.
+
+    Именно этот путь раньше ронял сбор корневых тестов: calculate_frequency_curve
+    вызывает calculate_statistical_parameters, а тот уходил в (5.6) с Ĉv = 0.
+    """
+    from core.stats.frequency import calculate_frequency_curve
+
+    constant = np.full(40, 5.0)
+    frame = calculate_frequency_curve(
+        constant, probabilities=np.array([0.1, 0.5, 0.9])
+    )
+    assert not frame.empty, "константный ряд должен давать кривую, а не исключение"
+
+
+def test_frequency_curve_consumes_the_correction() -> None:
+    """Поправка действительно доходит до кривой, а не остаётся в статистиках.
+
+    calculate_frequency_curve по умолчанию берёт corrected_* (use_corrected=True),
+    поэтому с включённой поправкой кривая должна отличаться от построенной по
+    неисправленным значениям. Это и есть смысл всей работы: исправленный Cv
+    обязан менять проектные числа.
+    """
+    from core.stats.frequency import calculate_frequency_curve
+
+    data = high_variability()
+    with_correction = calculate_frequency_curve(
+        data, probabilities=np.array([0.1, 0.5, 0.9]), use_corrected=True
+    )
+    without_correction = calculate_frequency_curve(
+        data, probabilities=np.array([0.1, 0.5, 0.9]), use_corrected=False
+    )
+    q_with = float(with_correction["Q"].iloc[1])
+    q_without = float(without_correction["Q"].iloc[1])
+    assert q_with != q_without, (
+        "поправка (5.6)-(5.7) обязана влиять на ординату кривой"
+    )
