@@ -88,7 +88,9 @@ def test_formula_5_40_is_x0_estimate_not_a_lambda(data: dict) -> None:
     """
     latex = data["formulas"]["5.40"]["latex"]
     assert "x_0" in latex
-    assert "\\varphi(C_s)" in latex
+    assert "\\varphi(C_v)" in latex
+    assert "C_s" not in latex, "индекс C_v (изменчивость), а не C_s (асимметрия)"
+    assert "\\cdot" in latex, "(5.40) — умножение, а не сложение"
     assert "\\sum" not in latex, "(5.40) не содержит суммы — это оценка параметра"
 
 
@@ -115,7 +117,8 @@ def test_formula_5_43_is_separate_statistic(data: dict) -> None:
 def test_formula_5_42_was_missing_from_reconstruction(data: dict) -> None:
     """(5.42) присутствует в фикстуре — в реконструкции её не было вовсе."""
     latex = data["formulas"]["5.42"]["latex"]
-    assert "\\varphi(C_s)" in latex
+    assert "\\varphi(C_v)" in latex
+    assert "C_s" not in latex
     assert "\\gamma" in latex
     assert "x_{mg}" in latex
     assert "Б.4" in data["auxiliary_from_photo"]["table_Б.4"]
@@ -131,7 +134,9 @@ def test_computation_order_and_tables_from_photo(data: dict) -> None:
     assert any("5.7" in step for step in order)
 
     aux = data["auxiliary_from_photo"]
-    assert aux["gamma"] == "γ = 1 / Cₛ²"
+    # (5.40) и (5.42) оперируют изменчивостью C_v, поэтому и гамма по C_v.
+    assert aux["gamma"] == "gamma = 1 / C_v^2"
+    assert "C_v" in aux["gamma"] and "Cₛ" not in aux["gamma"]
     assert "Б.5" in aux["table_Б.5"]
 
 
