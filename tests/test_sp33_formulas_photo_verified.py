@@ -44,39 +44,81 @@ def test_rejected_reconstruction_is_recorded(data: dict) -> None:
     assert "5.40" in rejected["what"]
 
 
-def test_lambda_2_multiplies_by_n_minus_one(data: dict) -> None:
-    """(5.2): (n−1) стоит ВНЕ суммы и при УМНОЖЕНИИ.
+def test_lambda_2_divides_by_n_minus_one(data: dict) -> None:
+    """(5.2): ДЕЛЕНИЕ на (n-1).
 
-    Реконструкция ставила деление 1/(n−1) — знак перепутан. При n = 8 оба
-    варианта отрицательны, так что знак их не различает; различает величина:
-    умножение даёт 7·S, деление — S/7, то есть расходятся в 49 раз.
+    Скобка закрывается после суммы, и (n-1) стоит ПОСЛЕ скобки. Проверяется и
+    структурой latex, и числом: при n = 8 деление и умножение дают разные знаки,
+    так что подмена невозможна незаметно.
     """
+    latex = data["formulas"]["5.2"]["latex"]
+    assert "/(n-1)" in latex
+    assert "cdot" not in latex, "(5.2) — деление, а не умножение"
     k = [0.8, 1.2, 0.5, 1.7, 0.95, 1.35, 0.62, 1.05]
     n = len(k)
-    log_sum = sum(math.log(value) for value in k)
+    log_sum = sum(math.log10(value) for value in k)
 
-    lambda2 = (n - 1) * log_sum
-    wrong = log_sum / (n - 1)
-
+    lambda2 = log_sum / (n - 1)
+    wrong = log_sum * (n - 1)
     # Числа получены прямым расчётом, а не подобраны.
-    assert log_sum == pytest.approx(-0.3837752627, abs=1e-9)
-    assert lambda2 == pytest.approx(-2.6864268391, abs=1e-9)
-    assert wrong == pytest.approx(-0.0548250375, abs=1e-9)
-    assert lambda2 == pytest.approx((n - 1) ** 2 * wrong, rel=1e-12)
-    assert "(n-1)" in data["formulas"]["5.2"]["latex"]
+    assert log_sum == pytest.approx(-0.166671, abs=1e-6)
+    assert lambda2 == pytest.approx(-0.023810, abs=1e-5)
+    assert wrong == pytest.approx(-1.166700, abs=1e-5)
+    assert lambda2 == pytest.approx(wrong / (n - 1) ** 2, rel=1e-9)
 
 
-def test_lambda_3_multiplies_by_n_minus_one(data: dict) -> None:
-    """(5.3): та же структура, но kᵢ входит множителем внутрь логарифма."""
-    k = [0.8, 1.2, 0.5, 1.7, 0.95, 1.35, 0.62, 1.05]
-    n = len(k)
-    weighted = sum(value * math.log(value) for value in k)
+def test_lambda_3_divides_by_n_minus_one(data: dict) -> None:
+    """(5.3): та же структура, но k_i входит множителем под логарифм."""
+    latex = data["formulas"]["5.3"]["latex"]
+    assert "/(n-1)" in latex
+    assert "cdot" not in latex
+    assert "k_i\\lg k_i" in latex
 
-    lambda3 = (n - 1) * weighted
-    assert weighted == pytest.approx(0.7070255096, abs=1e-9)
-    assert lambda3 == pytest.approx(4.9491785669, abs=1e-9)
-    assert lambda3 == pytest.approx((n - 1) * weighted, rel=1e-12)
-    assert "k_i\\,\\lg k_i" in data["formulas"]["5.3"]["latex"]
+
+def test_k_4_is_ratio_to_mean(data: dict) -> None:
+    """(5.4) k_i = Q_i/Q̄ — модульный коэффициент, ранее не был зафиксирован."""
+    latex = data["formulas"]["5.4"]["latex"]
+    assert "k_i = Q_i/" in latex
+    assert "bar{Q}" in latex
+    assert data["formulas"]["5.5"]["latex"].endswith("/n")
+
+
+def test_my_double_error_on_division_is_recorded(data: dict) -> None:
+    """Я ошибся дважды и переубедил пользователя, который был прав.
+
+    Пользователь прислал деление, я записал умножение, он возразил, и я настоял
+    на своём. Снимок в высоком разрешении показал деление. Ошибка зафиксирована,
+    чтобы «пользователь ошибся» не повторилось как приём.
+    """
+    c = data["critical_correction_5_2_5_3"]
+    assert "переубедил пользователя, который был прав" in c["what_happened"]
+    joined = " ".join(c["sequence"])
+    assert "настоял на своей ошибке" in joined
+    assert "Пользователь возразил" in joined
+    assert "ДВАЖДЫ" in c["verification"]
+
+
+def test_km_coefficients_come_from_external_source_4(data: dict) -> None:
+    """п. 5.6: для Крицкого-Менкеля коэффициенты из [4], а не из Б.1.
+
+    Б.1 - это Пирсон III. При Cs/Cv < 2 применяется Крицкий-Менкель, и там мы
+    используем коэффициенты чужого распределения.
+    """
+    c = data["critical_finding_km_coefficients"]
+    assert "Крицкого-Менкеля" in c["what"]
+    assert "[4]" in c["what"]
+    assert "таблица Б.1 для распределения Пирсона III типа" in c["quote"]
+    assert "[4] - для распределения Крицкого-Менкеля" in c["quote"]
+    assert "неверной таблицы" in c["consequence"]
+    assert "Источник [4] вне СП 33" in c["blocked_on"]
+
+
+def test_ml_coefficients_come_from_nomograms_source_5(data: dict) -> None:
+    """п. 5.5: λ₂, λ₃ → C_v, C_s по номограммам [5], которых нет в СП 33."""
+    c = data["formulas"]["5.5_clause"]
+    assert "номограмм" in c["lambda_to_coefficients"]
+    assert "[5]" in c["lambda_to_coefficients"]
+    assert "усеченному" in c["note_about_B4_B5"] or "усеч" in c["note_about_B4_B5"]
 
 
 def test_formula_5_40_is_x0_estimate_not_a_lambda(data: dict) -> None:
