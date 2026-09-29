@@ -268,20 +268,16 @@ def calculate_statistical_parameters(
         table_ratio_node = correction["table_ratio_node"]
         table_r1_node = correction["table_r1_node"]
         correction_note = (
-            "п. 5.6, (5.6) и (5.7) по таблице Б.1; выбранные узлы указаны "
-            "в table_ratio_node и table_r1_node, интерполяция не применяется"
+            f"п. 5.6, (5.6) и (5.7) по таблице Б.1; узлы Cs/Cv={table_ratio_node}, "
+            f"r(1)={table_r1_node} — ближайшие, интерполяция не применяется. "
+            f"Cv {cv:.4f} -> {corrected_cv:.4f}, Cs {cs:.4f} -> {corrected_cs:.4f}"
         )
-        if show_warnings:
-            warnings.warn(
-                "СП 33-101-2003 п. 5.6: Cv >= 0,6 или Cs >= 1,0, поэтому поправки "
-                f"на смещение обязательны и применены (Cv={cv:.3f} -> "
-                f"{corrected_cv:.3f}, Cs={cs:.3f} -> {corrected_cs:.3f}). "
-                f"Коэффициенты взяты из табл. Б.1 для Cs/Cv = {table_ratio_node} "
-                f"и r(1) = {table_r1_node} — ближайшие узлы, интерполяция "
-                "стандартом не предписана.",
-                UserWarning,
-                stacklevel=2,
-            )
+        # Предупреждение НЕ выдаётся: применение поправок — не аномалия, а
+        # нормальный путь для большинства гидрологических рядов (Cv > 0,6 либо
+        # Cs > 1,0 встречаются часто). До реализации поправок это было
+        # предупреждением о том, что их нет, и потому было уместно. Сведения о
+        # применении остаются в correction_note, bias_corrections_applied и в
+        # узлах таблицы, то есть проверяемы без потока предупреждений.
     corrections_required = not corrections_exempt
 
     # Статистики для Крицкого-Менкеля

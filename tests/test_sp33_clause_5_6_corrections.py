@@ -157,18 +157,40 @@ def test_nearest_node_selection_is_deterministic() -> None:
     assert out["table_r1_node"] == 0.5
 
 
-def test_warning_reports_the_coefficients_actually_used() -> None:
-    """Предупреждение называет не «отсутствующие», а применённые коэффициенты."""
-    with pytest.warns(UserWarning) as caught:
-        calculate_statistical_parameters(high_variability(), show_warnings=True)
-    texts = [str(w.message) for w in caught]
-    matching = [t for t in texts if "5.6" in t]
-    assert matching, f"нет предупреждения о поправках среди: {texts}"
-    text = matching[0]
-    assert "применены" in text
-    assert "табл. Б.1" in text
-    assert "интерполяция" in text
-    assert "не реализованы" not in text, "старое сообщение об отсутствии поправок"
+def test_applying_corrections_does_not_warn() -> None:
+    """Применение поправок — нормальный путь, а не повод для предупреждения.
+
+    До реализации поправок предупреждение сообщало, что их НЕТ, и потому было
+    уместно. Теперь они есть, и предупреждать о соблюдении нормы — шум: у
+    большинства гидрологических рядов Cv > 0,6 либо Cs > 1,0, так что оно
+    срабатывало бы на каждом вызове. Сведения остаются в полях вывода.
+    """
+    # Ловим предупреждения, а не превращаем их в ошибки: тот же ряд вызывает
+    # законное и постороннее предупреждение п. 5.1 о погрешности среднего,
+    # которое к поправкам отношения не имеет.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = calculate_statistical_parameters(
+            high_variability(), show_warnings=True
+        )
+    about_corrections = [str(w.message) for w in caught if "5.6" in str(w.message)]
+    assert not about_corrections, (
+        f"поправки не должны вызывать предупреждение, а получили: {about_corrections}"
+    )
+    assert result["bias_corrections_applied"] is True
+    note = result["correction_note"]
+    assert "Б.1" in note
+    assert "интерполяция" in note
+    assert str(result["table_ratio_node"]) in note
+    assert str(result["table_r1_node"]) in note
+
+
+def test_no_stale_claim_that_corrections_are_missing() -> None:
+    """Старое сообщение об отсутствии поправок больше не может появиться."""
+    result = calculate_statistical_parameters(high_variability(), show_warnings=False)
+    blob = " ".join(str(v) for v in result.values())
+    assert "не реализованы" not in blob
+    assert "не применяются" not in blob
 
 
 # --- невакуумность --------------------------------------------------------
