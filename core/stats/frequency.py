@@ -206,11 +206,13 @@ def calculate_frequency_curve(
     cv = params['corrected_cv'] if use_corrected else params['cv']
     cs = params['corrected_cs'] if use_corrected else params['cs']
 
-    # При Cs/Cv < 2 поправка (5.7) не применяется: п. 5.6 требует для
-    # Крицкого-Менкеля коэффициенты из источника [4], которого нет в СП 33.
-    # Молча отдавать corrected_cs значило бы отдать неверное число без
-    # предупреждения, поэтому признак выносится в атрибут DataFrame.
+    # При Cs/Cv < 2 поправки (5.6) и (5.7) не применяются: п. 5.6 требует для
+    # Крицкого-Менкеля коэффициенты a1...a6 и b1...b6 из источника [4], которого
+    # нет в СП 33, а таблица Б.1 — это Пирсон III. Молча отдавать corrected_cv и
+    # corrected_cs значило бы отдать неверные числа без предупреждения, поэтому
+    # признаки выносятся в атрибут DataFrame.
     cs_correction_applied = bool(params.get('cs_correction_applied', True))
+    cv_correction_applied = bool(params.get('cv_correction_applied', True))
     bias_coefficients_applicable = bool(
         params.get('bias_coefficients_applicable', True)
     )
@@ -259,16 +261,17 @@ def calculate_frequency_curve(
         'Q': np.round(quantiles, 2)
     })
     # Признаки нормативности вынесены в атрибуты, а не в столбцы: иначе они
-    # попали бы в выгрузку и в отчёт как данные. При Cs/Cv < 2 поправка (5.7)
-    # не применена, и Q посчитано по несмещенной Cs.
+    # попали бы в выгрузку и в отчёт как данные. При Cs/Cv < 2 обе поправки не
+    # применены, и Q посчитано по несмещенным Cv и Cs.
     result.attrs['cs_correction_applied'] = cs_correction_applied
+    result.attrs['cv_correction_applied'] = cv_correction_applied
     result.attrs['bias_coefficients_applicable'] = bias_coefficients_applicable
     result.attrs['cs_correction_note'] = (
-        "п. 5.6/Б.1: поправка (5.7) применена"
-        if cs_correction_applied else
-        "п. 5.6: Cs/Cv < 2, поправка (5.7) НЕ ПРИМЕНЕНА — п. 5.6 требует для "
-        "Крицкого-Менкеля коэффициенты из [4], вне СП 33; Q посчитано по "
-        "несмещенной Cs"
+        "п. 5.6/Б.1: поправки (5.6) и (5.7) применены"
+        if cs_correction_applied and cv_correction_applied else
+        "п. 5.6: Cs/Cv < 2, поправки (5.6) и (5.7) НЕ ПРИМЕНЕНЫ — п. 5.6 требует "
+        "для Крицкого-Менкеля коэффициенты из [4], вне СП 33; Q посчитано по "
+        "несмещенным Cv и Cs"
     )
     return result
 

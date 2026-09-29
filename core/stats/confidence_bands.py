@@ -54,11 +54,12 @@ def pearson3_confidence_bands(
     params = calculate_statistical_parameters(data)
     Q_mean = pearson3_ppf(P_arr, params['mean'], params['corrected_cv'], params['corrected_cs'])
 
-    # При Cs/Cv < 2 поправка (5.7) не применяется: п. 5.6 требует для
-    # Крицкого-Менкеля коэффициенты из [4], которого нет в СП 33. Полосы по
-    # неверной Cs были бы неверны так же, как и центральная кривая, поэтому
-    # признак выносится в результат.
+    # При Cs/Cv < 2 поправки (5.6) и (5.7) не применяются: п. 5.6 требует для
+    # Крицкого-Менкеля коэффициенты a1...a6 и b1...b6 из [4], которого нет в
+    # СП 33. Полосы по неверным Cv и Cs были бы неверны так же, как и центральная
+    # кривая, поэтому признаки выносятся в результат.
     cs_correction_applied = bool(params.get('cs_correction_applied', True))
+    cv_correction_applied = bool(params.get('cv_correction_applied', True))
     bias_coefficients_applicable = bool(
         params.get('bias_coefficients_applicable', True)
     )
@@ -87,17 +88,18 @@ def pearson3_confidence_bands(
         'confidence': confidence,
         'n_bootstrap': n_bootstrap,
         'n': n,
-        # Нормативные признаки: при Cs/Cv < 2 поправка (5.7) не применена, и полосы
-        # посчитаны по несмещенной Cs. Без этого пользователь видел бы числа,
+        # Нормативные признаки: при Cs/Cv < 2 обе поправки не применены, и полосы
+        # посчитаны по несмещенным Cv и Cs. Без этого пользователь видел бы числа,
         # полученные по коэффициентам Пирсона III там, где стандарт требует
         # коэффициенты Крицкого-Менкеля из источника [4].
         'cs_correction_applied': cs_correction_applied,
+        'cv_correction_applied': cv_correction_applied,
         'bias_coefficients_applicable': bias_coefficients_applicable,
         'normativity_note': (
-            "п. 5.6/Б.1: поправка (5.7) применена"
-            if cs_correction_applied else
-            "п. 5.6: Cs/Cv < 2, поправка (5.7) НЕ ПРИМЕНЕНА — требуются "
-            "коэффициенты из [4], вне СП 33; полосы по несмещенной Cs"
+            "п. 5.6/Б.1: поправки (5.6) и (5.7) применены"
+            if cs_correction_applied and cv_correction_applied else
+            "п. 5.6: Cs/Cv < 2, поправки (5.6) и (5.7) НЕ ПРИМЕНЕНЫ — требуются "
+            "коэффициенты из [4], вне СП 33; полосы по несмещенным Cv и Cs"
         ),
     }
 
