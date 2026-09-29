@@ -274,7 +274,17 @@ def sp33_bias_correction_56_57(
 
     cs_cv = chat_s / chat_v
     ratio_node = _nearest_node(cs_cv, SP33_B1_A)
-    r1 = float(np.clip(lag1_autocorrelation, -0.99, 0.99))
+
+    # ОТСЕЧЕНИЕ ЗА ЕДИНИЦУ ДОЛЖНО БЫТЬ ВИДНО. Таблица Б.1 определена для
+    # r(1) в узлах {0; 0,3; 0,5}, поэтому значение вне диапазона нужно чем-то
+    # ограничить, иначе выбора узла не будет. Но ограничение - это ПОДМЕНА
+    # величины, и молчаливая подмена здесь недопустима: на коротком ряду
+    # нормативное r(1) по (Б.1) достигает 2...5, и читатель результата,
+    # увидев «узел r(1)=0,5», не должен делать вывод, что r(1) было 0,5.
+    # Поэтому исходное и отсечённое значения оба возвращаются наружу.
+    r1_raw = float(lag1_autocorrelation)
+    r1 = float(np.clip(r1_raw, -0.99, 0.99))
+    r1_clipped = r1_raw != r1
     r1_node = _nearest_node(r1, SP33_B1_B)
 
     a = SP33_B1_A[ratio_node][r1_node]
@@ -293,6 +303,10 @@ def sp33_bias_correction_56_57(
         "table_ratio_node": ratio_node,
         "table_r1_node": r1_node,
         "cs_cv": float(cs_cv),
+        # Неотсечённое значение — чтобы подмену можно было увидеть и исправить.
+        "r1_raw": r1_raw,
+        "r1_clipped": r1_clipped,
+        "r1_clipped_to": r1,
     }
 
 
@@ -425,6 +439,19 @@ def calculate_statistical_parameters(
         # узлах таблицы, то есть проверяемы без потока предупреждений.
     corrections_required = not corrections_exempt
 
+    # Признак подмены r(1) при выборе узла таблицы Б.1. Если нормативное r(1)
+    # вышло за диапазон таблицы, это попадает и в вывод, и в текст поправки.
+    r1_for_table_clipped = False
+    if not corrections_exempt:
+        r1_for_table_clipped = bool(correction.get("r1_clipped"))
+        if r1_for_table_clipped:
+            correction_note += (
+                f" ВНИМАНИЕ: нормативное r(1) = {correction['r1_raw']:.4f} "
+                f"вне диапазона таблицы Б.1 (узлы 0; 0,3; 0,5) и приведено к "
+                f"{correction.get('r1_clipped_to', 0.99):.2f} для выбора узла; "
+                f"поправка (5.7) при этом ЗАМЕНИТЕЛЬНА."
+            )
+
     # Статистики для Крицкого-Менкеля
     if std == 0:
         deviations = np.zeros_like(data)
@@ -451,6 +478,10 @@ def calculate_statistical_parameters(
         'correction_note': correction_note,
         'table_ratio_node': table_ratio_node,
         'table_r1_node': table_r1_node,
+        # Подмена r(1) при выборе узла Б.1 должна быть видна в выводе, а не
+        # жить только в correction_note: по ней видно, что поправка (5.7)
+        # посчитана для граничного значения, а не для фактического.
+        'r1_clipped_for_table': r1_for_table_clipped,
         'r1': round(r1, 4),
         # Пирсон и r̃ сохранены рядом с нормативным r(1): величины разные,
         # и подмена одной другой — тот же дефект, что был с (7.51).
