@@ -111,22 +111,31 @@ def test_high_variability_gets_corrections_applied() -> None:
 
 
 def test_corrections_match_hand_computation_from_table_b1() -> None:
-    """Поправка совпадает с независимым расчётом по (5.6) и (5.7)."""
+    """Поправка совпадает с независимым расчётом по (5.6) и (5.7).
+
+    Учитывается политика (б), принятая 2026-09-29: при Cs/Cv < 2 поправка (5.7)
+    НЕ применяется, потому что п. 5.6 требует для Крицкого-Менкеля коэффициенты
+    из источника [4], а не из табл. Б.1 (Пирсон III). Проверяется ровно то, что
+    делает код, в зависимости от признака.
+    """
     data = high_variability()
     result = calculate_statistical_parameters(data, show_warnings=False)
     n = result["n"]
     chat_v, chat_s = result["cv"], result["cs"]
 
     a = SP33_B1_A[result["table_ratio_node"]][result["table_r1_node"]]
-    b = SP33_B1_B[result["table_r1_node"]]
     expect_cv = ((a[0] + a[1] / n)
-                + (a[2] + a[3] / n) * chat_v
-                + (a[4] + a[5] / n) * chat_v**2)
-    expect_cs = ((b[0] + b[1] / n)
-                 + (b[2] + b[3] / n) * chat_s
-                 + (b[4] + b[5] / n) * chat_s**2)
-
+                 + (a[2] + a[3] / n) * chat_v
+                 + (a[4] + a[5] / n) * chat_v**2)
     assert result["corrected_cv"] == pytest.approx(expect_cv, abs=1e-4)
+
+    if result["cs_correction_applied"]:
+        b = SP33_B1_B[result["table_r1_node"]]
+        expect_cs = ((b[0] + b[1] / n)
+                     + (b[2] + b[3] / n) * chat_s
+                     + (b[4] + b[5] / n) * chat_s**2)
+    else:
+        expect_cs = chat_s
     assert result["corrected_cs"] == pytest.approx(expect_cs, abs=1e-4)
 
 
@@ -208,9 +217,16 @@ def test_corrections_actually_change_the_result() -> None:
     data = high_variability()
     result = calculate_statistical_parameters(data, show_warnings=False)
     assert result["corrected_cv"] != result["cv"], (
-        "поправка обязана менять Cv, иначе её применение бессмысленно"
+        "поправка (5.6) обязана менять Cv, иначе её применение бессмысленно"
     )
-    assert result["corrected_cs"] != result["cs"]
+    # (5.7) при Cs/Cv < 2 не применяется осознанно, поэтому Cs не меняется.
+    if result["cs_correction_applied"]:
+        assert result["corrected_cs"] != result["cs"]
+    else:
+        assert result["corrected_cs"] == pytest.approx(result["cs"]), (
+            "при Cs/Cv < 2 должна возвращаться несмещенная Cs, а не поправка "
+            "по коэффициентам Пирсона III"
+        )
 
 
 def test_correction_direction_is_not_assumed_downward() -> None:

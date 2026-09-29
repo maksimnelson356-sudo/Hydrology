@@ -206,6 +206,15 @@ def calculate_frequency_curve(
     cv = params['corrected_cv'] if use_corrected else params['cv']
     cs = params['corrected_cs'] if use_corrected else params['cs']
 
+    # При Cs/Cv < 2 поправка (5.7) не применяется: п. 5.6 требует для
+    # Крицкого-Менкеля коэффициенты из источника [4], которого нет в СП 33.
+    # Молча отдавать corrected_cs значило бы отдать неверное число без
+    # предупреждения, поэтому признак выносится в атрибут DataFrame.
+    cs_correction_applied = bool(params.get('cs_correction_applied', True))
+    bias_coefficients_applicable = bool(
+        params.get('bias_coefficients_applicable', True)
+    )
+
     if curve_type == "normal":
         std = params['std']
         quantiles = stats.norm.ppf(1 - probabilities, loc=mean, scale=std)
@@ -245,10 +254,23 @@ def calculate_frequency_curve(
         std = params['std']
         quantiles = stats.norm.ppf(1 - probabilities, loc=mean, scale=std)
 
-    return pd.DataFrame({
+    result = pd.DataFrame({
         'P_%': np.round(probabilities * 100, 2),
         'Q': np.round(quantiles, 2)
     })
+    # Признаки нормативности вынесены в атрибуты, а не в столбцы: иначе они
+    # попали бы в выгрузку и в отчёт как данные. При Cs/Cv < 2 поправка (5.7)
+    # не применена, и Q посчитано по несмещенной Cs.
+    result.attrs['cs_correction_applied'] = cs_correction_applied
+    result.attrs['bias_coefficients_applicable'] = bias_coefficients_applicable
+    result.attrs['cs_correction_note'] = (
+        "п. 5.6/Б.1: поправка (5.7) применена"
+        if cs_correction_applied else
+        "п. 5.6: Cs/Cv < 2, поправка (5.7) НЕ ПРИМЕНЕНА — п. 5.6 требует для "
+        "Крицкого-Менкеля коэффициенты из [4], вне СП 33; Q посчитано по "
+        "несмещенной Cs"
+    )
+    return result
 
 
 # ============================================================
