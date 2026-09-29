@@ -26,6 +26,7 @@ from scipy import stats
 from core.stats.parameters import (
     MAX_MIN_RELATIVE_RMS_ERROR_LIMIT,
     relative_mean_error_percent,
+    sp33_lag1_autocorrelation,
 )
 
 from .utils import compute_basic_stats
@@ -111,13 +112,25 @@ def compute_max_runoff_stats(
     else:
         Cs = Cs_emp
 
-    r1 = float(np.corrcoef(data[:-1], data[1:])[0, 1])
+    # r(1) берётся из нормативного источника (Б.1)-(Б.3) приложения Б, а не из
+    # корреляции Пирсона: (5.26) и (5.27) требуют именно её, в (Б.2) две разные
+    # средние и приведение к несмещённой оценке через (Б.1). Раньше здесь стоял
+    # np.corrcoef, то есть величина считалась не по стандарту.
+    lag1 = sp33_lag1_autocorrelation(data)
+    r1 = lag1["r1"]
     epsilon = relative_mean_error_percent(Cv, n, r1)
     error_limit_percent = MAX_MIN_RELATIVE_RMS_ERROR_LIMIT * 100.0
 
     warnings = []
     reliability_class = "Надёжная"
-    if epsilon > error_limit_percent:
+    if not np.isfinite(epsilon):
+        warnings.append(
+            f"εQ НЕ ВЫЧИСЛЕНА: {lag1['source']}; множитель в (5.26)/(5.27) "
+            f"не имеет вещественного значения. Предел "
+            f"{error_limit_percent:.0f}% не проверен"
+        )
+        reliability_class = "Недостаточно данных"
+    elif epsilon > error_limit_percent:
         warnings.append(
             f"εQ = {epsilon:.1f}% > {error_limit_percent:.0f}%. "
             "Требуется удлинение ряда (СП 33-101-2003 п. 5.1, 5.14)"
