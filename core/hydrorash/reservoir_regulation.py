@@ -203,6 +203,112 @@ def _steady_initial_storage(q_d: np.ndarray, capacity: float) -> float:
     return 0.5 * (low + high)
 
 
+def _calculate_regulation_year_metrics(
+    Q_annual: np.ndarray,
+    demand_m3_s: float,
+    capacity_m3: float,
+    initial_storage_m3: float,
+    year_seconds: float = SECONDS_PER_YEAR,
+) -> dict:
+    """Годовой водохозяйственный баланс с РАЗДЕЛЕНИЕМ двух разных понятий.
+
+    Раньше год считался дефицитным по одному признаку — «итоговый запас
+    S == 0». Это смешивало две разные величины и давало три измеренных
+    расхождения:
+
+    1. При V = 0 запас пуст каждый год, поэтому год помечался дефицитным даже
+       при Q >= D, когда недобора не было вовсе (спрос обслуживался, излишек
+       списывался);
+    2. При Q == D годовой баланс тождественно нулю, то есть unmet = 0 всегда,
+       но если запас пришёл пустым, он оставался пустым и год снова
+       помечался — недобор последующих лет наследовался от провалившегося;
+    3. Касание S = 0 ровно на границе года (S_raw == 0) давало unmet = 0 и
+       всё равно флаг, хотя спрос был обслужен полностью.
+
+    Теперь считаются ДВА независимых счётчика:
+
+    unmet_i = max(0.0, -S_raw)
+        ФАКТИЧЕСКИЙ НЕДОБОР спроса в году. Ненулевой тогда и только тогда,
+        когда год не обеспечен. Это то, что «гарантированный расход»
+        обещает не допустить.
+
+    empty_i = (S == 0.0)
+        ОПОРОЖНЕНИЕ водохранилища на конец года. Само по себе это не
+        аномалия: водохранилище, полностью опустошённое и затем восполненное
+        водами своего же года, обслужило спрос. При V = 0 этот признак
+        постоянен и гарантии не касается.
+
+    Для Q_i < D признаки совпадают, поэтому прежние значения
+    guarantee_percent сохраняются. Расходятся они только там, где год
+    обслужен, а запас пуст — и именно там прежний критерий врал.
+
+    Returns:
+        storage_end_m3 — запас на конец последнего года;
+        storage_series_m3 — запас на конец каждого года, для публикации;
+        deficit_years — число лет с unmet_i > 0;
+        empty_years — число лет с S == 0 на конец;
+        unmet_volume_m3 — суммарный недобор за период;
+        max_unmet_volume_m3 — наибольший недобор за один год;
+        guarantee_percent — (n - deficit_years) / n * 100.
+
+    НОРМАТИВНЫЙ СТАТУС РАЗДЕЛЕНИЯ: UNKNOWN / SOURCE_MISSING. Определения
+    «гарантированной отдачи», связывающего недобор с состоянием запаса, в
+    локальном нормативном корпусе нет: термины «массовая кривая»,
+    «накопленных расходов», «Риппл» не встречаются ни в одном из девяти PDF,
+    а «гарантированная отдача» в СП 33 (стр. 9) и СП 529 (стр. 21)
+    встречается по одному разу и только как ПРОЕКТНОЕ входное значение.
+    Приписывать разделение СП 33 или СП 529 оснований нет.
+    """
+    storage = float(initial_storage_m3)
+    cap = float(capacity_m3)
+
+    deficit_years = 0
+    empty_years = 0
+    unmet_volume = 0.0
+    max_unmet = 0.0
+    series: list[float] = []
+
+    for q_i in Q_annual:
+        storage_raw = storage + (float(q_i) - demand_m3_s) * year_seconds
+        unmet = -storage_raw if storage_raw < 0.0 else 0.0
+        storage = cap if storage_raw > cap else (0.0 if storage_raw < 0.0 else storage_raw)
+
+        if unmet > 0.0:
+            deficit_years += 1
+        if storage == 0.0:
+            empty_years += 1
+
+        unmet_volume += unmet
+        if unmet > max_unmet:
+            max_unmet = unmet
+        series.append(storage)
+
+    n_years = len(Q_annual)
+    return {
+        'storage_end_m3': storage,
+        'storage_series_m3': series,
+        'deficit_years': deficit_years,
+        'empty_years': empty_years,
+        'unmet_volume_m3': unmet_volume,
+        'max_unmet_volume_m3': max_unmet,
+        'guarantee_percent': (n_years - deficit_years) / n_years * 100.0,
+    }
+
+
+def _shortage_diagnostics(metrics: dict) -> dict:
+    """Публикуемые поля недобора и опустошения.
+
+    Объёмы отдаются в км³, потому что наружу отдаются объёмы, а годы и
+    проценты остаются целыми. Ключи названы по образцу существующих полей
+    (``required_volume_km3``), ничего не переименовывая.
+    """
+    return {
+        'empty_years': metrics['empty_years'],
+        'unmet_volume_km3': round(metrics['unmet_volume_m3'] / 1e9, 6),
+        'max_unmet_volume_km3': round(metrics['max_unmet_volume_m3'] / 1e9, 6),
+    }
+
+
 def _ripple_diagnostics(ripple: dict) -> dict:
     """Публикуемые поля метода накопленных расходов.
 
@@ -463,18 +569,12 @@ def multi_year_regulation(
     T = SECONDS_PER_YEAR
 
     if mode == "guarantee_for_volume":
-        # Даны V_max, D — вычислить гарантию
-        S = S_0
-        deficit_years = 0
-        balance_series = [S_0 / 1e9]  # в км³ для удобства
-
-        for Q_i in Q:
-            S = min(V_max, max(0.0, S + (Q_i - D) * T))
-            balance_series.append(S / 1e9)
-            if S == 0:
-                deficit_years += 1
-
-        guarantee = (n - deficit_years) / n * 100
+        # Даны V_max, D — вычислить гарантию.
+        # Баланс и оба счётчика считает _calculate_regulation_year_metrics:
+        # deficit_years по фактическому недобору, empty_years по опустошению.
+        metrics = _calculate_regulation_year_metrics(Q, D, V_max, S_0, T)
+        guarantee = metrics['guarantee_percent']
+        balance_series = [S_0 / 1e9] + [s / 1e9 for s in metrics['storage_series_m3']]
 
         # Метод накопленных расходов по Q − D на периодическом продолжении —
         # тот же расчёт, что и в natural_supply (общая функция).
@@ -485,7 +585,7 @@ def multi_year_regulation(
             'required_volume_km3': round(V_ripple_m3 / 1e9, 3),
             'required_volume_mln_m3': round(V_ripple_m3 / 1e6, 1),
             'guarantee_percent': round(guarantee, 1),
-            'deficit_years': deficit_years,
+            'deficit_years': metrics['deficit_years'],
             'Q_mean': round(Q_mean, 2),
             'Q_demand': round(D, 2),
             'deficit_fraction': round(float(ripple['within_period_m3_s']) / Q_mean, 3) if Q_mean > 0 else 0,
@@ -494,6 +594,7 @@ def multi_year_regulation(
             'V_max_km3': round(V_max / 1e9, 3),
             'S_0_km3': round(S_0 / 1e9, 3),
             'target_guarantee': target_guarantee,
+            **_shortage_diagnostics(metrics),
             **_ripple_diagnostics(ripple),
         }
 
@@ -543,15 +644,10 @@ def multi_year_regulation(
 
             V_mid = (V_low + V_high) / 2
 
-            # Проверка гарантии для V_mid
-            S = V_mid  # S_0 = V_max
-            deficit_years = 0
-            for Q_i in Q:
-                S = min(V_mid, max(0.0, S + (Q_i - D) * T))
-                if S == 0:
-                    deficit_years += 1
-
-            guarantee = (n - deficit_years) / n * 100
+            # Проверка гарантии для V_mid. Тот же helper, что и в остальных
+            # режимах: иначе критерий дефицита разошёлся бы между ними.
+            probe = _calculate_regulation_year_metrics(Q, D, V_mid, V_mid, T)
+            guarantee = probe['guarantee_percent']
 
             if guarantee >= target_guarantee:
                 best_V = V_mid
@@ -559,25 +655,20 @@ def multi_year_regulation(
             else:
                 V_low = V_mid
 
-        # Финальная проверка для best_V
-        S = best_V
-        deficit_years = 0
-        for Q_i in Q:
-            S = min(best_V, max(0.0, S + (Q_i - D) * T))
-            if S == 0:
-                deficit_years += 1
-
-        guarantee = (n - deficit_years) / n * 100
+        # Финальная проверка для best_V — по фактическому недобору.
+        metrics = _calculate_regulation_year_metrics(Q, D, best_V, best_V, T)
+        guarantee = metrics['guarantee_percent']
 
         return {
             'required_volume_km3': round(best_V / 1e9, 3),
             'required_volume_mln_m3': round(best_V / 1e6, 1),
             'guarantee_percent': round(guarantee, 1),
-            'deficit_years': deficit_years,
+            'deficit_years': metrics['deficit_years'],
             'Q_mean': round(Q_mean, 2),
             'Q_demand': round(D, 2),
             'target_guarantee': target_guarantee,
             'achieved_guarantee': round(guarantee, 1),
+            **_shortage_diagnostics(metrics),
             **_ripple_diagnostics(ripple),
         }
 
@@ -668,15 +759,14 @@ def storage_yield_curve(
 
             D_mid = (D_low + D_high) / 2
 
-            # Проверка гарантии для D_mid
-            S = V_max  # S_0 = V_max
-            deficit_years = 0
-            for Q_i in Q:
-                S = min(V_max, max(0.0, S + (Q_i - D_mid) * SECONDS_PER_YEAR))
-                if S == 0:
-                    deficit_years += 1
-
-            guarantee = (len(Q) - deficit_years) / len(Q) * 100
+            # Проверка гарантии для D_mid. Тот же helper, что и в
+            # multi_year_regulation: определение дефицита обязано совпадать,
+            # иначе кривая отдачи строилась бы по другой семантике, чем
+            # остальные режимы модуля.
+            probe = _calculate_regulation_year_metrics(
+                Q, D_mid, V_max, V_max, SECONDS_PER_YEAR
+            )
+            guarantee = probe['guarantee_percent']
 
             if guarantee >= target_guarantee:
                 best_D = D_mid
@@ -691,21 +781,21 @@ def storage_yield_curve(
         # вернуло бы ровно то противоречие, которое здесь устраняется.
         best_D = math.floor(best_D * 100.0) / 100.0
 
-        # Финальная проверка — на том же значении, которое будет опубликовано.
-        S = V_max
-        deficit_years = 0
-        for Q_i in Q:
-            S = min(V_max, max(0.0, S + (Q_i - best_D) * SECONDS_PER_YEAR))
-            if S == 0:
-                deficit_years += 1
-
-        guarantee = (len(Q) - deficit_years) / len(Q) * 100
+        # Финальная проверка — на том же значении, которое будет опубликовано,
+        # и по фактическому недобору, а не по опустошению запаса.
+        metrics = _calculate_regulation_year_metrics(
+            Q, best_D, V_max, V_max, SECONDS_PER_YEAR
+        )
+        guarantee = metrics['guarantee_percent']
 
         rows.append({
             'V_km3': V_km3,
             'Q_max_demand': round(best_D, 2),
             'achieved_guarantee': round(guarantee, 1),
             'target_guarantee': target_guarantee,
+            'deficit_years': metrics['deficit_years'],
+            'empty_years': metrics['empty_years'],
+            'unmet_volume_km3': round(metrics['unmet_volume_m3'] / 1e9, 6),
         })
 
     return pd.DataFrame(rows)
