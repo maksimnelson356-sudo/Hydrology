@@ -68,6 +68,10 @@ class DataController(QObject):
     # --- Public API ---
     def load_from_file(self, filepath: str) -> bool:
         """Загрузить данные из Excel-файла (единый шаблон или плоский)."""
+        # Книга закрывается в finally: без этого дескриптор жил до сборки мусора,
+        # и на Windows загруженный .xlsx оставался занятым. xls = None нужен,
+        # чтобы finally был безопасен при неудачном открытии.
+        xls = None
         try:
             xls = pd.ExcelFile(filepath)
             self._df_raw, self._year_col, self._available_posts = load_hydrological_data(filepath)
@@ -83,6 +87,9 @@ class DataController(QObject):
         except (OSError, FileNotFoundError, ValueError, KeyError, TypeError) as e:
             self.error.emit(f"Ошибка загрузки: {e}")
             return False
+        finally:
+            if xls is not None:
+                xls.close()
 
     def set_post(self, post_name: str) -> bool:
         """Сменить текущий пост и уведомить подписчиков."""

@@ -67,10 +67,24 @@ def pearson3_confidence_bands(
     Q_boot = np.zeros((n_bootstrap, len(P_arr)))
     rng = np.random.default_rng(42)
 
+    # Счётчик перевыборок, не прошедших проверку достаточности ряда по п. 5.1.
+    #
+    # ПОЧЕМУ show_warnings=False. Перевыборка СИНТЕТИЧЕСКАЯ, а нормативное
+    # сообщение звучит как «погрешность 13,1 % превышает предел 10 % для ряда
+    # n=40» — то есть ложно приписывает исходному ряду пользователя то, что
+    # относится к ресемплу. На n_bootstrap = 1000 это до тысячи предупреждений,
+    # и среди них невозможно увидеть настоящий диагноз. Сами бутстреп-вычисления
+    # от этого не меняются: меняется только поток предупреждений.
+    n_series_check_failed = 0
     for b in range(n_bootstrap):
         sample = rng.choice(data, size=n, replace=True)
         try:
-            sp = calculate_statistical_parameters(sample)
+            sp = calculate_statistical_parameters(sample, show_warnings=False)
+            # length_warnings непусто ровно тогда, когда предел 10 % не пройден
+            # ИЛИ погрешность не вычислилась (r(1) >= 1). Оба случая означают,
+            # что по (5.26)/(5.27) перевыборка не обслуживается.
+            if sp['length_warnings']:
+                n_series_check_failed += 1
             Q_boot[b] = pearson3_ppf(P_arr, sp['mean'], sp['corrected_cv'], sp['corrected_cs'])
         except (ValueError, TypeError, ZeroDivisionError):
             Q_boot[b] = Q_mean
@@ -87,6 +101,14 @@ def pearson3_confidence_bands(
         'Q_upper': Q_upper.tolist(),
         'confidence': confidence,
         'n_bootstrap': n_bootstrap,
+        # Диагностика бутстрепа вместо потока предупреждений. Смысл полей:
+        # n_bootstrap — всего перевыборок, n_series_check_failed — сколько из них
+        # не прошли проверку достаточности ряда по п. 5.1 (относительная СКП
+        # превысила нормативный предел 10 % либо не вычислилась из-за r(1) >= 1).
+        # Это СВОЙСТВО БУТСТРЕПА, а не диагноз исходному ряду: по исходному ряду
+        # предупреждение (если оно нужно) выдаёт calculate_statistical_parameters
+        # на строке выше, вне цикла.
+        'n_series_check_failed': n_series_check_failed,
         'n': n,
         # Нормативные признаки: при Cs/Cv < 2 обе поправки не применены, и полосы
         # посчитаны по несмещенным Cv и Cs. Без этого пользователь видел бы числа,

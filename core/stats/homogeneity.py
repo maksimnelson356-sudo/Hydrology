@@ -254,10 +254,22 @@ def check_homogeneity_full(
             'message': 'Недостаточно данных (n < 3)',
         }
 
-    cs = float(stats.skew(data, bias=False))
+    # Cs по (5.9). scipy.stats.skew на постоянном ряде делит на нулевую
+    # дисперсию и печатает RuntimeWarning о потере точности, хотя вырожденность
+    # ряда не аномалия, а отсутствие величины: NaN и был ответом. Ставим NaN явно,
+    # значение не меняется, ложное предупреждение исчезает.
+    cs = float("nan") if np.std(data, ddof=1) == 0.0 else float(stats.skew(data, bias=False))
 
     if r1 is None and n > 2:
-        r1 = float(np.corrcoef(data[:-1], data[1:])[0, 1])
+        # Корреляция Пирсона по смежным членам. np.corrcoef здесь не зовём при
+        # постоянном лаге: он делит на СКО лага, то есть 0/0 -> NaN и RuntimeWarning
+        # о недопустимом делении. «Корреляция не определена» — правильный ответ, и
+        # NaN возвращается и раньше; убирается только ложное предупреждение.
+        # Подстановка 0.0 была бы утверждением о независимости, которого нет.
+        # Помощник общий с parameters.py, чтобы причина была описана один раз.
+        from core.stats.parameters import _lag1_pearson_or_nan
+
+        r1 = _lag1_pearson_or_nan(data)
     elif r1 is None:
         r1 = 0
 

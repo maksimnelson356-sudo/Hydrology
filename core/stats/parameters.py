@@ -220,6 +220,33 @@ def sp33_autocorrelation_b1_b2_b3(series: np.ndarray) -> dict:
     }
 
 
+def _lag1_pearson_or_nan(x: np.ndarray) -> float:
+    """Корреляция Пирсона первого порядка по смежным членам, NaN если не определена.
+
+    ЗАЧЕМ НЕ np.corrcoef НАПРЯМУЮ. Внутри np.corrcoef делит ковариацию на СКО
+    каждого лага (`c /= stddev[:, None]`, затем `c /= stddev[None, :]`). Если хотя бы
+    один из лагов постоянен, его СКО = 0, то есть возникает 0/0 -> NaN и
+    RuntimeWarning «invalid value encountered in divide». На гидрологическом ряду
+    это не экзотика, а обычная ситуация: в «30 спокойных лет + один выброс» передний
+    лаг целиком постоянен.
+
+    ПОЧЕМУ ЭТО НЕ БАГ, А ОТСУТСТВИЕ ВЕЛИЧИНЫ. При постоянном лаге корреляция
+    Пирсона математически не определена, и NaN — правильный ответ. Раньше он и
+    возвращался, но вместе с ложным RuntimeWarning о недопустимом делении. Здесь
+    NaN ставится явно, без вызова np.corrcoef, поэтому значение не меняется, а
+    предупреждение исчезает. Подменять его на 0.0 нельзя: нулевая корреляция —
+    утверждение о независимости, а здесь её вычислить не удалось.
+
+    На обоих лагах с ненулевым СКО вычисление не меняется ни в чём.
+    """
+    if x.size < 2:
+        return 0.0
+    head, tail = x[:-1], x[1:]
+    if np.std(head, ddof=1) <= 0.0 or np.std(tail, ddof=1) <= 0.0:
+        return float("nan")
+    return float(np.corrcoef(head, tail)[0, 1])
+
+
 def sp33_lag1_autocorrelation(series) -> dict:
     """Единая точка получения r(1) по (Б.1)-(Б.3) для всех потребителей.
 
@@ -243,7 +270,7 @@ def sp33_lag1_autocorrelation(series) -> dict:
         error — причина отказа, когда (Б.1)-(Б.3) неприменимы.
     """
     x = np.asarray(series, dtype=float)
-    pearson = float(np.corrcoef(x[:-1], x[1:])[0, 1]) if x.size > 1 else 0.0
+    pearson = _lag1_pearson_or_nan(x)
     try:
         b1 = sp33_autocorrelation_b1_b2_b3(x)
     except ValueError as exc:
@@ -460,7 +487,16 @@ def calculate_statistical_parameters(
     mean = np.mean(data)
     std = np.std(data, ddof=1)
     cv = std / mean if mean != 0 else 0.0
-    cs = stats.skew(data, bias=False)
+
+    # === Cs для ряда без изменений (std == 0) ===
+    # scipy.stats.skew делит на выборочную дисперсию, поэтому на постоянном
+    # ряде он даёт NaN и печатает RuntimeWarning о потере точности при вычислении
+    # моментов. Предупреждение тут ложное: вырожденность ряда УЖЕ проверяется
+    # ниже (degenerate), и NaN здесь не аномалия, а точный ответ — коэффициент
+    # асимметрии для ряда из одинаковых значений не определён. Поэтому scipy
+    # не зовём, а NaN ставим явно: контракт не меняется (было NaN, стало NaN),
+    # исчезает только ложное предупреждение о неточности моментов.
+    cs = float("nan") if std == 0.0 else stats.skew(data, bias=False)
 
     # Коэффициент автокорреляции.
     #

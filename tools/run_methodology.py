@@ -91,16 +91,23 @@ def load_dataset(path: str | None, post: str | None) -> Dataset:
         if post:
             # Перечисляем реальные листы, а не отсылаем к несуществующему флагу.
             try:
-                available = ", ".join(pd.ExcelFile(path).sheet_names)
+                # with, а не pd.ExcelFile(path).sheet_names: книга держит
+                # открытый дескриптор, и без закрытия файл нельзя удалить сразу
+                # после чтения (важно на Windows).
+                with pd.ExcelFile(path) as probe:
+                    available = ", ".join(probe.sheet_names)
             except Exception:  # noqa: BLE001 - файл может быть не Excel
                 available = "не удалось прочитать"
             raise SystemExit(
                 f"В файле {path} не найден лист «{post}». "
                 f"Доступные листы: {available}. "
-                f"Либо запустите без --post, чтобы взять первый лист."
+                f"Либо запускайте без --post, чтобы взять первый лист."
             )
-        frame = read_work_sheet(path, [pd.ExcelFile(path).sheet_names[0]],
-                                use_columns=True)
+        # Имя первого листа узнаём через закрываемую книгу, а не через временный
+        # pd.ExcelFile(...).sheet_names[0], который оставался открытым.
+        with pd.ExcelFile(path) as probe:
+            first_sheet = probe.sheet_names[0]
+        frame = read_work_sheet(path, [first_sheet], use_columns=True)
     if frame is None or frame.empty:
         raise SystemExit(f"В файле {path} не найдено данных")
 

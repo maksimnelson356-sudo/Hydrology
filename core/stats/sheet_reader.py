@@ -95,26 +95,39 @@ def read_work_sheet(filepath_or_xls,
     Returns:
         pd.DataFrame с данными; пустой DataFrame, если лист не найден.
     """
-    xls = filepath_or_xls if isinstance(filepath_or_xls, pd.ExcelFile) else pd.ExcelFile(filepath_or_xls)
-    sheet = find_sheet(xls, sheet_keywords)
-    if sheet is None:
-        return pd.DataFrame()
+    # ВЛАДЕЛЕЦ ФАЙЛА. pd.ExcelFile держит открытый файловый дескриптор, и без
+    # .close() он освобождается только сборщиком мусора. На Windows из-за этого
+    # .xlsx нельзя удалить сразу после чтения, а pytest держит временные файлы
+    # открытыми до конца сессии. Поэтому книга, открытая ЗДЕСЬ, закрывается
+    # детерминированно в finally — включая все ранние return. Книга, переданная
+    # вызывающим кодом, НЕ закрывается: её владелец — вызывающий, и закрыть
+    # чужой объект было бы тем же молчаливым разрывом контракта, которым раньше
+    # была подмена r(1).
+    owns_xls = not isinstance(filepath_or_xls, pd.ExcelFile)
+    xls = pd.ExcelFile(filepath_or_xls) if owns_xls else filepath_or_xls
+    try:
+        sheet = find_sheet(xls, sheet_keywords)
+        if sheet is None:
+            return pd.DataFrame()
 
-    raw = pd.read_excel(xls, sheet, header=None)
-    # Обработка объединённых ячеек (merged cells): openpyxl/pandas оставляет
-    # пустые ячейки в объединённых диапазонах, кроме первой. Прячем значения
-    # из строки заголовка вниз по объединённым колонкам.
-    raw = _fill_merged_headers(raw, xls, sheet)
-    header_idx = find_header_row(raw, header_keywords)
-    if header_idx < 0:
-        return raw
+        raw = pd.read_excel(xls, sheet, header=None)
+        # Обработка объединённых ячеек (merged cells): openpyxl/pandas оставляет
+        # пустые ячейки в объединённых диапазонах, кроме первой. Прячем значения
+        # из строки заголовка вниз по объединённым колонкам.
+        raw = _fill_merged_headers(raw, xls, sheet)
+        header_idx = find_header_row(raw, header_keywords)
+        if header_idx < 0:
+            return raw
 
-    if use_columns:
-        df = raw.iloc[header_idx + 1:].copy()
-        df.columns = [str(c) for c in raw.iloc[header_idx].values]
-        return df.reset_index(drop=True)
+        if use_columns:
+            df = raw.iloc[header_idx + 1:].copy()
+            df.columns = [str(c) for c in raw.iloc[header_idx].values]
+            return df.reset_index(drop=True)
 
-    return pd.read_excel(xls, sheet, skiprows=header_idx)
+        return pd.read_excel(xls, sheet, skiprows=header_idx)
+    finally:
+        if owns_xls:
+            xls.close()
 
 
 def _fill_merged_headers(raw: pd.DataFrame, xls, sheet: str) -> pd.DataFrame:
