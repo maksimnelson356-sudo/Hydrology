@@ -84,6 +84,242 @@ import pandas as pd
 SECONDS_PER_YEAR = 365 * 86400
 
 
+# ======================================================================
+# МЕТОД НАКОПЛЕННЫХ РАСХОДОВ (МАССОВАЯ КРИВАЯ) — ЕДИНАЯ РЕАЛИЗАЦИЯ
+# ======================================================================
+#
+# НОРМАТИВНЫЙ СТАТУС: SOURCE_MISSING. Метод не отнесён ни к одному
+# локальному стандарту: полнотекстовый поиск по девяти PDF локального
+# корпуса (СП 529.1325800.2023, СП 33-101-2003, СП 47.13330.2016,
+# СП 482.1325800.2020, ГОСТ 19179-73, СП 38.13330.2018, Методические
+# рекомендации, Рождественский, Пособие к СП 33) дал НОЛЬ вхождений
+# «Риппл», «массовая кривая», «накопленных расходов». В СП 33 «водохранилищ»
+# встречается только в связи с трансформацией паводков и поправками на
+# зарегулированные реки, а «гарантированная отдача» — единственный раз, как
+# ПРОЕКТНОЕ входное значение, без методики расчёта. Приписывать формулу этим
+# документам оснований нет.
+#
+# ИСТОЧНИК МЕТОДА — ВНЕ ЛОКАЛЬНОГО КОРПУСА:
+# - Крицкий С.Н., Менкель М.Ф. «Многолетнее регулирование стока» //
+#   Гидротехническое строительство. 1935. №10-12. С. 3-10 (первичная работа;
+#   в локальном корпусе отсутствует и не читалась);
+# - «Методические указания по водохозяйственным расчётам», раздел о способе
+#   полной суммарной кривой: полезный объём — наибольшее вертикальное
+#   расстояние между ПРЕДЫДУЩИМИ верхними и ПОСЛЕДУЮЩИМИ нижними касательными,
+#   причём сначала по времени всегда верхнее касание, затем нижнее; избытки
+#   сверх потребления — холостые сбросы;
+# - Приказ МПР РФ от 30.11.2007 № 314 «Об утверждении Методики расчёта
+#   водохозяйственных балансов водных объектов» — использован ТОЛЬКО как
+#   основание условия установившегося заполнения: при многолетнем
+#   регулировании наполнение на начало ряда определяется итерациями до
+#   совпадения объёмов наполнения на начало и конец ряда.
+#
+# ЗАЧЕМ НУЖЕН ИМЕННО ПЕРИОДИЧЕСКИЙ РЯД. Многолетнее регулирование — это
+# НЕПРЕРЫВНЫЙ режим: расчётный период повторяется, и водохранилище обязано
+# обслуживать сток за пределами последнего года записи. Максимальная
+# просадка внутри одного периода этого не покрывает: вершина в конце периода и
+# яма в начале следующего — разные точки кривой. Раньше просадка считалась
+# только внутри периода, и на сбалансированном ряде (Σ(Q−D) = 0) ёмкость
+# занижалась.
+#
+# ПРОВЕРКА ЗАМКНУТОСТИ. При Σ(Q−D) < 0 запас не восстанавливается: за
+# каждый цикл водохранилище теряет |Σ|, и никакая конечная ёмкость не
+# обеспечит работу без дефицита. Признак обнаруживается сравнением просадки
+# на 2- и 3-периодном продолжении: при Σ ≥ 0 они совпадают, при Σ < 0 —
+# расходятся. В таком случае конечное значение ёмкости НЕ ВЫДАЁТСЯ.
+
+
+def _periodic_max_drawdown(c: np.ndarray, net: float, n_periods: int) -> float:
+    """Максимальная просадка на n-периодном продолжении массовой кривой.
+
+    Формула метода: V = max_{i<j} (C_i - C_j), где C — кумулятивная сумма
+    (Q − D), C_0 = 0. Знак (Q − D) НЕ меняется: смена знака дала бы ту же
+    величину, но混 с величиной другой размерности.
+
+    Цикл с «текущим максимумом» эквивалентен прямому перебору пар i < j
+    (проверено на целочисленной сетке: 0 расхождений), но не квадратичен.
+    """
+    extended = np.concatenate([c + p * net for p in range(n_periods)])
+    running_max = extended[0]
+    max_drawdown = 0.0
+    for value in extended[1:]:
+        gap = running_max - value
+        if gap > max_drawdown:
+            max_drawdown = gap
+        if value > running_max:
+            running_max = value
+    return float(max_drawdown)
+
+
+def _simulate_cycle(
+    q_d: np.ndarray, capacity: float, storage: float
+) -> tuple[float, float, float]:
+    """Один цикл баланса: S = min(V, max(0, S + (Q − D))).
+
+    Returns:
+        (storage_end, spill, unmet) — конечный запас, суммарный сброс
+        (холостой) и суммарный непокрытый сток, все в м³/с.
+    """
+    spill = 0.0
+    unmet = 0.0
+    for delta in q_d:
+        raw = storage + delta
+        if raw < 0.0:
+            unmet += -raw
+            storage = 0.0
+        elif raw > capacity:
+            spill += raw - capacity
+            storage = capacity
+        else:
+            storage = raw
+    return storage, spill, unmet
+
+
+def _steady_initial_storage(q_d: np.ndarray, capacity: float) -> float:
+    """Установившееся начальное заполнение: итерация до S_нач = S_кон.
+
+    Условие взято из приказа МПР РФ № 314: при многолетнем регулировании
+    наполнение на начало первого года расчётного ряда определяется итерациями
+    до совпадения объёмов наполнения на начало и конец ряда.
+
+    Функция g(S0) = S_кон(S0) − S0 невозрастающая: шаг баланса
+    min(V, max(0, ·)) не уменьшает и увеличивает не более чем на величину
+    приращения, поэтому корень ищется бисекцией на [0, V].
+    """
+    if capacity <= 0.0:
+        return 0.0
+    low, high = 0.0, capacity
+    for _ in range(200):
+        mid = 0.5 * (low + high)
+        end, _, _ = _simulate_cycle(q_d, capacity, mid)
+        if end - mid > 0.0:
+            low = mid
+        else:
+            high = mid
+        if high - low < 1e-12:
+            break
+    return 0.5 * (low + high)
+
+
+def _ripple_diagnostics(ripple: dict) -> dict:
+    """Публикуемые поля метода накопленных расходов.
+
+    Имена подчинены существующему API (префикс ``required_volume_km3``) и
+    дополняют его, ничего не переименовывая. Обозначения V₁/V₂ НЕ
+    используются: в литературе они означают разные величины — в «Гидротехнических
+    сооружениях» (том II) это расстояния между касательными при РАЗНЫХ
+    процентах регулирования, то есть два варианта ёмкости, а не две
+    компоненты одного проекта.
+
+    Исходные м³/с пересчитываются в км³, потому что наружу отдаются объёмы.
+    При невозможном режиме (Σ < 0) ёмкость равна NaN и НЕ подменяется нулём:
+    нулевой объём означал бы, что регулирование не нужно, а не что оно
+    невозможно.
+
+    ПОЛЕ ``deficit_fraction`` ЗДЕСЬ НЕ УЧАСТВУЕТ. Оно по-прежнему считается по
+    внутрипериодной просадке (``within_period_m3_s``), а не по требуемой
+    ёмкости: иначе правка метода накопленных расходов задела бы это поле.
+    Методология ``deficit_fraction`` — величина безразмерная, и смысл её здесь
+    не проверяется; разбор отнесён к отдельной задаче, в этой правке она
+    намеренно не затрагивается.
+    """
+    required_m3 = ripple['required_m3_s']
+    initial_m3 = ripple['initial_storage_m3_s']
+    spill_m3 = ripple['spill_m3_s']
+
+    def to_km3(value: float) -> float:
+        return round(value * SECONDS_PER_YEAR / 1e9, 6)
+
+    return {
+        'net_balance_m3_s': round(ripple['net_balance_m3_s'], 6),
+        'initial_storage_km3': to_km3(initial_m3),
+        'spill_volume_km3': to_km3(spill_m3),
+        'stable_cycle': ripple['stable_cycle'],
+        'regulation_possible': ripple['regulation_possible'],
+        'capacity_unbounded': ripple['capacity_unbounded'],
+        'closure_error_m3_s': round(ripple['closure_error_m3_s'], 9),
+    }
+
+
+def _ripple_mass_curve(q_d: np.ndarray) -> dict:
+    """Метод накопленных расходов по Q − D: ёмкость, заполнение, сброс.
+
+    Аргумент q_d — уже разность (Q_i − D) в м³/с, без NaN.
+
+    ФИЗИЧЕСКИЙ КРИТЕРИЙ ЗАМКНУТОСТИ. Возможность установившегося цикла
+    определяется суммой баланса за период, net = Σ(Q−D), а не сравнением
+    просадок на продолжениях разной длины:
+
+    - net > 0 — за каждый цикл водохранилище получает избыток; он уходит на
+      холостой сброс, и цикл замыкается;
+    - net = 0 — запас не растёт и не тает, цикл замыкается;
+    - net < 0 — за каждый полный период запас уменьшается на |net| и никогда
+      не восстанавливается. Конечной стационарной ёмкости не существует.
+
+    Сравнение 2- и 3-периодной просадки даёт ТОТ ЖЕ ответ (для Σ ≥ 0 кривая
+    повторяется либо поднимается, и просадка на двух периодах уже максимальна),
+    но это следствие, а не признак. Оно оставлено как диагностика
+    ``three_period_m3_s`` и в решении о возможности регулирования не участвует.
+
+    Returns:
+        required_m3_s — требуемая полезная регулирующая ёмкость в м³/с
+        (для перевода в объём умножается на SECONDS_PER_YEAR);
+        net_balance_m3_s — Σ(Q−D) за период;
+        within_period_m3_s — просадка внутри одного периода (прежняя
+        семантика поля deficit_fraction, см. сборщик диагностики);
+        initial_storage_m3_s — установившееся начальное заполнение;
+        spill_m3_s — холостой сброс за один установившийся цикл;
+        stable_cycle — признак устойчивого (замкнутого) цикла;
+        regulation_possible — False, если замкнутый режим невозможен;
+        capacity_unbounded — True в этом случае;
+        closure_error_m3_s — невязка S_кон − S_нач (диагностика);
+        three_period_m3_s — просадка на 3-периодном продолжении (диагностика).
+    """
+    cumulative = np.concatenate([[0.0], np.cumsum(q_d)])
+    net = float(cumulative[-1])
+
+    # Допуск на сумму (Q−D): она накапливается за n лет, поэтому сравнение
+    # ведётся по относительной величине. 1e-9 м³/с накопительно за 100 лет —
+    # это 3 м³ за весь период, то есть несравнимо с любой реальной
+    # погрешностью округления исходных расходов.
+    net_tolerance = 1e-9 * max(1.0, abs(net))
+
+    required_within = _periodic_max_drawdown(cumulative, net, 1)
+    required_two = _periodic_max_drawdown(cumulative, net, 2)
+
+    if net < -net_tolerance:
+        return {
+            "required_m3_s": float("nan"),
+            "net_balance_m3_s": net,
+            "within_period_m3_s": required_within,
+            "initial_storage_m3_s": float("nan"),
+            "spill_m3_s": float("nan"),
+            "stable_cycle": False,
+            "regulation_possible": False,
+            "capacity_unbounded": True,
+            "closure_error_m3_s": float("nan"),
+            "three_period_m3_s": float("nan"),
+        }
+
+    initial = _steady_initial_storage(q_d, required_two)
+    end, spill, _ = _simulate_cycle(q_d, required_two, initial)
+    return {
+        "required_m3_s": required_two,
+        "net_balance_m3_s": net,
+        "within_period_m3_s": required_within,
+        "initial_storage_m3_s": initial,
+        "spill_m3_s": spill,
+        "stable_cycle": True,
+        "regulation_possible": True,
+        "capacity_unbounded": False,
+        "closure_error_m3_s": end - initial,
+        # Диагностика, не признак: при net ≥ 0 обязано совпадать с
+        # required_m3_s, и расхождение означало бы ошибку в самой формуле.
+        "three_period_m3_s": _periodic_max_drawdown(cumulative, net, 3),
+    }
+
+
+
 def multi_year_regulation(
     Q_annual: np.ndarray,
     demand_m3_s: float,
@@ -177,24 +413,13 @@ def multi_year_regulation(
         guarantee = float((Q >= demand_m3_s).mean() * 100) if n > 0 else 0
         natural_supply = guarantee
 
-        # Метод накопленных расходов для оценки требуемого объёма (S_0 = 0, V_max = inf).
-        # Название «метод Риппла» — обозначение алгоритма, не нормативная ссылка:
-        # в СП 529 его нет, а в проверенных п. 7.2 и 7.3 СП 33-101-2003 он
-    # не упомянут (эти пункты — про отсутствие наблюдений и выбор аналогов).
-        # V_ripple = max_{j>i} (C_i - C_j) * T, где C_0 = 0, C_k = sum_{m=1}^k (Q_m - D).
-        # Единицы: Q_D в м3/с; T = SECONDS_PER_YEAR в с; произведение -> м3; /1e9 -> км3.
-        Q_D = Q - demand_m3_s
-        max_C = 0.0  # C_0 = 0
-        c = 0.0  # C_0 = 0 (актуальная накопленная сумма)
-        max_drawdown = 0.0
-        for q_d in Q_D:
-            c = c + q_d
-            drawdown = max_C - c
-            if drawdown > max_drawdown:
-                max_drawdown = drawdown
-            if c > max_C:
-                max_C = c
-        V_ripple_m3 = max_drawdown * SECONDS_PER_YEAR
+        # Метод накопленных расходов по Q − D на ПЕРИОДИЧЕСКОМ продолжении.
+        # Название «метод Риппла» — обозначение алгоритма, не нормативная
+        # ссылка: ни в СП 529, ни в проверенных п. 7.2 и 7.3 СП 33-101-2003
+        # он не упомянут, а в локальном корпусе термин не найден ни разу.
+        # Расчёт — в _ripple_mass_curve, общем для всех трёх режимов.
+        ripple = _ripple_mass_curve(Q - demand_m3_s)
+        V_ripple_m3 = ripple['required_m3_s'] * SECONDS_PER_YEAR
         V_ripple_km3 = V_ripple_m3 / 1e9
 
         return {
@@ -204,8 +429,9 @@ def multi_year_regulation(
             'natural_supply_percent': round(natural_supply, 1),
             'Q_mean': round(Q_mean, 2),
             'Q_demand': round(demand_m3_s, 2),
-            'deficit_fraction': round(float(max_drawdown) / Q_mean, 3) if Q_mean > 0 else 0,
+            'deficit_fraction': round(float(ripple['within_period_m3_s']) / Q_mean, 3) if Q_mean > 0 else 0,
             'balance_cumulative': np.cumsum(Q - demand_m3_s).tolist(),
+            **_ripple_diagnostics(ripple),
             'warning': 'Режим natural_supply: гарантия = P(Q >= D), не учитывает регулирование!' if demand_m3_s <= Q_mean else 'Забор > среднего стока! Нужно много летнее регулирование.',
         }
 
@@ -248,21 +474,10 @@ def multi_year_regulation(
 
         guarantee = (n - deficit_years) / n * 100
 
-        # Метод накопленных расходов для требуемого объёма (при S_0=0).
-        # Название «метод Риппла» — обозначение алгоритма, не нормативная ссылка.
-        # V_ripple = max_{j>i} (C_i - C_j) * T, где C_0 = 0, C_k = sum_{m=1}^k (Q_m - D).
-        Q_D = Q - D
-        max_C = 0.0  # C_0 = 0
-        c = 0.0  # C_0 = 0 (актуальная накопленная сумма)
-        max_drawdown = 0.0
-        for q_d in Q_D:
-            c = c + q_d
-            drawdown = max_C - c
-            if drawdown > max_drawdown:
-                max_drawdown = drawdown
-            if c > max_C:
-                max_C = c
-        V_ripple_m3 = max_drawdown * T
+        # Метод накопленных расходов по Q − D на периодическом продолжении —
+        # тот же расчёт, что и в natural_supply (общая функция).
+        ripple = _ripple_mass_curve(Q - D)
+        V_ripple_m3 = ripple['required_m3_s'] * T
 
         return {
             'required_volume_km3': round(V_ripple_m3 / 1e9, 3),
@@ -271,12 +486,13 @@ def multi_year_regulation(
             'deficit_years': deficit_years,
             'Q_mean': round(Q_mean, 2),
             'Q_demand': round(D, 2),
-            'deficit_fraction': round(float(max_drawdown) / Q_mean, 3) if Q_mean > 0 else 0,
+            'deficit_fraction': round(float(ripple['within_period_m3_s']) / Q_mean, 3) if Q_mean > 0 else 0,
             'balance_cumulative': np.cumsum(Q - D).tolist(),
             'balance_series_km3': balance_series,
             'V_max_km3': round(V_max / 1e9, 3),
             'S_0_km3': round(S_0 / 1e9, 3),
             'target_guarantee': target_guarantee,
+            **_ripple_diagnostics(ripple),
         }
 
     elif mode == "volume_for_guarantee":
@@ -286,18 +502,21 @@ def multi_year_regulation(
 
         # Нижняя граница: 0
         # Верхняя граница: оценка по методу накопленных расходов + запас.
+        # Расчёт тот же, что и в двух других режимах (общая функция).
         # «Метод Риппла» — обозначение алгоритма, не нормативная ссылка.
-        Q_D = Q - D
-        max_C = 0.0  # C_0 = 0
-        c = 0.0  # C_0 = 0 (актуальная накопленная сумма)
-        max_drawdown = 0.0
-        for q_d in Q_D:
-            c = c + q_d
-            drawdown = max_C - c
-            if drawdown > max_drawdown:
-                max_drawdown = drawdown
-            if c > max_C:
-                max_C = c
+        ripple = _ripple_mass_curve(Q - D)
+        max_drawdown = ripple['required_m3_s']
+        # При D < Q_mean, что проверено выше, Σ(Q−D) = n·(Q_mean − D) > 0, то
+        # есть замкнутый режим заведомо возможен и ёмкость конечна. Проверка
+        # оставлена явно: молчаливый NaN в верхней границе бинарного поиска
+        # сломал бы его сравнениями, а это труднее заметить, чем отказ.
+        if not ripple['regulation_possible']:
+            raise ValueError(
+                "Для mode=volume_for_guarantee требуется конечная ёмкость, "
+                "но замкнутый многолетний режим невозможен: "
+                f"Σ(Q−D) = {ripple['net_balance_m3_s']:.4g} м³/с < 0, запас "
+                "не восстанавливается. Снизьте забор или увеличьте ряд."
+            )
         # ИНЖЕНЕРНАЯ ЭВРИСТИКА, не норматив: множитель запаса 2.
         # Нормативное происхождение не установлено (SOURCE_MISSING).
         # Приписывать его СП 529, СП 33 или СП 58 оснований нет.
@@ -357,6 +576,7 @@ def multi_year_regulation(
             'Q_demand': round(D, 2),
             'target_guarantee': target_guarantee,
             'achieved_guarantee': round(guarantee, 1),
+            **_ripple_diagnostics(ripple),
         }
 
     else:
