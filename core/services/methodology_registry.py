@@ -11,11 +11,18 @@ No mathematics lives here. Formulas stay in the calculation core
 
 Normative references in DEFAULT_METHODOLOGIES were NOT all taken from the core
 module docstrings, and several were invented outright. A 2026-09-28 audit
-against the printed texts refuted eight of them: СП 33 has no section 8,
-its chapter 7 has 74 clauses, not 53; СП 290 (not СП 58) prescribes the
-spillway formula; СП 32 is "Канализация" and does not cover ecological flow;
-СП 58 has no table 6.1; and РД 52-26-2008 could not be found in any of the
-thirteen catalogue collections. Those references were corrected.
+against the printed texts refuted eight of them: СП 33-101-2003 (HISTORICAL, not
+a current basis) has no section 8 and its chapter 7 has 74 clauses, not 53;
+СП 290.1325800.2016 (not СП 58) prescribes the spillway formula; СП 32 is
+"Канализация" and does not cover ecological flow; СП 58 has no table 6.1; and
+РД 52-26-2008 could not be found in any of the thirteen catalogue collections.
+Those references were corrected.
+
+As of 2026-09-30 the current document is СП 529.1325800.2023; this registry names
+it explicitly for min_runoff, re-anchored on 2026-09-30 to СП 529 p. 5.5. Remaining
+`standard="СП 33-101-2003"` entries are historical attributions unless explicitly
+reviewed otherwise. Re-anchoring requires content-level clause matching and is
+tracked as REVIEW REQUIRED; it is not a mechanical renumbering.
 
 The `evidence_status` field records what was verified, per method, and is the
 machine-readable counterpart of DOCS/normative_verification_matrix.md. Read it
@@ -470,8 +477,8 @@ DEFAULT_METHODOLOGIES: tuple[MethodologyDescriptor, ...] = (
         evidence_status="partial",
         name="Минимальный сток (30-суточные зимние минимумы)",
         category="runoff",
-        standard="СП 33-101-2003",
-        clause="п. 5.41–5.43",
+        standard="СП 529.1325800.2023",
+        clause="п. 5.5 (частично: п. 5.5.1)",
         scope=(
             "Расчёт минимальных расходов воды: 7/10/30-суточные минимумы, "
             "экосистемный минимум. Прежняя ссылка на СП 32.13330.2018 ошибочна: "

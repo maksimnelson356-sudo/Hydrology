@@ -87,16 +87,78 @@ def pearson3_ppf(probabilities: np.ndarray, mean: float, cv: float, cs: float) -
     return np.maximum(quantiles, 0.0)
 
 
+def _log_interp(probabilities: np.ndarray, tab_p: np.ndarray, tab_kp: np.ndarray) -> np.ndarray:
+    """Интерполяция нормированных ординат kp по обеспеченности.
+
+    Логарифмическая по обеим осям — то же соглашение, что и в
+    core.stats.kritsky_tables.get_ordinates при заполнении пропусков по P.
+    За пределами табличного диапазона берётся ближайший узел, а не
+    экстраполяция.
+
+    Нормативные нули (таблица печатает «0,000» при трёх значащих цифрах) НЕ
+    считаются пропуском: они проходят до результата как 0. Логарифмическая
+    интерполяция по ним невозможна, поэтому участок от последнего положительного
+    узла до первого нулевого заполняется линейным спуском по kp.
+    """
+    valid = np.isfinite(tab_kp) & (tab_kp > 0)
+    if valid.sum() < 2:
+        return np.full_like(probabilities, np.nan, dtype=float)
+
+    lp = np.log(tab_p[valid])
+    lk = np.log(tab_kp[valid])
+    out = np.interp(
+        np.log(probabilities), lp, lk,
+        left=lk[0], right=lk[-1],
+    )
+    out = np.exp(out)
+
+    # НОРМАТИВНЫЕ НУЛИ. Печать «0,000» при трёх значащих цифрах означает
+    # «значение ниже разрешения таблицы», а не «данных нет». Такие узлы
+    # несут нормативное значение 0 и обязаны доходить до результата как 0.
+    # Маска valid выше их отбрасывает, и без этой ветки нули подменялись
+    # ближайшим положительным узлом: 149 ячеек в 33 строках таблицы, причём
+    # Cs/Cv = 0,5, Cv = 0,7, P = 99,9 % давало 0,1775 вместо нуля.
+    zero = np.isfinite(tab_kp) & (tab_kp == 0.0)
+    if zero.any():
+        p_zero = tab_p[zero].min()
+        out[probabilities >= p_zero] = 0.0
+
+        # Переход от последнего положительного узла к первому нулевому:
+        # лог-интерполяция сюда не годится (ln 0 = -inf), поэтому спуск
+        # линейный по kp и логарифмический по обеспеченности.
+        last_pos = np.where(valid)[0][-1]
+        if tab_p[last_pos] < p_zero:
+            band = (probabilities > tab_p[last_pos]) & (probabilities < p_zero)
+            if band.any():
+                frac = (
+                    (np.log(probabilities[band]) - np.log(tab_p[last_pos]))
+                    / (np.log(p_zero) - np.log(tab_p[last_pos]))
+                )
+                out[band] = tab_kp[last_pos] * (1.0 - frac)
+
+    return out
+
+
 def kritsky_menkel_ppf(probabilities: np.ndarray, mean: float, cv: float, cs: float) -> np.ndarray:
     """
-    Квантили распределения Крицкого-Менкеля.
+    Квантили распределения Крицкого-Менкеля по НОРМАТИВНОЙ ТАБЛИЦЕ.
 
-    Основной метод — трёхпараметрическое гамма-распределение:
-       α = 4/Cs²,  β = X̄·Cv·Cs/2,  A₀ = X̄·(1 - 2Cv/Cs)
-       X_p = A₀ + Gamma(α, β)
+    Ординаты берутся из core.stats.kritsky_tables (Приложение Б, таблица 1
+    ГГИ 2005 / приложение 2, таблица 3 пособия Гидрометеоиздата 1984) по
+    соотношению Cs/Cv и коэффициенту вариации Cv, затем домножаются на среднее.
 
-    Совпадает с эталонной программой HydroStatCalc (таблицы KritkMenc.bin)
-    в пределах погрешности таблиц. Отрицательные квантили обрезаются до нуля.
+    ПОЧЕМУ ТАБЛИЦА, А НЕ ТРЁХПАРАМЕТРИЧЕСКАЯ ГАММА. Моментная параметризация
+    α = 4/Cs², β = X̄·Cv·Cs/2, A₀ = X̄·(1 − 2Cv/Cs) не воспроизводит
+    первоисточник. При Cs = Cv сдвиг A₀ = −X̄ для всех колонок блока, то есть
+    опорная точка отрицательна: квантили нижнего хвоста уходят в минус и
+    прежняя реализация обрезала их в ноль. Так терялись 33 нормированные
+    ячейки, все из которых в первоисточнике строго положительны.
+    Подгонка гаммы под таблицу невозможна в принципе: свободная трёхпарамет­
+    рическая гамма даёт rms(log10) 0,194 при Cv = 1,0, тогда как таблица
+    задана первоисточником как есть.
+
+    Обрезка `np.maximum(., 0)` здесь не применяется и не нужна: все табличные
+    ординаты положительны. Для Пирсона III обрезка остаётся — см. pearson3_ppf.
     """
     probabilities = np.asarray(probabilities, dtype=float)
     cs = float(cs)
@@ -109,29 +171,18 @@ def kritsky_menkel_ppf(probabilities: np.ndarray, mean: float, cv: float, cs: fl
     if cv <= 0:
         return np.full_like(probabilities, mean, dtype=float)
 
-    # --- Трёхпараметрическое гамма-распределение (Крицкий-Менкель) ---
-    alpha = 4.0 / (cs ** 2)                          # параметр формы
-    beta = mean * cv * cs / 2.0                      # параметр масштаба
-    A0 = mean * (1.0 - 2.0 * cv / cs)              # начальная точка (сдвиг)
+    out_of_range = (probabilities <= 0) | (probabilities >= 1)
+    safe_p = np.where(out_of_range, 0.5, probabilities)
 
-    try:
-        if cs >= 0:
-            # Положительная асимметрия: X_p = A0 + beta * Gamma(1-p), beta > 0
-            quantiles = A0 + stats.gamma.ppf(1 - probabilities, a=alpha, scale=beta)
-        else:
-            # Отрицательная асимметрия: распределение с асимметрией Cs является
-            # зеркальным отражением распределения с |Cs| относительно среднего:
-            #   X_p(Cs) = 2*mean - X_{1-p}(|Cs|)
-            # В параметризации трёхпараметрического гамма это эквивалентно
-            #   X_p = A0 + beta * Gamma(p) = A0 - |beta| * Gamma(p),
-            # т.е. используется квантиль q = p (а не q = 1-p) и scale = |beta|.
-            # Проверено по таблицам Крицкого-Менкеля: Kp(-1, p) ≈ 2 - Kp(+1, 1-p).
-            quantiles = A0 - stats.gamma.ppf(probabilities, a=alpha, scale=-beta)
-    except (ValueError, TypeError, RuntimeError):
-        # Fallback на scipy pearson3
-        quantiles = pearson3_ppf(probabilities, mean, cv, cs)
+    from core.stats.kritsky_tables import PROBS, get_ordinates
 
-    return np.maximum(quantiles, 0.0)
+    kp_table = np.asarray(get_ordinates(cs / cv, cv), dtype=float)
+    kp = _log_interp(safe_p, np.asarray(PROBS, dtype=float), kp_table)
+    quantiles = mean * kp
+
+    if np.any(out_of_range):
+        quantiles = np.where(out_of_range, np.nan, quantiles)
+    return quantiles
 
 
 def fit_theoretical_distributions(Q: np.ndarray, p_prob: np.ndarray) -> dict:
@@ -206,9 +257,14 @@ def calculate_frequency_curve(
     cv = params['corrected_cv'] if use_corrected else params['cv']
     cs = params['corrected_cs'] if use_corrected else params['cs']
 
-    # При Cs/Cv < 2 поправки (5.6) и (5.7) не применяются: п. 5.6 требует для
-    # Крицкого-Менкеля коэффициенты a1...a6 и b1...b6 из источника [4], которого
-    # нет в СП 33, а таблица Б.1 — это Пирсон III. Молча отдавать corrected_cv и
+    # При Cs/Cv < 2 поправки (5.6) и (5.7) не применяются.
+    # Историческая атрибуция: СП 33-101-2003 требовала для Крицкого-Менкеля
+    # коэффициенты a1...a6 и b1...b6 из источника [4], которого нет в СП 33.
+    # Текущая норма: СП 529.1325800.2023, п. 5.1.6, формулы (5.6)/(5.7) —
+    # коэффициенты по таблице В.1; её сетка задана только для Cs/Cv = 2, 3, 4,
+    # поэтому при Cs/Cv < 2 узла нет. Таблица Б.1 СП 529 — ординаты
+    # Крицкого-Менкеля, а нормированные отклонения Пирсона III — таблица Б.2.
+    # Молча отдавать corrected_cv и
     # corrected_cs значило бы отдать неверные числа без предупреждения, поэтому
     # признаки выносятся в атрибут DataFrame.
     cs_correction_applied = bool(params.get('cs_correction_applied', True))
@@ -267,10 +323,11 @@ def calculate_frequency_curve(
     result.attrs['cv_correction_applied'] = cv_correction_applied
     result.attrs['bias_coefficients_applicable'] = bias_coefficients_applicable
     result.attrs['cs_correction_note'] = (
-        "п. 5.6/Б.1: поправки (5.6) и (5.7) применены"
+        "п. 5.1.6 СП 529, (5.6)/(5.7), табл. В.1: поправки применены"
         if cs_correction_applied and cv_correction_applied else
-        "п. 5.6: Cs/Cv < 2, поправки (5.6) и (5.7) НЕ ПРИМЕНЕНЫ — п. 5.6 требует "
-        "для Крицкого-Менкеля коэффициенты из [4], вне СП 33; Q посчитано по "
+        "п. 5.1.6 СП 529, (5.6)/(5.7), табл. В.1: Cs/Cv < 2, поправки НЕ ПРИМЕНЕНЫ — "
+        "сетка табл. В.1 задана для Cs/Cv = 2, 3, 4; историческая атрибуция: "
+        "СП 33 требовала коэффициенты из [4], вне СП 33; Q посчитано по "
         "несмещенным Cv и Cs"
     )
     return result

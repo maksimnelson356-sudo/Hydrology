@@ -11,6 +11,8 @@ from core.stats.sp33_variance_correction import apply_formula_6_9, apply_formula
 
 
 def _multi_analog_case() -> tuple[pd.Index, pd.Series, pd.Series, pd.Series]:
+    # Совместный период — 10 лет: два аналога требуют n ≥ 10 по
+    # СП 529.1325800.2023, п. 6.1.6. Прежние 8 лет были субнормативны.
     years = pd.Index(range(2000, 2013), name="year")
     analog_1 = pd.Series(np.arange(1.0, 14.0), index=years)
     analog_2 = pd.Series(
@@ -18,12 +20,12 @@ def _multi_analog_case() -> tuple[pd.Index, pd.Series, pd.Series, pd.Series]:
         index=years,
     )
     target = 20.0 + 1.5 * analog_1 + 0.8 * analog_2
-    target.loc[2000:2007] += pd.Series(
-        [0.2, -0.1, 0.05, -0.15, 0.1, -0.05, 0.15, -0.1],
-        index=years[0:8],
+    target.loc[2000:2009] += pd.Series(
+        [0.2, -0.1, 0.05, -0.15, 0.1, -0.05, 0.15, -0.1, 0.12, -0.08],
+        index=years[0:10],
     )
     observed = target.copy()
-    observed.loc[2008:] = np.nan
+    observed.loc[2010:] = np.nan
     return years, analog_1, analog_2, observed
 
 
@@ -33,8 +35,8 @@ def _regression_parts(
     analog_2: pd.Series,
     observed: pd.Series,
 ) -> tuple[np.ndarray, np.ndarray, float, float, pd.Index, pd.Index]:
-    common = years[0:8]
-    missing = years[8:]
+    common = years[0:10]
+    missing = years[10:]
     design = np.column_stack(
         [np.ones(len(common)), analog_1.loc[common], analog_2.loc[common]]
     )
@@ -94,7 +96,7 @@ def test_multi_analog_extension_applies_formula_6_9_by_default() -> None:
     result = multi_analog_extension(
         observed,
         {"analog-1": analog_1, "analog-2": analog_2},
-        n_min=8,
+        n_min=10,
     )
 
     _, beta, correlation, observed_mean, _, missing = _regression_parts(
@@ -111,11 +113,11 @@ def test_multi_analog_extension_applies_formula_6_9_by_default() -> None:
 
 def test_multi_analog_extension_applies_formula_6_10() -> None:
     years, analog_1, analog_2, observed = _multi_analog_case()
-    phi = pd.Series([-1.0, 0.0, 1.0, -0.5, 0.5], index=years[8:])
+    phi = pd.Series([-1.0, 0.0, 1.0], index=years[10:])
     result = multi_analog_extension(
         observed,
         {"analog-1": analog_1, "analog-2": analog_2},
-        n_min=8,
+        n_min=10,
         variance_correction="6.10",
         phi=phi,
     )
@@ -126,7 +128,7 @@ def test_multi_analog_extension_applies_formula_6_10() -> None:
     raw_missing = np.column_stack([
         np.ones(len(missing)), analog_1.loc[missing], analog_2.loc[missing]
     ]) @ beta
-    sigma = float(observed.loc[years[0:8]].std(ddof=1))
+    sigma = float(observed.loc[years[0:10]].std(ddof=1))
     expected = raw_missing + phi.to_numpy() * sigma * np.sqrt(1.0 - correlation**2)
 
     assert result["variance_correction"] == "6.10"
@@ -138,7 +140,7 @@ def test_multi_analog_stochastic_correction_is_reproducible() -> None:
     _, analog_1, analog_2, observed = _multi_analog_case()
     kwargs = {
         "analogs": {"analog-1": analog_1, "analog-2": analog_2},
-        "n_min": 8,
+        "n_min": 10,
         "variance_correction": "6.10",
         "random_state": 42,
     }
