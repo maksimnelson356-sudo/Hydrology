@@ -268,7 +268,10 @@ def handle_max_runoff(context: CalculationContext) -> dict[str, Any]:
     frame = max_runoff_frequency_curve(
         max_series,
         P_values=_param(context, "P_values", None),
-        use_normative_Cs=_param(context, "use_normative_Cs", True),
+        # False = эмпирическая непрерывная Cs. Ветка True (правило 2Cv/3Cv)
+        # остаётся доступной явным opt-in: нормативного подтверждения у неё
+        # нет, и она разрывает кривую при Cv = 0,5.
+        use_normative_Cs=_param(context, "use_normative_Cs", False),
     )
     return _to_float_dict(frame)
 
