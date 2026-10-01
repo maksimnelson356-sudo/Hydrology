@@ -498,3 +498,222 @@ def test_module_does_not_claim_ripple_comes_from_a_local_standard() -> None:
     for claim in ("соответствует СП 33", "соответствует СП 529",
                   "реализует СП 529", "по СП 33 п. 7.2", "по СП 33 п. 7.3"):
         assert claim not in doc, f"недопустимая атрибуция: {claim!r}"
+
+
+# ----------------------------------------------------------------------
+# P2. Запрет возврата к исторической формуле  V = -min(cumsum(Q - D))
+# ----------------------------------------------------------------------
+# ИСТОРИЯ. До коммита e39cb39 ёмкость считалась как
+#     max_deficit = float(-np.min(cumulative))
+# где cumulative = cumsum(Q - D) БЕЗ начального нуля. Величина измеряет
+# просадку накопленного баланса ОТ НУЛЯ, то есть предполагает пустой запас
+# и однократный прогон. Многолетнее регулирование так не работает: запас
+# наполняется, расходуется и снова наполняется, поэтому нужна просадка от
+# ЛЮБОГО раннего максимума до ЛЮБОЙ последующей ямы, то есть
+# max_{i<j}(C_i - C_j) на периодическом продолжении ряда.
+#
+# Проверка физическая, а не текстовая: сравнивается опубликованная ёмкость с
+# независимо зафиксированным числом. Возврат старой формулы дал бы на этих
+# рядах 0 или отрицательное значение, и тест упал бы на численном
+# несовпадении — независимо от того, каким текстом написана реализация.
+
+
+@pytest.mark.parametrize(
+    "q_minus_d, expected_capacity, historical_value, why",
+    [
+        pytest.param(
+            [0.004, 0.004, 0.004, -0.006], 0.006, -0.004,
+            "min(Cumsum) = +0.004 > 0, поэтому -min даёт ОТРИЦАТЕЛЬНУю емкость; "
+            "год 4 всё же не покрыт и требует (D-Q4)*T",
+            id="negative_historical_value",
+        ),
+        pytest.param(
+            [10.0, -10.0, 10.0, -10.0], 10.0, 0.0,
+            "Cumsum = [10, 0, 10, 0], минимум 0 => -min = 0, но яма в 10 ед/с "
+            "реальна: от пика 10 до следующего нуля",
+            id="two_equal_valleys",
+        ),
+        pytest.param(
+            [10.0, -10.0, 10.0], 10.0, 0.0,
+            "переход через ноль: C = [0, 10, 0], -min = 0 при дефиците 10",
+            id="crossing_zero",
+        ),
+        pytest.param(
+            [30.0, 30.0, -10.0], 10.0, 0.0,
+            "дефицит в последнем году: C = [0, 30, 60, 50], -min = 0",
+            id="deficit_in_last_year",
+        ),
+        pytest.param(
+            [-10.0, 30.0, -10.0, 30.0, -10.0], 20.0, 10.0,
+            "net = +30: однопериодная просадка 10, но второй период сдвинут "
+            "вверх на 30, и яма после пика достигает 20",
+            id="positive_net_periodic_matters",
+        ),
+    ],
+)
+def test_capacity_is_not_negative_min_of_cumulative_balance(
+    q_minus_d, expected_capacity, historical_value, why
+) -> None:
+    """Ёмкость не равна -min(cumsum(Q−D)): историческая формула неверна.
+
+    Ожидаемые значения зафиксированы независимо, разбором ряда вручную;
+    historical_value показывает, что вернула бы старая формула. Проверяется
+    публикуемое число, а не исходный текст.
+    """
+    ripple = rr._ripple_mass_curve(np.asarray(q_minus_d, dtype=float))
+
+    assert ripple["regulation_possible"] is True
+    published = ripple["required_m3_s"]
+
+    assert published == pytest.approx(expected_capacity, abs=1e-9), (
+        f"ожидалась ёмкость {expected_capacity}, получено {published}. {why}"
+    )
+    assert abs(published - historical_value) > 1e-9, (
+        f"ряд не различает формулы: обе дают {published}. {why}"
+    )
+
+
+def test_monotonic_growth_reports_zero_capacity_not_negative() -> None:
+    """Ряд без единого дефицита даёт нулевую ёмкость, а не отрицательную.
+
+    -min(cumsum) на монотонно растущем балансе строго отрицателен, то есть
+    формула выдавала бы отрицательный объём при заведомо нулевой потребности.
+    """
+    ripple = rr._ripple_mass_curve(np.array([5.0, 15.0, 25.0]))
+
+    assert ripple["net_balance_m3_s"] == pytest.approx(45.0)
+    assert ripple["required_m3_s"] == pytest.approx(0.0, abs=1e-12)
+    assert ripple["required_m3_s"] >= 0.0
+
+
+# ----------------------------------------------------------------------
+# P3. Физическая перекрёстная проверка: ёмкость против симуляции баланса
+# ----------------------------------------------------------------------
+def _min_capacity_by_simulation(q_minus_d, n_periods: int = 2) -> float:
+    """Минимальная ёмкость без недобора, найденная ПОИСКОМ ПО САМОЙ ВЕЛИЧИНЕ.
+
+    Оракул намеренно не повторяет production-формулу max_{i<j}(C_i - C_j):
+    здесь V ищется делением отрезка пополам, пока посторонняя симуляция
+    баланса (функция _simulate выше) не перестанет давать недобор. Это
+    независимый путь к тому же ответу, а не проверка формулы её же кодом.
+
+    ЕДИНИЦЫ. Аргумент и результат — в м³/с накопленного баланса, то есть
+    ровно те же единицы, что у required_m3_s. Умножение на T_year здесь НЕ
+    выполняется намеренно: так обе величины сравниваются напрямую.
+    """
+    delta = np.asarray(q_minus_d, dtype=float)
+    seq = np.tile(delta, n_periods)
+
+    # Допуск недобора масштабируется величиной самого ряда. Абсолютный допуск
+    # здесь был бы груб: для ряда порядка 0.006 м³/с величина 1e-9 дала бы
+    # относительную терпимость 1.7e-7 и бисекция остановилась бы заметно ниже
+    # истинной ёмкости — то есть оракул врал бы из-за своей точности, а не
+    # из-за ошибки production.
+    scale = float(np.abs(seq).sum()) or 1.0
+    tolerance = 1e-12 * scale
+
+    def no_unmet(capacity: float) -> bool:
+        return _simulate(seq, capacity, capacity)[2] <= tolerance
+
+    hi = float(np.abs(seq).sum()) or 1.0
+    for _ in range(64):
+        if no_unmet(hi):
+            break
+        hi *= 2.0
+    else:
+        raise AssertionError("не удалось найти заведомо достаточную ёмкость")
+
+    lo = 0.0
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if no_unmet(mid):
+            hi = mid
+        else:
+            lo = mid
+    return hi
+
+
+@pytest.mark.parametrize(
+    "q_minus_d, label",
+    [
+        pytest.param([20.0, 20.0, -10.0, -10.0], "net=+20, яма в конце", id="s1_positive_net"),
+        pytest.param([30.0, -10.0, 30.0, 30.0], "net=+80, яма в середине", id="s2_valley_middle"),
+        pytest.param([10.0, -10.0, 10.0, -10.0], "net=0, две одинаковые ямы", id="s3_two_valleys"),
+        pytest.param([20.0, -20.0, 20.0, -20.0], "net=0, зеркальные ямы", id="s4_mirrored"),
+        pytest.param([-10.0, 30.0, -10.0, 30.0, -10.0], "net=+30, три ямы", id="s5_three_valleys"),
+        pytest.param([-70.0, 90.0, -70.0, 50.0], "CASE_A, net=0", id="case_a"),
+        pytest.param([-70.0, 10.0, 30.0, 90.0], "CASE_B, net=+60", id="case_b"),
+        pytest.param([0.004, 0.004, 0.004, -0.006], "аудит: net=+0.006", id="audit_control"),
+    ],
+)
+def test_required_capacity_matches_physical_simulation(q_minus_d, label) -> None:
+    """Ёмкость production совпадает с минимумом, найденным симуляцией баланса.
+
+    Ряды покрывают разные конфигурации: положительный net, нулевой net,
+    одиночную яму, несколько ям, ряды с масштабом порядка 1 и 0.004 м³/с.
+    Oracle (_min_capacity_by_simulation) не обращается к production-формуле
+    расчёта дефицита — он ищет ёмкость бисекцией по условию нулевого
+    недобора в посторонней симуляции.
+    """
+    ripple = rr._ripple_mass_curve(np.asarray(q_minus_d, dtype=float))
+    published = ripple["required_m3_s"]
+    simulated = _min_capacity_by_simulation(q_minus_d, n_periods=2)
+
+    assert ripple["regulation_possible"] is True, label
+    assert published == pytest.approx(simulated, rel=1e-9, abs=1e-12), (
+        f"{label}: production {published} против симуляции {simulated} м³/с"
+    )
+
+
+# ----------------------------------------------------------------------
+# P4. net > 0: однопериодная и двухпериодная просадка различаются
+# ----------------------------------------------------------------------
+def test_positive_net_two_period_drawdown_exceeds_one_period() -> None:
+    """При net > 0 периодическое продолжение даёт БОЛЬШУЮ ёмкость.
+
+    Ряд [−10, +30, −10, +30, −10], net = +30. Кумулятивная кривая
+    C = [0, −10, 20, 10, 40, 30].
+
+    Один период: пары i<j дают максимум 40 − 30 = 10 (пик конца периода и
+    следующая за ним яма). Два периода: кривая повторяется со сдвигом вверх
+    на net = 30, то есть [30, 20, 50, 40, 70, 60]. Теперь пик 40 (конец
+    первого периода) и яма 20 (начало второго) дают 40 − 20 = 20. Поэтому
+    ёмкость 20, а не 10.
+
+    Именно эта разница отличает периодический расчёт от однократного: при
+    net = 0 оба дают одно число (тест test_3_period_drawdown_... на этом и
+    построен), поэтому случай net > 0 — единственный, где видна разница.
+    """
+    q_minus_d = np.array([-10.0, 30.0, -10.0, 30.0, -10.0])
+    assert q_minus_d.sum() == pytest.approx(30.0), "net должен быть положительным"
+
+    # Независимая опора: перебор всех пар, без production-функции.
+    cumulative = np.concatenate([[0.0], np.cumsum(q_minus_d)])
+
+    def exhaustive(extended: np.ndarray) -> float:
+        best = 0.0
+        for i in range(len(extended)):
+            for j in range(i + 1, len(extended)):
+                best = max(best, float(extended[i] - extended[j]))
+        return best
+
+    net = float(cumulative[-1])
+    one_period = exhaustive(cumulative)
+    two_period = exhaustive(np.concatenate([cumulative, cumulative + net]))
+
+    assert one_period == pytest.approx(10.0), "однопериодная просадка"
+    assert two_period == pytest.approx(20.0), "двухпериодная просадка"
+    assert two_period > one_period, "периодическое продолжение обязано давать больше"
+
+    ripple = rr._ripple_mass_curve(q_minus_d)
+    assert ripple["within_period_m3_s"] == pytest.approx(one_period)
+    assert ripple["required_m3_s"] == pytest.approx(two_period), (
+        "required_m3_s обязан быть двухпериодным, а не однопериодным"
+    )
+    assert ripple["required_m3_s"] > ripple["within_period_m3_s"]
+
+    # Трёхпериодное продолжение при net > 0 обязано совпасть с двухпериодным:
+    # дальше кривая только поднимается, новых ям глубже не появляется.
+    assert ripple["three_period_m3_s"] == pytest.approx(
+        ripple["required_m3_s"], abs=1e-9
+    )
