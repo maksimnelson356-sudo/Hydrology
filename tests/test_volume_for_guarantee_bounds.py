@@ -23,9 +23,18 @@ max(1 м³, 1e-9 · max(|V_high|, |V_low|, 1)) — а решение допол�
 этом же модуле для допуска на сумму (Q−D), пол 1.0 — там же для защиты от
 нулевого масштаба. Это численный критерий алгоритма, не нормативный параметр.
 
-ЧТО НАМЕРЕННО НЕ ТРОГАЕТСЯ этим набором: множитель запаса `* 2`, fallback
-`* 1.5`, ветка `net < 0`, округление полей required_volume_* , Ripple и
+ЧТО НАМЕРЕННО НЕ ТРОГАЕТСЯ этим набором: множитель запаса верхней границы,
+fallback, ветка `net < 0`, округление полей required_volume_*, Ripple и
 методика массовой кривой.
+
+НЕЗАВИСИМОСТЬ ОТ МНОЖИТЕЛЯ ГРАНИЦЫ. Тесты этого файла не имеют права
+падать из-за конкретной величины запаса верхней границы. Read-only-аудит
+установил, что `max_drawdown * T` — точная достаточная граница, а множитель
+сверх неё — избыточный запас, не влияющий на ответ. Поэтому ожидания
+сформулированы как «ответ равен НЕЗАВИСИМО вычисленному минимуму», а не как
+«ответ равен такой-то доле границы». Ориентир для сверки —
+_independent_min_capacity_m3 ниже; она переписывает модель баланса заново и
+не обращается к production-хелперам.
 """
 
 from __future__ import annotations
@@ -40,13 +49,55 @@ T_YEAR = 365 * 86400
 # Ряд из production-кейса аудита: объём менее 1 млн м³.
 SMALL_SERIES = np.array([0.1, 0.1, 0.1, 0.09])
 SMALL_DEMAND = 0.096
-SMALL_V_UPPER = 378_432.0   # 2 * max_drawdown * T, была возвращена как «решение»
-SMALL_TRUE_MIN = 189_216.0  # max_drawdown * T, истинный минимум без недобора
+SMALL_TRUE_MIN = 189_216.0  # 0.006 * T: минимум, при котором нет ни одного недобора
 
 # Обычный случай из задания на аудит.
 NORMAL_SERIES = np.array([30.0, 110.0, 130.0, 190.0])
 NORMAL_DEMAND = 100.0
 NORMAL_EXPECTED_MLN = 2207.5
+
+
+def _independent_min_capacity_m3(series, demand, target_percent: float) -> float:
+    """Минимальный V (м³), при котором достигается target_percent.
+
+    НЕЗАВИСИМЫЙ ОРАКУЛ, а не слепок production. Модель баланса переписана
+    заново по документированному виду (docstring multi_year_regulation,
+    строка 460): S_{i+1} = min(V, max(0, S_i + (Q_i - D)·T)), а год без
+    недобора считается годом, у которого raw < 0, где
+    raw = S_i + (Q_i − D)·T.
+
+    Верхняя граница собственной бисекции — суммарный АБСОЛЮТНЫЙ недобор
+    sum(max(0, D − Q_i))·T. Он заведомо достаточен (весь накопленный дефицит
+    закрывается запасом) и принципиально НЕ выводится из max_drawdown: иначе
+    сверка была бы круговой и повторяла бы то же допущение, которое проверяет.
+    """
+    n = len(series)
+
+    def guarantee_at(volume: float) -> float:
+        storage = float(volume)
+        deficit_years = 0
+        for q in series:
+            raw = storage + (float(q) - demand) * T_YEAR
+            if raw < 0.0:
+                deficit_years += 1
+            storage = min(float(volume), max(0.0, raw))
+        return 100.0 * (n - deficit_years) / n
+
+    sufficient = sum(max(0.0, demand - float(q)) for q in series) * T_YEAR
+    low, high = 0.0, max(sufficient, T_YEAR)
+    assert guarantee_at(high) >= target_percent, (
+        "независимая граница (суммарный абсолютный недобор) оказалась "
+        "недостаточной — oracle сам непригоден"
+    )
+    for _ in range(200):
+        mid = 0.5 * (low + high)
+        if guarantee_at(mid) >= target_percent:
+            high = mid
+        else:
+            low = mid
+        if high - low <= max(1.0, 1e-9 * high):
+            break
+    return high
 
 
 def _iterations(monkeypatch, series, demand, target=95.0, mode="volume_for_guarantee"):
@@ -77,22 +128,34 @@ def _iterations(monkeypatch, series, demand, target=95.0, mode="volume_for_guara
 # ----------------------------------------------------------------------
 # Test A — граница больше не выдаётся за найденное решение
 # ----------------------------------------------------------------------
-def test_small_reservoir_no_longer_returns_the_search_boundary() -> None:
-    """Production-кейс: функция больше не возвращает V_upper как решение.
+def test_small_reservoir_no_longer_returns_the_search_boundary(monkeypatch) -> None:
+    """Production-кейс: функция возвращает истинный минимум, а не границу.
 
-    До исправления: 0 итераций тела цикла, возврат ровно 378 432 м³.
-    Теперь поиск выполняется и находит истинный минимум 189 216 м³, а
-    публичное поле, округлённое до 0.1 млн м³, даёт 0.2, а не 0.4.
+    До исправления: 0 итераций тела цикла и возврат верхней границы поиска
+    как «найденного решения». Теперь поиск выполняется и сходится к
+    независимо вычисленному минимуму.
+
+    Свойство проверяется ПОЛОЖИТЕЛЬНО — ответ сверяется с oracle, а не
+    отрицанием «не равно границе». Отрицательная форма была привязана к
+    величине запаса границы: она знала только numerals и молчала бы, если
+    бы production сменил множитель. Сверка с oracle переживает любой
+    множитель и заодно сильнее: она ловит и границу вместо минимума, и
+    любой другой промах по величине.
     """
-    result = rr.multi_year_regulation(
-        SMALL_SERIES, SMALL_DEMAND, mode="volume_for_guarantee",
-        target_guarantee=95.0,
+    true_min = _independent_min_capacity_m3(SMALL_SERIES, SMALL_DEMAND, 95.0)
+    assert true_min == pytest.approx(SMALL_TRUE_MIN, abs=1.0), (
+        "oracle разошёлся с арифметикой минимума более чем на пол допуска — "
+        "проверка непригодна"
     )
-    returned_mln = result["required_volume_mln_m3"] * 1e6
 
-    assert returned_mln != pytest.approx(SMALL_V_UPPER, rel=1e-3), (
-        "функция вернула верхнюю границу поиска как найденное решение — "
-        "дефект не устранён"
+    result, iterations, best_v = _iterations(monkeypatch, SMALL_SERIES, SMALL_DEMAND)
+
+    assert iterations > 0, (
+        "бинарный поиск не выполнил ни одной итерации — наружу уйдёт граница"
+    )
+    assert best_v == pytest.approx(true_min, abs=1.0), (
+        f"найдено {best_v:,.6f} м³ вместо минимума {true_min:,.6f} м³ — "
+        "возвращена граница поиска, а не искомый объём"
     )
     assert result["required_volume_mln_m3"] == pytest.approx(0.2, abs=1e-9)
     assert result["guarantee_percent"] >= 95.0, "возвращённое значение обязано быть проверено"
@@ -201,24 +264,27 @@ def test_normal_case_search_really_executes(monkeypatch) -> None:
     assert iterations <= 50
 
 
-def test_normal_case_boundary_never_returned_verbatim() -> None:
-    """Возврат не равен верхней границе поиска, даже с запасом ×2.
+def test_normal_case_boundary_never_returned_verbatim(monkeypatch) -> None:
+    """Возврат равен истинному минимуму, а не границе поиска.
 
-    Смысл проверки: запас «2x» не должен попадать в результат. Если бы
-    бинарный поиск снова не выполнился, вернулось бы ровно 2 · max_drawdown · T.
+    Раньше проверка выглядела как `returned < V_upper * 0.75`: она знала
+    numerals запаса «2x» и потому падала бы при ЛЮБОЙ смене множителя, даже
+    если production остался бы корректным. Это тест на историческую
+    реализацию, а не на свойство.
+
+    Свойство здесь одно: ответ — это искомый объём, а не точка, с которой
+    начался поиск. Оно сформулировано через независимый oracle, поэтому
+    верно при любом запасе границы и одновременно ловит возврат границы
+    вместо минимума.
     """
-    max_drawdown = rr._ripple_mass_curve(NORMAL_SERIES - NORMAL_DEMAND)["required_m3_s"]
-    v_upper = max_drawdown * T_YEAR * 2
+    true_min = _independent_min_capacity_m3(NORMAL_SERIES, NORMAL_DEMAND, 95.0)
 
-    result = rr.multi_year_regulation(
-        NORMAL_SERIES, NORMAL_DEMAND, mode="volume_for_guarantee",
-        target_guarantee=95.0,
-    )
-    returned_mln = result["required_volume_mln_m3"] * 1e6
+    _, iterations, best_v = _iterations(monkeypatch, NORMAL_SERIES, NORMAL_DEMAND)
 
-    assert returned_mln < v_upper * 0.75, (
-        "возврат слишком близок к верхней границе поиска — вероятно, "
-        "бинарный поиск не отработал"
+    assert iterations > 0, "бинарный поиск обязан выполнять итерации"
+    assert best_v == pytest.approx(true_min, rel=1e-9), (
+        f"найдено {best_v:,.6f} м³ вместо минимума {true_min:,.6f} м³ — "
+        "вернулась точка старта поиска, а не искомый объём"
     )
 
 
@@ -294,33 +360,95 @@ def test_zero_answer_case_converges_instead_of_stalling(monkeypatch) -> None:
 # ----------------------------------------------------------------------
 # Test D — решение у верхней границы не считается ошибкой
 # ----------------------------------------------------------------------
-def test_solution_at_top_of_range_is_not_false_rejected(monkeypatch) -> None:
-    """Достижимое решение у верхней границы принимается, отказа нет.
+def test_answer_never_depends_on_where_the_search_started(monkeypatch) -> None:
+    """Ответ не зависит от верхней границы: это и есть «решение ≠ граница».
 
-    Отказ срабатывает по фактической проверке гарантии, поэтому решение,
-    найденное у границы (здесь — ровно на её половине, то есть в самом
-    верхнем возможном положении при множителе запаса 2), обязано быть
-    принято. Иначе проверка была бы слишком строгой и ломала бы штатные
-    случаи.
+    Исходный тест утверждал `returned ≈ V_upper / 2`, то есть проверял
+    БУКВАЛЬНО текущий множитель запаса. Он проходил по построению, а не по
+    существу: меняй production на любой множитель — и тест рассыпался, хотя
+    методика оставалась бы корректной. Хуже того, равенство «ответ = половина
+    границы» было бы истинным и для НЕВЕРНОГО ответа, случись тот равен
+    половине границы: диагностической силы у такой проверки нет.
+
+    Настоящее свойство: бинарный поиск возвращает искомый объём при ЛЮБОЙ
+    верхней границе, какой бы достаточной она ни была, — граница влияет
+    только на число итераций. Оно и проверяется лестницей масштабов
+    границы, без предположения о множителе:
+
+      * где production отвечает — ответ обязан совпасть с oracle;
+      * где production отказывает — границы не хватило, и это штатно.
+
+    Отдельное требование: лестница обязана содержать и отказ. Иначе при
+    любой сколь угодно малой границе проверка была бы вакуумной, и
+    достаточность границы вообще не проверялась бы — ровно та ловушка,
+    о которой предупреждает задание.
+
+    Попутно закрывается свойство «решение у верхней границы диапазона не
+    отклоняется ложно»: чем меньше масштаб, тем ближе ответ к границе, и
+    последний успешный шаг — это и есть решение ровно на границе.
     """
-    series = NORMAL_SERIES
-    demand = NORMAL_DEMAND
-    max_drawdown = rr._ripple_mass_curve(series - demand)["required_m3_s"]
-    v_upper = max_drawdown * T_YEAR * 2
-    half_of_upper = v_upper / 2  # = max_drawdown * T, верхняя граница ответа
+    real_ripple = rr._ripple_mass_curve
+    true_min = _independent_min_capacity_m3(NORMAL_SERIES, NORMAL_DEMAND, 100.0)
 
-    result = rr.multi_year_regulation(
-        series, demand, mode="volume_for_guarantee", target_guarantee=100.0
-    )
-    returned_mln = result["required_volume_mln_m3"] * 1e6
+    def solve_with_scale(scale: float) -> float | None:
+        """ТОЧНЫЙ ответ production при масштабе границы scale, либо None при отказе.
 
-    assert result["guarantee_percent"] >= 100.0, "отказа быть не должно"
-    assert returned_mln == pytest.approx(half_of_upper, rel=1e-2), (
-        f"ответ {returned_mln:,.0f} м³ должен совпадать с верхним возможным "
-        f"положением {half_of_upper:,.0f} м³"
+        Берётся best_V из трассировки, а не публичное поле: required_volume_mln_m3
+        округляется с шагом 0.1 млн м³, что на этом объёме само по себе даёт
+        до 20 000 м³ расхождения и замаскировало бы проверку.
+        """
+        def scaled(q_d):
+            result = dict(real_ripple(q_d))
+            result["required_m3_s"] = result["required_m3_s"] * scale
+            return result
+
+        monkeypatch.setattr(rr, "_ripple_mass_curve", scaled)
+        real_metrics = rr._calculate_regulation_year_metrics
+        seen: list[float] = []
+
+        def traced(Q, d, cap, init, years=T_YEAR):
+            seen.append(float(cap))
+            return real_metrics(Q, d, cap, init, years)
+
+        monkeypatch.setattr(rr, "_calculate_regulation_year_metrics", traced)
+        seen.clear()
+        try:
+            rr.multi_year_regulation(
+                NORMAL_SERIES, NORMAL_DEMAND, mode="volume_for_guarantee",
+                target_guarantee=100.0,
+            )
+        except ValueError:
+            return None
+        return seen[-1] if seen else None
+
+    succeeded, refused = [], []
+    scale = 1.0
+    for _ in range(24):
+        answer = solve_with_scale(scale)
+        if answer is None:
+            refused.append(scale)
+        else:
+            succeeded.append((scale, answer))
+        scale *= 0.5
+
+    assert succeeded, (
+        "ни один масштаб границы не дал решения — проверка неинформативна"
     )
-    # Границу поиска наружу не отдаём даже в этом предельном случае.
-    assert returned_mln < v_upper * 0.75
+    assert refused, (
+        "ни один масштаб границы не дал отказа: достаточность границы не "
+        "проверяется, и лестница не может поймать слишком малую границу"
+    )
+    assert min(refused) < max(s for s, _ in succeeded), (
+        "лестница должна пересекать порог: слишком малые границы обязаны "
+        "отказывать, а достаточные — отвечать"
+    )
+
+    for scale, answer in succeeded:
+        assert answer == pytest.approx(true_min, abs=1.0), (
+            f"при масштабе границы {scale:g} ответ {answer:,.0f} м³ отличается "
+            f"от минимума {true_min:,.0f} м³ более чем на пол допуска — "
+            "величина границы просочилась в результат"
+        )
 
 
 def test_strict_target_still_accepted_when_attainable() -> None:
