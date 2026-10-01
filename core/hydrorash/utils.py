@@ -20,6 +20,7 @@ from scipy.stats import linregress, pearson3
 from core.stats.parameters import (
     DEFAULT_RELATIVE_RMS_ERROR_LIMIT,
     relative_mean_error_percent,
+    sp33_lag1_autocorrelation,
 )
 
 
@@ -69,18 +70,33 @@ def compute_basic_stats(
     else:
         Cs = Cs_empirical
 
-    # Автокорреляция
-    if r is None and len(Q) > 2:
-        r = float(np.corrcoef(Q.iloc[1:], Q.shift(1).dropna())[0, 1])
-    elif r is None:
+    # Автокорреляция. Если r задан вызывающим, он используется как есть.
+    # Иначе берётся нормативное r(1) по (Б.1)-(Б.3) приложения Б, а не
+    # корреляция Пирсона: (5.26) и (5.27) требуют именно её, в (Б.2) две
+    # разные средние и приведение к несмещённой оценке через (Б.1). Раньше
+    # здесь стоял np.corrcoef, то есть величина считалась не по стандарту.
+    r_source = "задан вызывающим"
+    if r is None:
+        lag1 = sp33_lag1_autocorrelation(Q.to_numpy(dtype=float))
+        r = lag1["r1"]
+        r_source = lag1["source"]
+    elif len(Q) <= 2:
         r = 0.0
+        r_source = "n <= 2: автокорреляция не вычисляется"
 
     epsilon = relative_mean_error_percent(Cv, n, r)
     error_limit_percent = relative_rms_error_limit * 100.0
 
     warnings = []
     reliability_class = "Надёжная"
-    if epsilon > error_limit_percent:
+    if not np.isfinite(epsilon):
+        warnings.append(
+            f"εQ НЕ ВЫЧИСЛЕНА: {r_source}; множитель в (5.26)/(5.27) "
+            f"не имеет вещественного значения. Предел "
+            f"{error_limit_percent:.0f}% не проверен"
+        )
+        reliability_class = "Недостаточно данных"
+    elif epsilon > error_limit_percent:
         warnings.append(
             f"εQ = {epsilon:.1f}% > {error_limit_percent:.0f}%. "
             "Требуется удлинение ряда (СП 33-101-2003 п. 5.1, 5.14)"
@@ -96,6 +112,7 @@ def compute_basic_stats(
         "Cs_empirical": Cs_empirical,
         "Cs/Cv": Cs / Cv if Cv != 0 else 0.0,
         "r": r,
+        "r_source": r_source,
         "epsilon": epsilon,
         "relative_rms_error_limit": relative_rms_error_limit,
         "warnings": warnings,

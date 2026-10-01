@@ -105,7 +105,8 @@ class DataQualityService:
         1. Convert dataset to a time-ordered list of values (by year).
         2. Detect missing years in the expected range (min_year to max_year).
         3. Fill missing values via linear interpolation for outlier/diagnostic tests.
-        4. Run homogeneity test (СП 33-101-2003, Приложение А).
+        4. Run homogeneity test (historical critical values; conformance to
+           СП 529.1325800.2023 tables A.1-A.14 is NOT asserted).
         5. Run stationarity test (placeholder: Augmented Dickey-Fuller, p-value < 0.05 -> stationary).
         6. Detect outliers using Dixon's criteria (from homogeneity module).
         7. Compute basic statistics (mean, std, min, max).
@@ -276,7 +277,7 @@ class DataQualityService:
             issues.append(
                 ValidationIssue(
                     code="DATA_HOMOGENEITY_FAILED",
-                    message="Ряд не прошёл проверку однородности (СП 33-101-2003, Приложение А).",
+                    message="Ряд не прошёл проверку однородности (исторические критические значения; соответствие таблицам А.1–А.14 СП 529.1325800.2023 не утверждается).",
                     severity=ValidationSeverity.ERROR,
                     field="data",
                     details={

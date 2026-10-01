@@ -18,6 +18,10 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover - только для аннотаций
+    import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -72,13 +76,95 @@ def load_dataset(path: str | None, post: str | None) -> Dataset:
     if path_object.suffix.lower() == ".json":
         return _load_json_dataset(path_object)
 
-    from core.stats.sheet_reader import read_hydro_data
+    # Импортируется лениво: sheet_reader тянет pandas/xlrd и нужен только здесь.
+    # Раньше здесь стояло `from core.stats.sheet_reader import read_hydro_data` -
+    # функции с таким именем в модуле нет, и путь --file падал с ImportError.
+    import pandas as pd
 
-    data, _ = read_hydro_data(path, post or None)
+    from core.stats.sheet_reader import numeric_column, read_work_sheet
+
+    # Без --post берём первый лист: find_sheet с пустым списком ключей
+    # возвращает None, и read_work_sheet отдаёт пустой DataFrame.
+    sheet_keywords = [post] if post else []
+    frame = read_work_sheet(path, sheet_keywords, use_columns=True)
+    if frame is None or frame.empty:
+        if post:
+            # Перечисляем реальные листы, а не отсылаем к несуществующему флагу.
+            try:
+                # with, а не pd.ExcelFile(path).sheet_names: книга держит
+                # открытый дескриптор, и без закрытия файл нельзя удалить сразу
+                # после чтения (важно на Windows).
+                with pd.ExcelFile(path) as probe:
+                    available = ", ".join(probe.sheet_names)
+            except Exception:  # noqa: BLE001 - файл может быть не Excel
+                available = "не удалось прочитать"
+            raise SystemExit(
+                f"В файле {path} не найден лист «{post}». "
+                f"Доступные листы: {available}. "
+                f"Либо запускайте без --post, чтобы взять первый лист."
+            )
+        # Имя первого листа узнаём через закрываемую книгу, а не через временный
+        # pd.ExcelFile(...).sheet_names[0], который оставался открытым.
+        with pd.ExcelFile(path) as probe:
+            first_sheet = probe.sheet_names[0]
+        frame = read_work_sheet(path, [first_sheet], use_columns=True)
+    if frame is None or frame.empty:
+        raise SystemExit(f"В файле {path} не найдено данных")
+
+    year_column = _find_year_column(frame)
+    values = numeric_column(frame)
+
+    if year_column is not None:
+        years = pd.to_numeric(frame[year_column], errors="coerce")
+    else:
+        # Года может не быть отдельной колонкой: при чтении с skiprows он
+        # становится индексом. Но индекс 0..N — это НЕ годы. Без проверки
+        # диапазона молча получались бы годы 0,1,2,... и статистика по мусору,
+        # поэтому год обязан выглядеть как год, иначе отказ.
+        years = pd.to_numeric(pd.Series(frame.index), errors="coerce")
+        plausible = years.dropna()
+        looks_like_years = (
+            len(plausible) > 0
+            and bool(((plausible >= 1850) & (plausible <= 2100)).all())
+        )
+        if not looks_like_years:
+            raise SystemExit(
+                f"В файле {path} не найден год: нет ни колонки «год»/«year», ни "
+                f"года в первой колонке (индекс выглядит как {list(years.head(3))}). "
+                f"Добавьте столбец с годами или укажите --post с именем листа."
+            )
+
+    if values is None:
+        raise SystemExit(f"В файле {path} не найден числовой столбец со значениями")
+
+    # numeric_column в первом проходе возвращает dropna()-серию, то есть она
+    # может быть короче years. Молчаливый zip тогда спарил бы 1990-й год со
+    # вторым значением ряда. Проверяем длины и отказываем, а не подгоняем.
+    if len(values) != len(years):
+        raise SystemExit(
+            f"В файле {path} столбец значений и столбец лет расходятся по длине "
+            f"({len(values)} и {len(years)}) - вероятно, в значениях есть пропуски. "
+            f"Уберите пропуски или укажите другой столбец значений."
+        )
+
+    data = {
+        int(year): float(value)
+        for year, value in zip(years, values, strict=True)
+        if pd.notna(year) and pd.notna(value)
+    }
     if not data:
-        raise SystemExit(f"В файле {path} не найдено данных для поста «{post or '(первый)'}»")
+        raise SystemExit(f"В файле {path} не удалось прочитать ни одного значения")
     name = post or path_object.stem
     return Dataset(name=name, data=data, dataset_type=DatasetType.OBSERVED)
+
+
+def _find_year_column(frame: pd.DataFrame) -> str | None:
+    """Найти столбец с годом по его имени."""
+    for col in frame.columns:
+        cleaned = str(col).strip().lower()
+        if "год" in cleaned or "year" in cleaned:
+            return col
+    return None
 
 
 def demo_dataset() -> Dataset:

@@ -96,6 +96,16 @@ def build_gts_frequency_curve(
     cv = params['corrected_cv'] if use_corrected else params['cv']
     cs = params['corrected_cs'] if use_corrected else params['cs']
 
+    # При Cs/Cv < 2 поправки (5.6) и (5.7) не применяются: п. 5.6 требует для
+    # Крицкого-Менкеля коэффициенты a1...a6 и b1...b6 из [4], которого нет в
+    # СП 33. Расчётные точки ГТС берутся из этой же кривой, поэтому признаки
+    # должны дойти до результата вместе с ней.
+    cs_correction_applied = bool(params.get('cs_correction_applied', True))
+    cv_correction_applied = bool(params.get('cv_correction_applied', True))
+    bias_coefficients_applicable = bool(
+        params.get('bias_coefficients_applicable', True)
+    )
+
     gts_info = get_gts_points(gts_class)
 
     all_probs = get_standard_probabilities(gts_class)
@@ -159,7 +169,19 @@ def build_gts_frequency_curve(
         'gts_description': gts_info['description'],
         'stats': {
             'mean': mean, 'Cv': cv, 'Cs': cs, 'n': params['n']
-        }
+        },
+        # Нормативные признаки. Расчётные точки ГТС — производные от этой же
+        # кривой, поэтому при Cs/Cv < 2 они, как и кривая, посчитаны по
+        # несмещенным Cv и Cs: обе поправки не применены.
+        'cs_correction_applied': cs_correction_applied,
+        'cv_correction_applied': cv_correction_applied,
+        'bias_coefficients_applicable': bias_coefficients_applicable,
+        'normativity_note': (
+            "п. 5.6/Б.1: поправки (5.6) и (5.7) применены"
+            if cs_correction_applied and cv_correction_applied else
+            "п. 5.6: Cs/Cv < 2, поправки (5.6) и (5.7) НЕ ПРИМЕНЕНЫ — требуются "
+            "коэффициенты из [4], вне СП 33; точки ГТС по несмещенным Cv и Cs"
+        ),
     }
 
 

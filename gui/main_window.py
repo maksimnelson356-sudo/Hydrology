@@ -1527,6 +1527,11 @@ class MainWindow(QMainWindow):
 
     def load_data_from_path(self, filepath):
         """Загрузить данные из указанного файла (без диалога). Возвращает True при успехе."""
+        # Книга открывается в try, а закрывается в finally. Без закрытия
+        # pd.ExcelFile держит файловый дескриптор до сборки мусора, и на Windows
+        # загруженный .xlsx остаётся занятым. xls = None нужен для того, чтобы
+        # finally был безопасен, если само открытие упадёт.
+        xls = None
         try:
             loaded = []
             xls = pd.ExcelFile(filepath)
@@ -1579,6 +1584,9 @@ class MainWindow(QMainWindow):
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка загрузки", str(e))
             return False
+        finally:
+            if xls is not None:
+                xls.close()
 
     def _parse_main_posts(self, xls, loaded):
         """Распарсить основной лист с постами (шаблон или плоский файл)."""

@@ -260,3 +260,112 @@ def test_staged_series_extension_cli_forwards_the_evidence_status(monkeypatch, t
     assert container.calculation.parameters["evidence_status"] == "partial", (
         "статус доказательности не дошёл до параметров расчёта"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Регрессия: путь --file для Excel был сломан
+#
+# load_dataset импортировал read_hydro_data из core.stats.sheet_reader, а
+# функции с таким именем в модуле нет. Импорт ленивый, поэтому --list и
+# --demo работали, а --file падал с ImportError. README документирует
+# именно этот путь. Тесты покрывали только JSON, поэтому баг дожил до main.
+# ─────────────────────────────────────────────────────────────────────────
+
+_VALUES = [110.5, 117.8, 74.5, 98.6, 110.1, 113.5, 106.5, 115.0, 102.9, 105.5,
+           101.8, 89.3, 91.5, 103.8, 94.2, 112.7, 112.9, 118.0, 99.7, 113.8]
+_YEARS = list(range(1990, 1990 + len(_VALUES)))
+
+
+def _xlsx(path, sheets: dict[str, object]) -> str:
+    import pandas as pd
+
+    with pd.ExcelWriter(path) as writer:
+        for name, frame in sheets.items():
+            frame.to_excel(writer, sheet_name=name, index=False)
+    return str(path)
+
+
+def test_excel_with_year_column_loads(tmp_path):
+    """Основной случай: год отдельной колонкой."""
+    import pandas as pd
+
+    path = _xlsx(tmp_path / "plain.xlsx",
+                 {"Sheet1": pd.DataFrame({"Год": _YEARS, "Расход": _VALUES})})
+
+    dataset = cli.load_dataset(path, None)
+
+    assert len(dataset.data) == len(_VALUES)
+    assert min(dataset.data) == _YEARS[0]
+    assert max(dataset.data) == _YEARS[-1]
+
+
+def test_excel_without_year_is_refused_not_faked(tmp_path):
+    """Индекс 0..N - это не годы.
+
+    Без проверки диапазона молча получались бы годы 0,1,2,..., и статистика
+    считалась бы по мусору. Проверка диапазона добавлена именно поэтому.
+    """
+    import pandas as pd
+
+    path = _xlsx(tmp_path / "no_year.xlsx",
+                 {"Пост 1": pd.DataFrame({"Пост 1": _VALUES})})
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.load_dataset(path, "Пост 1")
+
+    assert "не найден год" in str(excinfo.value)
+
+
+def test_excel_sheet_named_by_post_still_needs_a_year(tmp_path):
+    """Лист по --post находится, но без года чтение всё равно отказывает.
+
+    Имя намеренно не «loads»: проверяет отказ, а не успешное чтение.
+    """
+    import pandas as pd
+
+    path = _xlsx(tmp_path / "named.xlsx",
+                 {"Пост 1": pd.DataFrame({"Расход": _VALUES})})
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.load_dataset(path, "Пост 1")
+    assert "не найден год" in str(excinfo.value)
+
+
+def test_excel_unknown_post_names_available_sheets(tmp_path):
+    import pandas as pd
+
+    path = _xlsx(tmp_path / "sheets.xlsx",
+                 {"Данные": pd.DataFrame({"Год": _YEARS, "Расход": _VALUES})})
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.load_dataset(path, "НетТакогоЛиста")
+
+    message = str(excinfo.value)
+    assert "НетТакогоЛиста" in message
+    # Перечисляются реальные листы. Раньше здесь предлагалась команда
+    # --list-sheets, которой в CLI нет, - то есть сообщение уводило в никуда.
+    assert "Данные" in message
+    assert "--list-sheets" not in message
+
+
+def test_excel_with_title_rows_before_header(tmp_path):
+    """Книги МДС начинаются с титульных строк; заголовок ищется под ними."""
+    import pandas as pd
+
+    path = tmp_path / "with_title.xlsx"
+    with pd.ExcelWriter(path) as writer:
+        pd.DataFrame([
+            ["ФЕДЕРАЛЬНАЯ СЛУЖБА ГИДРОМЕТЕОРОЛОГИИ"],
+            [],
+            ["Таблица 1 - расходы воды, м3/с"],
+            [],
+            ["Пост 1 - д. Горелуха"],
+            [],
+        ]).to_excel(writer, sheet_name="Данные", index=False, header=False)
+        pd.DataFrame({"Год": _YEARS, "Расход": _VALUES}).to_excel(
+            writer, sheet_name="Данные", index=False, startrow=6)
+
+    dataset = cli.load_dataset(str(path), None)
+
+    assert len(dataset.data) == len(_VALUES)
+    assert min(dataset.data) == _YEARS[0]

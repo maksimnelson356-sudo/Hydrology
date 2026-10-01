@@ -122,18 +122,37 @@ def test_cr2_kritsky_menkel_median_near_mean_for_cs_negative():
     assert abs(float(q[0]) - 100.0) < 8.0, f'Медиана далеко от среднего: {q[0]}'
 
 
-def test_cr2_kritsky_menkel_positive_cs_preserved():
-    """CR-2: поведение для Cs>0 не должно измениться (сохранение результатов)."""
+def test_cr2_kritsky_menkel_positive_cs_uses_normative_table():
+    """CR-2: при Cs>0 кривая берётся из нормативной таблицы, а не из гаммы.
+
+    ИСТОРИЯ ЭТОЙ ПРОВЕРКИ. Прежде здесь стояло
+    test_cr2_kritsky_menkel_positive_cs_preserved, и оно требовало совпадения с
+    формулой A0 + Gamma(1-p) при rtol=1e-9, то есть закрепляло моментентную
+    параметризацию как эталон «неизменного поведения». Эталон оказался неверным:
+    расхождение с первоисточником достигало 0,36 % в теле кривой, а в хвостах
+    квантили обрезались в ноль. Эталон заменён на таблицу ординат, которая и
+    является первоисточником (Прил. 2, табл. 3 [5]).
+
+    Само требование «поведение для Cs>0 не изменилось» было некорректным: перед
+    правкой не изменить его было нельзя, не оставив в коде доказанный дефект.
+    """
+    from core.stats.kritsky_tables import PROBS, get_ordinates
+
     probs = np.array([0.01, 0.05, 0.5, 0.95])
-    # Эталон: текущая (рабочая) ветка Cs>0 — гамма с q=1-p
+    mean = 100.0
+    table_p = np.asarray(PROBS, dtype=float) * 100.0
+
     for cv, cs in ((0.2, 0.5), (0.3, 1.0)):
-        mean = 100.0
-        alpha = 4.0 / cs ** 2
-        beta = mean * cv * cs / 2.0
-        a0 = mean * (1.0 - 2.0 * cv / cs)
-        expected = a0 + stats.gamma.ppf(1 - probs, a=alpha, scale=beta)
+        idx = np.argmin(np.abs(table_p[:, None] - probs[None, :] * 100.0), axis=0)
+        kp = np.asarray(get_ordinates(cs / cv, cv), dtype=float)
+        expected = mean * kp[idx]
+
         got = kritsky_menkel_ppf(probs, mean=mean, cv=cv, cs=cs)
-        np.testing.assert_allclose(got, expected, rtol=1e-9)
+        np.testing.assert_allclose(got, expected, rtol=1e-9, atol=0.0)
+
+        # Дубликат был бы бессмысленен: таблица не может совпасть с гаммой
+        # всюду, иначе расхождение в хвостах было бы нечего было исправлять.
+        assert np.all(got > 0.0), f'cv={cv}, cs={cs}: отрицательные квантили'
 
 
 # ============================================================

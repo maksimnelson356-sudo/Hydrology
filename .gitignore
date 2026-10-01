@@ -20,6 +20,14 @@ venv/
 installer_output/
 *.spec
 
+# --- покрытие и отчёты о тестах ---
+# Появилось вместе с прогонами coverage при поиске непокрытых путей.
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+coverage.xml
+
 # --- OpenCode / local artifacts ---
 .omo/
 .opencode/
@@ -28,3 +36,9 @@ _independent_validation.py
 TOOL_TEST.md
 _file_inventory.json
 generate_file_inventory.py
+
+# --- печатные экземпляры нормативных документов ---
+# Служат рабочим первоисточником для сверки, но не принадлежат репозиторию:
+# это крупные бинарники без ценности для сборки. Проверенные по ним числа
+# зафиксированы в DOCS/normative_verification_matrix.md.
+DOCS/Официальные документы/
