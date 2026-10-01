@@ -412,3 +412,139 @@ def inspect_doc(func) -> str:
     import inspect
 
     return inspect.getdoc(func) or ""
+
+
+# ----------------------------------------------------------------------
+# G. Контракт входных расходов: отрицательные недопустимы, нулевые допустимы
+# ----------------------------------------------------------------------
+NEGATIVE_SERIES = [
+    pytest.param(np.array([-5.0, 20.0, 30.0]), id="one_negative"),
+    pytest.param(np.array([-5.0, -3.0, 20.0, 30.0, 40.0]), id="several_negative"),
+]
+
+
+@pytest.mark.parametrize("q", NEGATIVE_SERIES)
+def test_negative_flows_are_rejected(q) -> None:
+    """Отдельный отрицательный расход физически недопустим и должен отклоняться.
+
+    Контракт проекта закреплён в core/hydrorash: backwater.py и max_runoff.py
+    отклоняют Q <= 0. Здесь проверяется знак < 0, потому что Q == 0 —
+    допустимое значение (см. следующий тест).
+
+    Среднее в обоих рядах положительно, поэтому отказ нельзя объяснить
+    проверкой среднего: нужна именно проверка отдельных элементов.
+
+    ПОСИТОЧНО ЗАЯВЛЕНИЕ О ТОМ, КАКАЯ ИМЕННО ПРОВЕРКА СРАБОТАЛА. Обход
+    входной валидации не проходит: post-check ниже тоже упоминает
+    отрицательные расходы, поэтому match по общему слову «отрицательн»
+    удовлетворялся бы и его сообщению. Здесь требуется уникальная формулировка
+    входной проверки и наличие в тексте минимума ряда — post-check минимум
+    не сообщает.
+    """
+    assert q.mean() > 0, "ряд должен иметь положительное среднее, иначе причина отказа неоднозначна"
+
+    with pytest.raises(ValueError, match="не могут быть отрицательными") as excinfo:
+        storage_yield_curve(q, V_range_km3=[0.05], target_guarantee=95.0)
+
+    assert f"{q.min():.6g}" in str(excinfo.value), (
+        f"сообщение должно называть минимум ряда {q.min():.6g} м³/с; "
+        f"получено: {excinfo.value}"
+    )
+
+
+@pytest.mark.parametrize(
+    "q, expected",
+    [
+        pytest.param(np.array([0.0, 20.0, 30.0]), 1.58, id="one_zero"),
+        pytest.param(np.array([0.0, 0.0, 20.0, 30.0]), 0.79, id="two_zeros"),
+    ],
+)
+def test_zero_flows_remain_admissible(q, expected) -> None:
+    """Q == 0 допустим: река может иметь нулевой сток.
+
+    Ключевая проверка знака: если бы валидация читалась как Q <= 0, оба
+    случая падали бы с ValueError. Поэтому тест обязан ЗАФИКСИРОВАТЬ
+    числовой результат, а не просто отсутствие исключения.
+    """
+    frame = storage_yield_curve(q, V_range_km3=[0.05], target_guarantee=95.0)
+
+    assert float(frame["Q_max_demand"].iloc[0]) == pytest.approx(expected, abs=0.011)
+    assert float(frame["achieved_guarantee"].iloc[0]) == pytest.approx(100.0)
+
+
+@pytest.mark.parametrize(
+    "q",
+    [
+        pytest.param(np.array([-10.0, 5.0]), id="negative_mean"),
+        pytest.param(np.array([0.0, 0.0, 0.0]), id="zero_mean"),
+    ],
+)
+def test_non_positive_mean_still_raises(q) -> None:
+    """Прежний отказ по неположительному среднему сохранён.
+
+    Проверка NegativeFlow идёт раньше, поэтому для [-10, 5] сообщение теперь
+    про отрицательный расход, а не про среднее. Оба отказа — ValueError,
+    и тест намеренно не привязан к тексту сообщения: проверка среднего как
+    отдельного контракта проверяется случаем с нулевым средним.
+    """
+    with pytest.raises(ValueError):
+        storage_yield_curve(q, V_range_km3=[0.05], target_guarantee=95.0)
+
+
+def test_published_rows_always_meet_the_target() -> None:
+    """Каждая опубликованная строка обязана достигать целевой гарантии.
+
+    Действующий инвариант функции: возвращаемое DataFrame не содержит
+    строки, где достигнутый процент ниже запрошенного. Раньше при
+    недостижимой цели публиковалась строка с отдачей 0 и achieved_guarantee
+    ниже target; теперь такой путь закрыт отказом.
+
+    Oracle — собственная функция _simulate, а не production-хелпер.
+    Ряды длиной от 3 лет, чтобы проценты были различными и дискретными.
+    """
+    rng = np.random.default_rng(20261001)
+    checked = 0
+
+    for _ in range(40):
+        n = int(rng.integers(3, 14))
+        # Только неотрицательные расходы: отрицательные теперь отклоняются.
+        q = np.round(rng.uniform(0.0, 100.0, n), 4)
+        if q.mean() <= 0:
+            continue
+        target = float(rng.choice([50.0, 75.0, 90.0, 95.0, 100.0]))
+        volumes = [0.0, 0.05, 0.5, 5.0]
+
+        frame = storage_yield_curve(q, V_range_km3=volumes, target_guarantee=target)
+        assert len(frame) == len(volumes)
+
+        for _, row in frame.iterrows():
+            guarantee, _deficit, _empty, _unmet = _simulate(
+                q, float(row["Q_max_demand"]), float(row["V_km3"]) * 1e9
+            )
+            checked += 1
+            assert guarantee >= target - 1e-9, (
+                f"при V = {row['V_km3']} км³ опубликована отдача "
+                f"{row['Q_max_demand']} при гарантии {guarantee:.2f} % < "
+                f"цели {target} %"
+            )
+
+    assert checked >= 100, f"проверено слишком мало строк: {checked}"
+
+
+def test_zero_demand_can_be_a_correct_published_answer() -> None:
+    """Отдача 0 — легитимный результат, а не признак ошибки.
+
+    При V = 0 и требовании 100 % отдача ограничена min(Q) = 0.004 м³/с,
+    а округление вниз до сотых даёт ровно 0. Гарантия при этом 100 %:
+    ненулевой спрос действительно невозможен. Тест защищает от двух
+    ошибок: наивного «D == 0 значит сбой» и валидации Q <= 0.
+    """
+    q = np.array([0.004, 50.0, 50.0, 50.0])
+
+    frame = storage_yield_curve(q, V_range_km3=[0.0], target_guarantee=100.0)
+
+    assert float(frame["Q_max_demand"].iloc[0]) == 0.0
+    assert float(frame["achieved_guarantee"].iloc[0]) == pytest.approx(100.0)
+    # Отличать отказ от корректного нуля: у по-настоящему сломанного входа
+    # сообщение про отрицательные расходы, а не про достигнутую гарантию.
+    assert float(frame["deficit_years"].iloc[0]) == 0
