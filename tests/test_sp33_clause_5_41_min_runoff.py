@@ -841,3 +841,237 @@ def test_sliding_window_itself_is_unchanged() -> None:
     values = np.arange(10, dtype=float)
     expected = min(float(values[i:i + 4].mean()) for i in range(len(values) - 3))
     assert mre._sliding_window_min_mean(values, 4) == pytest.approx(expected)
+
+
+# --------------------------------------------------------------------------
+# Порядок входных строк
+#
+# Основание: п. 2.33 Пособия 1984, с. 31 — 30-суточные расходы берутся «за
+# 30 сут с наименьшим стоком», то есть за ПОДРЯД ИДУЩИЕ календарные сутки.
+# Окно строится по соседним строкам (np.convolve), поэтому перестановка строк
+# меняла найденное окно при неизменном наборе суток: расхождение до 5.53 м³/с
+# на одном и том же ряде. Набор дней от перестановки не меняется, поэтому и
+# минимальный средний расход меняться не должен.
+# --------------------------------------------------------------------------
+
+
+def _order_sensitive_frame() -> pd.DataFrame:
+    """Суточный ряд 2000-01-01 … 2003-12-31 с убывающим внутрисезонным градиентом.
+
+    Градиент делает порядок строк значимым: при перестановке «30 соседних
+    строк» перестают быть 30 соседними сутками. Месяцы вне зимнего сезона
+    (IV, V, IX, X) подняты в 60,0, чтобы окно не могло «съехать» на них.
+    """
+    dates = pd.date_range("2000-01-01", "2003-12-31", freq="D")
+    values = np.linspace(40.0, 2.0, len(dates))
+    values[np.isin(np.asarray(dates.month), [4, 5, 9, 10])] = 60.0
+    return pd.DataFrame(
+        {"year": dates.year, "month": dates.month, "value": values},
+        index=pd.DatetimeIndex(dates),
+    )
+
+
+@pytest.mark.parametrize("seed", [1, 42, 2026, 7, 99])
+def test_result_is_independent_of_input_row_order(seed) -> None:
+    """Перестановка тех же строк не должна менять минимальный 30-суточный расход."""
+    frame = _order_sensitive_frame()
+    reference = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    assert sorted(reference.index) == [2001, 2002, 2003]
+
+    shuffled = frame.sample(frac=1.0, random_state=seed)
+    assert len(shuffled) == len(frame), "набор строк должен быть тем же"
+
+    got = mre.extract_min_annual(
+        shuffled, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    assert got.to_dict() == reference.to_dict(), (
+        f"порядок строк изменил результат (seed={seed}): "
+        f"{got.to_dict()} != {reference.to_dict()}"
+    )
+
+
+def test_shuffled_input_window_matches_calendar_consecutive_days() -> None:
+    """Найденное окно совпадает с минимумом по подряд идущим календарным суткам.
+
+    Ожидаемое значение вычисляется независимо: сезонные месяцы каждого цикла
+    отбираются, сортируются по дате и перебираются все окна длиной 30 суток.
+    Так утверждается буквальное требование п. 2.33 — «за 30 сут с наименьшим
+    стоком», то есть за ПОДРЯД ИДУЩИЕ календарные сутки, а не соседние строки
+    входной таблицы.
+    """
+    frame = _order_sensitive_frame()
+    shuffled = frame.sample(frac=1.0, random_state=42)
+
+    for season, months in (
+        ("winter", (11, 12, 1, 2, 3)),
+        ("summer", (6, 7, 8, 9, 10)),
+    ):
+        got = mre.extract_min_annual(
+            shuffled, year_col="year", value_col="value",
+            period_days=30, season=season,
+        )
+
+        reference = frame.copy()
+        reference["_cyc"] = reference["year"] + (reference["month"] >= 4).astype(int)
+        checked = 0
+        for label, group in reference.groupby("_cyc"):
+            if not set(months).issubset(set(group["month"].unique())):
+                continue
+            sub = group[group["month"].isin(months)].sort_index()
+            vals = sub["value"].to_numpy(dtype=float)
+            if len(vals) < 30:
+                continue
+            expected = min(float(vals[i:i + 30].mean()) for i in range(len(vals) - 29))
+            assert float(got.loc[label]) == pytest.approx(expected), (
+                f"{season}, цикл {label}: получено {got.loc[label]}, "
+                f"минимум по календарным суткам {expected}"
+            )
+            checked += 1
+        assert checked >= 2, f"{season}: проверено слишком мало циклов ({checked})"
+
+
+def test_month_only_input_still_finds_cross_year_window() -> None:
+    """Без временного индекса сортировка не должна разрушать переход 31 декабря.
+
+    Ось защиты: ключ сортировки обязан быть хронологическим. Сортировка по
+    одному месяцу поставила бы январь раньше декабря и разорвала бы окно
+    через Новый год.
+    """
+    df = _q2_frame(SPELL_CROSS_YEAR).reset_index(drop=True)
+    assert not hasattr(df.index, "month"), "индекс должен быть RangeIndex"
+    got = mre.extract_min_annual(
+        df, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    # 22.12.2000-20.01.2001 = (20*5 + 10*30)/30 — те же 13.3333..., что и
+    # при DatetimeIndex: порядок месяцев внутри цикла остаётся XI, XII, I, II, III.
+    assert float(got.loc[2001]) == pytest.approx(13.333333333333334)
+
+
+def test_extraction_does_not_mutate_caller_frame() -> None:
+    """Вызывающий DataFrame не должен изменяться."""
+    frame = _order_sensitive_frame()
+    before = frame.copy()
+
+    shuffled = frame.sample(frac=1.0, random_state=42)
+    snapshot = shuffled.copy()
+    mre.extract_min_annual(
+        shuffled, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    pd.testing.assert_frame_equal(shuffled, snapshot)
+    pd.testing.assert_frame_equal(frame, before)
+
+
+# --------------------------------------------------------------------------
+# Тип индекса не должен влиять на хронологический порядок
+#
+# Ревизия выявила, что DatetimeIndex — не единственный носитель календарной
+# даты. PeriodIndex и object-индекс из datetime/date/Timestamp тоже её несут,
+# но прежняя проверка isinstance(..., pd.DatetimeIndex) их не узнавала:
+#   - PeriodIndex попадал в ветку «только месяц», и сутки внутри месяца
+#     оставались в случайном порядке — 30-суточное окно переставало быть
+#     окном подряд идущих календарных суток;
+#   - object-индекс из дат не давал month_col вовсе, поэтому season="winter"
+#     молча превращался в годовой минимум.
+# ---------------------------------------------------------------------------
+
+
+def _cross_year_frame(index_factory) -> pd.DataFrame:
+    """2000-01-01 … 2003-12-31; 22.12.2000-10.01.2001 = 5 м³/с, остальное 30.
+
+    Индекс строится через index_factory, чтобы один и тот же ряд проверить
+    с разными типами индекса.
+    """
+    dates = pd.date_range("2000-01-01", "2003-12-31", freq="D")
+    values = np.full(len(dates), 30.0)
+    values[(dates >= "2000-12-22") & (dates <= "2001-01-10")] = 5.0
+    frame = pd.DataFrame({"year": dates.year, "month": dates.month, "value": values})
+    frame.index = index_factory(dates)
+    return frame
+
+
+INDEX_FACTORIES = {
+    "datetime": pd.DatetimeIndex,
+    "period": lambda d: pd.PeriodIndex(d, freq="D"),
+    "object_timestamp": lambda d: pd.Index(list(d), dtype=object),
+}
+
+
+@pytest.mark.parametrize("kind", sorted(INDEX_FACTORIES))
+def test_calendar_index_type_does_not_change_result(kind: str) -> None:
+    """Любой индекс с календарной датой даёт тот же календарный минимум."""
+    frame = _cross_year_frame(INDEX_FACTORIES[kind])
+    reference = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    # 22.12.2000-20.01.2001 = (20*5 + 10*30)/30 — окно через 31 декабря.
+    assert float(reference.loc[2001]) == pytest.approx(13.333333333333334)
+
+    shuffled = frame.sample(frac=1.0, random_state=42)
+    got = mre.extract_min_annual(
+        shuffled, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    assert got.to_dict() == reference.to_dict(), (
+        f"тип индекса {kind}: порядок строк изменил результат "
+        f"{got.to_dict()} != {reference.to_dict()}"
+    )
+
+
+@pytest.mark.parametrize("kind", sorted(INDEX_FACTORIES))
+def test_calendar_index_keeps_season_filter_active(kind: str) -> None:
+    """season='winter' обязан фильтровать по сезону при любом типе индекса.
+
+    Защита от регрессии, при которой зимний запрос молча превращается в
+    годовой: вне сезона (IV, V, IX, X) стоят 60,0, поэтому годовой минимум
+    заметно отличается от зимнего.
+    """
+    frame = _cross_year_frame(INDEX_FACTORIES[kind])
+    frame.loc[frame["month"].isin([4, 5, 9, 10]), "value"] = 60.0
+
+    winter = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    annual = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="annual"
+    )
+    assert float(winter.loc[2001]) == pytest.approx(13.333333333333334)
+    assert float(annual.loc[2001]) > float(winter.loc[2001]), (
+        "сезонный отбор не изменил результат — фильтр не применился"
+    )
+
+
+@pytest.mark.parametrize("kind", sorted(INDEX_FACTORIES))
+def test_calendar_index_does_not_mutate_caller_frame(kind: str) -> None:
+    """Приведение индекса к временной шкале не мутирует кадр вызывающего."""
+    frame = _cross_year_frame(INDEX_FACTORIES[kind])
+    shuffled = frame.sample(frac=1.0, random_state=7)
+    before = shuffled.copy()
+    index_before = shuffled.index.copy()
+
+    mre.extract_min_annual(
+        shuffled, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    pd.testing.assert_frame_equal(shuffled, before)
+    assert shuffled.index.equals(index_before), "индекс вызывающего изменился"
+    assert type(shuffled.index) is type(index_before), "тип индекса изменился"
+
+
+def test_non_calendar_index_is_not_silently_converted() -> None:
+    """Неоднозначный индекс не приводится к дате молча.
+
+    Строковый, целочисленный и смешанный индексы календарную дату не несут,
+    поэтому функция не должна пытаться их разбирать: для них остаётся
+    позиция месяца внутри цикла, что для месячного разрешения достаточно.
+    """
+    frame = _cross_year_frame(lambda d: pd.Index([str(x.date()) for x in d]))
+    assert mre._calendar_order_key(frame.index) is None
+
+    assert mre._calendar_order_key(pd.RangeIndex(5)) is None
+    assert mre._calendar_order_key(pd.Index([1, 2, 3])) is None
+    assert mre._calendar_order_key(pd.Index([None, "2000-01-02"])) is None
+
+    for kind in INDEX_FACTORIES:
+        key = mre._calendar_order_key(_cross_year_frame(INDEX_FACTORIES[kind]).index)
+        assert key is not None, f"{kind}: календарный индекс должен давать ключ"
+        assert len(key) == 1461

@@ -101,6 +101,35 @@ from core.stats.parameters import MAX_MIN_RELATIVE_RMS_ERROR_LIMIT
 from .utils import compute_basic_stats, kritsky_menkel_quantiles
 
 
+# Типы индекса, которые несут календарную дату. inferred_type — собственная
+# классификация pandas: 'datetime64' (DatetimeIndex), 'period' (PeriodIndex),
+# 'datetime' (object-индекс из Timestamp), 'date' (object-индекс из date).
+# Строки, числа и смешанные значения ('string', 'integer', 'mixed') сюда не
+# попадают, поэтому неоднозначный вход молча не приводится к дате.
+_CALENDAR_INFERRED_TYPES = frozenset({"datetime64", "period", "datetime", "date"})
+
+
+def _calendar_order_key(index: pd.Index) -> np.ndarray | None:
+    """Хронологический ключ по полной календарной дате.
+
+    Единая временная шкала для упорядочивания строк перед построением окна,
+    независимо от конкретного типа индекса. None — индекс календарную дату не
+    несёт, и порядок суток восстановить нельзя.
+
+    PeriodIndex приводится к началу своего периода: при суточной частоте это
+    точная дата, при месячной все дни месяца дают одну отметку, и порядок
+    внутри месяца сохраняется устойчивой сортировкой.
+    """
+    if getattr(index, "inferred_type", None) not in _CALENDAR_INFERRED_TYPES:
+        return None
+    try:
+        if isinstance(index, pd.PeriodIndex):
+            return index.to_timestamp().to_numpy()
+        return pd.DatetimeIndex(index).to_numpy()
+    except (ValueError, TypeError):
+        return None
+
+
 def extract_min_annual(
     daily_df: pd.DataFrame,
     year_col: str = 'year',
@@ -280,6 +309,22 @@ def extract_min_annual(
 
         if len(year_data) < period_days:
             continue
+
+        # Порядок строк обязан быть хронологическим: окно скользящее и строится
+        # по соседним строкам (np.convolve), поэтому перестановка входа меняла
+        # найденное окно при неизменном наборе суток. Ключ сортировки — полная
+        # календарная дата, если индекс её несёт (DatetimeIndex, PeriodIndex,
+        # object-индекс из дат); это сохраняет переход через 31 декабря.
+        # Если даты нет, остаётся позиция месяца внутри цикла апр–мар
+        # (апрель = 0 … март = 11) — этого достаточно, чтобы установить порядок
+        # месяцев, но не суток внутри них. Сортировка устойчивая; исходный
+        # DataFrame вызывающего не изменяется.
+        order_key = _calendar_order_key(year_data.index)
+        if order_key is not None:
+            year_data = year_data.iloc[np.argsort(order_key, kind="stable")]
+        elif month_col is not None:
+            month_pos = (pd.to_numeric(year_data[month_col]).to_numpy() - 4) % 12
+            year_data = year_data.iloc[np.argsort(month_pos, kind="stable")]
 
         values = year_data[value_col].values
         min_avg = _sliding_window_min_mean(values, period_days)

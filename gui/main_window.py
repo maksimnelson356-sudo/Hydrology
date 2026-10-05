@@ -944,7 +944,6 @@ class MainWindow(QMainWindow):
         variant_layout.addWidget(self.btn_show_all)
         variant_layout.addWidget(self.btn_clear_variants)
         variant_layout.addStretch()
-        layout.addLayout(variant_layout)
 
         # Таблица сохранённых вариантов
         self.variant_table = QTableWidget()
@@ -954,7 +953,6 @@ class MainWindow(QMainWindow):
         self.variant_table.setMaximumHeight(120)
         self.variant_table.setVisible(False)
         auto_resize_table(self.variant_table)
-        layout.addWidget(self.variant_table)
 
         # Хранилище вариантов
         self._saved_variants = []
@@ -975,7 +973,6 @@ class MainWindow(QMainWindow):
         csv_layout.addWidget(self.btn_auto_cs_cv)
         csv_layout.addWidget(self.btn_add_extreme)
         csv_layout.addStretch()
-        layout.addLayout(csv_layout)
 
         # Текст результатов подбора Cs/Cv
         self.cs_cv_text = QTextEdit()
@@ -983,7 +980,6 @@ class MainWindow(QMainWindow):
         self.cs_cv_text.setMaximumHeight(100)
         self.cs_cv_text.setFont(QFont('Consolas', 9))
         self.cs_cv_text.setVisible(False)
-        layout.addWidget(self.cs_cv_text)
 
         # Хранилище исторических экстремумов
         self._historical_extremes = []
@@ -3062,7 +3058,7 @@ class MainWindow(QMainWindow):
             path, _ = QFileDialog.getSaveFileName(
                 self, "Сохранить шаблон",
                 "unified_template.xlsx",
-                "Excel files (*.xlsx);;All files (*)"
+                "Файлы Excel (*.xlsx);;Все файлы (*)"
             )
             if not path:
                 return

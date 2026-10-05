@@ -219,7 +219,7 @@ class MethodologyTab(QWidget):
 
             demand, ok = QInputDialog.getDouble(
                 self,
-                "reservoir_regulation",
+                "Потребность в воде для водохранилища",
                 "Потребность в воде, м³/с (demand_m3_s):",
                 value=50.0,
                 min=0.0,
