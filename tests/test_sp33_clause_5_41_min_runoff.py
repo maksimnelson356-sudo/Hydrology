@@ -375,17 +375,40 @@ def test_code_only_actually_strips_prose() -> None:
 
 
 def test_module_still_extracts_the_three_periods() -> None:
-    """Базовая функциональность на месте — регрессию ловим, а не ломаем."""
+    """Базовая функциональность на месте — регрессию ловим, а не ломаем.
+
+    Кадр несёт колонку month: season="winter" без календаря теперь честно
+    отказывает (см. test_absent_calendar_is_an_explicit_error_not_annual),
+    поэтому для проверки самих периодов календарь обязан присутствовать.
+
+    Ожидаемое количество — 9, а не 10. Ряд покрывает 10 календарных лет
+    (1990…1999), то есть 11 меток расчётного цикла (1990…2000), но полных
+    зимних циклов ровно 9 — метки 1991…1999:
+      - метка 1990 требует XI–XII 1989 года, которых в кадре нет;
+      - метка 2000 требует I–III 2000 года, которых тоже нет;
+    неполные краевые циклы отбрасываются (см. test_edge_incomplete_cycles_are_dropped).
+    Длина зимнего сезона XI+XII+I+II+III = 151 сут, поэтому на цикл приходится
+    151 − period_days + 1 окон (145 / 142 / 122), но в Series попадает по одному
+    значению на цикл, то есть 9. Прежнее ожидание 10 получалось из годового
+    fallback'а по 10 календарным годам — того самого дефекта, который здесь
+    закрыт.
+    """
     rng = np.random.default_rng(20260928)
     daily = pd.DataFrame({
         "year": np.repeat(np.arange(1990, 2000), 365),
+        "month": np.tile(
+            pd.date_range("1989-01-01", periods=365, freq="D").month, 10
+        ),
         "value": rng.lognormal(2.0, 0.4, 365 * 10),
     })
     for period in (7, 10, 30):
         series = mre.extract_min_annual(
             daily, period_days=period, season="winter"
         )
-        assert len(series) == 10, f"период {period} сут дал {len(series)} значений"
+        assert len(series) == 9, (
+            f"период {period} сут дал {len(series)} значений вместо 9 "
+            f"(полных зимних циклов 1991…1999)"
+        )
 
 
 def test_q7_30_still_returns_period_values() -> None:
@@ -508,13 +531,12 @@ def test_season_filter_applies_per_cycle_independently() -> None:
     }
 
 
-def test_absent_month_information_still_yields_annual_minimum() -> None:
-    """Без сведений о месяце остаётся годовой минимум — это НЕ регрессия.
+def test_absent_calendar_is_an_explicit_error_not_annual() -> None:
+    """Без сведений о месяце season больше НЕ вырождается в годовой минимум.
 
-    Исправлен только случай, когда месяц ПЕРЕДАН и игнорировался. Отсутствие
-    информации о месяце — отдельный вопрос к контракту параметра season;
-    здесь он намеренно не меняется, чтобы правка не трогала поведение,
-    не связанное с найденной ошибкой.
+    Раньше winter/summer/annual давали один и тот же годовой результат, и
+    подпись «30-суточные зимние минимумы» не соответствовала вычисленному
+    значению. Теперь отсутствие календаря — явная ошибка.
     """
     dates = pd.date_range("2000-01-01", periods=365, freq="D")
     months = dates.month
@@ -524,12 +546,13 @@ def test_absent_month_information_still_yields_annual_minimum() -> None:
     )
     df = pd.DataFrame({"year": dates.year, "value": values})
     assert "month" not in df.columns
+    assert not hasattr(df.index, "month")
 
     for season in ("winter", "summer"):
-        got = mre.extract_min_annual(
-            df, year_col="year", value_col="value", period_days=7, season=season
-        )
-        assert float(got.iloc[0]) == pytest.approx(5.0)
+        with pytest.raises(ValueError, match=_NO_CALENDAR_MESSAGE):
+            mre.extract_min_annual(
+                df, year_col="year", value_col="value", period_days=7, season=season
+            )
 
 
 # --------------------------------------------------------------------------
@@ -737,11 +760,27 @@ def test_annual_season_keeps_calendar_years() -> None:
 
 
 def test_absent_month_information_keeps_calendar_year_semantics() -> None:
-    """Fallback без сведений о месяце не меняется (Q2 сюда не распространяется)."""
+    """Календарная группировка требует календаря: без него winter отказывает.
+
+    Раньше здесь проверялось, что годовая группировка применяется к winter
+    без месяца. После исправления это поведение удалено как искажающее, а
+    группировку по календарному году проверяем на season="annual", который
+    календаря не требует по контракту.
+    """
     df = _q2_frame(SPELL_CROSS_YEAR).drop(columns=["month"]).reset_index(drop=True)
     assert not hasattr(df.index, "month"), "индекс должен быть RangeIndex"
+
+    # winter/summer без календаря — явная ошибка, а не молчаливый годовой итог
+    for season in ("winter", "summer"):
+        with pytest.raises(ValueError, match=_NO_CALENDAR_MESSAGE):
+            mre.extract_min_annual(
+                df, year_col="year", value_col="value",
+                period_days=30, season=season,
+            )
+
+    # annual по-прежнему работает без календаря и группирует по календарному году
     got = mre.extract_min_annual(
-        df, year_col="year", value_col="value", period_days=30, season="winter"
+        df, year_col="year", value_col="value", period_days=30, season="annual"
     )
     assert sorted(got.index) == [2000, 2001, 2002, 2003]
     # Календарная группировка: окно через 31.12.2000 построить нельзя.
@@ -1075,3 +1114,279 @@ def test_non_calendar_index_is_not_silently_converted() -> None:
         key = mre._calendar_order_key(_cross_year_frame(INDEX_FACTORIES[kind]).index)
         assert key is not None, f"{kind}: календарный индекс должен давать ключ"
         assert len(key) == 1461
+
+
+# --------------------------------------------------------------------------
+# Объектный календарный индекс БЕЗ колонки month
+#
+# Ревизия выявила расхождение: _calendar_order_key() относит object-индексы
+# из Timestamp и datetime.date к календарным (inferred_type 'datetime'/'date'
+# входят в _CALENDAR_INFERRED_TYPES), но определение month в extract_min_annual
+# опиралось только на hasattr(index, 'month'). У таких индексов атрибута .month
+# нет, поэтому month_col оставался None:
+#   - до исправления season="winter" молча превращался в годовой минимум;
+#   - после запрета fallback'а guard ошибочно отвергал поддерживаемый календарь.
+# Теперь месяц берётся из временной шкалы по тому же признаку календарности.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("index_factory", [
+    lambda d: pd.Index([x.date() for x in d], dtype=object),
+    lambda d: pd.Index(list(d), dtype=object),
+], ids=["object_date", "object_timestamp"])
+def test_object_calendar_index_yields_month_without_month_column(
+    index_factory,
+) -> None:
+    """A/B. object-индекс дат без month даёт СЕЗОННЫЙ результат, не ValueError.
+
+    Проверяется не отсутствие исключения, а правильное использование месяца:
+    на контрастном ряду winter обязан дать 50,0, а summer — 5,0.
+    """
+    frame = _seasonal_frame()
+    frame = frame.set_axis(index_factory(frame.index))
+    assert "month" not in frame.columns, "колонка month отсутствует намеренно"
+    assert getattr(frame.index, "inferred_type", None) in {"datetime", "date"}
+    assert not hasattr(frame.index, "month"), "у объектного индекса нет .month"
+    assert mre._calendar_order_key(frame.index) is not None, (
+        "индекс обязан признаваться календарным — иначе тест проверяет не то"
+    )
+
+    winter = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    summer = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="summer"
+    )
+
+    assert float(winter.min()) == pytest.approx(50.0), (
+        f"зимний отбор не применён: {winter.to_dict()}"
+    )
+    assert float(summer.min()) == pytest.approx(5.0), (
+        f"летне-осенний отбор не применён: {summer.to_dict()}"
+    )
+
+
+@pytest.mark.parametrize("index_factory", [
+    lambda d: pd.Index([x.date() for x in d], dtype=object),
+    lambda d: pd.Index(list(d), dtype=object),
+], ids=["object_date", "object_timestamp"])
+def test_object_calendar_index_agrees_with_datetime_index(index_factory) -> None:
+    """C. Сезонный отбор не зависит от типа календарного индекса."""
+    base = _seasonal_frame()
+    reference = mre.extract_min_annual(
+        base, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    obj = base.set_axis(index_factory(base.index))
+    got = mre.extract_min_annual(
+        obj, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    assert sorted(got.index) == sorted(reference.index)
+    np.testing.assert_allclose(got.to_numpy(), reference.to_numpy())
+
+
+def test_period_index_path_is_not_regressed() -> None:
+    """PeriodIndex обязан работать и через .month, и через календарную ветку."""
+    base = _seasonal_frame()
+    period = base.set_axis(pd.PeriodIndex(base.index, freq="D"))
+    winter = mre.extract_min_annual(
+        period, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    summer = mre.extract_min_annual(
+        period, year_col="year", value_col="value", period_days=30, season="summer"
+    )
+    assert float(winter.min()) == pytest.approx(50.0)
+    assert float(summer.min()) == pytest.approx(5.0)
+
+
+def test_string_index_is_still_refused_for_seasonal_months() -> None:
+    """Строковый индекс месяца не даёт — парсить его нельзя, guard обязан сработать."""
+    frame = _seasonal_frame()
+    frame = frame.set_axis(pd.Index([x.strftime("%Y-%m-%d") for x in frame.index]))
+    assert mre._calendar_order_key(frame.index) is None
+    with pytest.raises(ValueError, match="требует сведений о месяце"):
+        mre.extract_min_annual(
+            frame, year_col="year", value_col="value", period_days=30, season="winter"
+        )
+
+
+# --------------------------------------------------------------------------
+# Сезонный контракт: отсутствие календаря — явная ошибка, а не annual fallback
+#
+# Найдено read-only аудитом производственного пути:
+#   core/services/handlers/__init__.py:286  handle_min_runoff(season="winter")
+#   gui/main_window.py:1846-1848            daily_df без month и без даты
+# До исправления winter/summer/annual давали ОДИН И ТОТ ЖЕ годовой результат,
+# поэтому значение, подписанное «30-суточные зимние минимумы», было посчитано
+# по всему году. Наличие случайной колонки month в файле пользователя меняло
+# поведение того же кода.
+#
+# Методологические параметры (winter_months, summer_months, цикл Apr-Mar)
+# этим исправлением НЕ затронуты: состав сезонов — отдельное решение.
+# --------------------------------------------------------------------------
+
+_NO_CALENDAR_MESSAGE = "требует сведений о месяце"
+
+
+def _seasonal_frame(first: str = "2001-01-01", last: str = "2005-12-31") -> pd.DataFrame:
+    """Ряд с контрастными сезонами и С датой в индексе.
+
+    зима (XI, XII, I, II, III) = 50; летне-осень (VI-X) = 5; прочие = 30.
+    Годовой минимум 5,0, зимний 50,0 — расхождение в 10 раз, поэтому
+    подмена сезонного результата годовым не может остаться незамеченной.
+    """
+    dates = pd.date_range(first, last, freq="D")
+    values = np.where(
+        np.isin(dates.month, (11, 12, 1, 2, 3)), 50.0,
+        np.where(np.isin(dates.month, (6, 7, 8, 9, 10)), 5.0, 30.0),
+    )
+    return pd.DataFrame({"year": dates.year, "value": values}, index=dates)
+
+
+def _same_values_without_calendar() -> pd.DataFrame:
+    """Тот же ряд, но с календарной информацией, удалённой полностью."""
+    frame = _seasonal_frame().reset_index(drop=True)
+    assert list(frame.columns) == ["year", "value"]
+    assert not hasattr(frame.index, "month")
+    return frame
+
+
+def test_winter_without_calendar_raises_value_error() -> None:
+    """A. season='winter' с одним лишь year+value → ValueError."""
+    df = _same_values_without_calendar()
+    with pytest.raises(ValueError) as excinfo:
+        mre.extract_min_annual(
+            df, year_col="year", value_col="value", period_days=30, season="winter"
+        )
+    message = str(excinfo.value)
+    assert _NO_CALENDAR_MESSAGE in message
+    assert "month" in message, "сообщение должно называть допустимый источник month"
+    assert "DatetimeIndex" in message, "сообщение должно называть допустимый источник даты"
+    assert "annual" in message, "сообщение должно подсказывать выход season='annual'"
+
+
+def test_summer_without_calendar_raises_value_error() -> None:
+    """B. season='summer' с одним лишь year+value → ValueError."""
+    df = _same_values_without_calendar()
+    with pytest.raises(ValueError, match=_NO_CALENDAR_MESSAGE):
+        mre.extract_min_annual(
+            df, year_col="year", value_col="value", period_days=30, season="summer"
+        )
+
+
+def test_annual_keeps_working_without_calendar() -> None:
+    """C. season='annual' без календаря продолжает работать."""
+    df = _same_values_without_calendar()
+    got = mre.extract_min_annual(
+        df, year_col="year", value_col="value", period_days=30, season="annual"
+    )
+    assert len(got) == 5, "annual обязан дать значение на каждый календарный год"
+    assert sorted(got.index) == [2001, 2002, 2003, 2004, 2005]
+    assert float(got.min()) == pytest.approx(5.0)
+
+
+def test_winter_with_datetime_index_still_seasonal() -> None:
+    """D. winter с DatetimeIndex по-прежнему даёт СЕЗОННЫЙ результат."""
+    frame = _seasonal_frame()
+    got = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    assert len(got) > 0
+    assert float(got.min()) == pytest.approx(50.0), (
+        f"winter должен дать зимний минимум 50,0, получено {got.to_dict()}"
+    )
+
+
+def test_summer_with_datetime_index_still_seasonal() -> None:
+    """E. summer с DatetimeIndex по-прежнему даёт СЕЗОННЫЙ результат."""
+    frame = _seasonal_frame()
+    got = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="summer"
+    )
+    assert len(got) > 0
+    assert float(got.min()) == pytest.approx(5.0)
+
+
+def test_winter_and_annual_never_silently_agree_on_calendardless_input() -> None:
+    """F. production-регрессия: тихое совпадение winter и annual невозможно.
+
+    Тот же ряд без календаря обязан дать явную ошибку вместо равных чисел.
+    Контроль: с календарём winter и annual расходятся в 10 раз, то есть
+    различие действительно содержательное, а не артефакт теста.
+    """
+    df = _same_values_without_calendar()
+
+    with pytest.raises(ValueError, match=_NO_CALENDAR_MESSAGE):
+        mre.extract_min_annual(
+            df, year_col="year", value_col="value", period_days=30, season="winter"
+        )
+
+    annual = mre.extract_min_annual(
+        df, year_col="year", value_col="value", period_days=30, season="annual"
+    )
+    frame = _seasonal_frame()
+    winter = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    assert float(winter.min()) == pytest.approx(50.0)
+    assert float(annual.min()) == pytest.approx(5.0)
+    assert float(winter.min()) != pytest.approx(float(annual.min()))
+
+
+def test_month_column_remains_a_valid_calendar_source() -> None:
+    """G. Колонка month остаётся допустимым источником календаря."""
+    frame = _seasonal_frame().reset_index(drop=True)
+    frame["month"] = _seasonal_frame().index.month.to_numpy()
+    assert "month" in frame.columns
+    assert not hasattr(frame.index, "month"), "индекс без даты — календарь из month"
+
+    winter = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    summer = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="summer"
+    )
+    assert float(winter.min()) == pytest.approx(50.0)
+    assert float(summer.min()) == pytest.approx(5.0)
+    assert float(winter.min()) != pytest.approx(float(summer.min()))
+
+
+def test_handler_min_runoff_fails_loudly_without_calendar() -> None:
+    """Production-путь: handle_min_runoff не отдаёт молчаливо неверный ряд.
+
+    Регрессия из аудита: обработчик подписывал результат «30-суточные зимние
+    минимумы», а считал годовой минимум. Теперь season='winter' без календаря
+    обязан поднять ошибку, и сообщение должно называть причину.
+    """
+    from core.services.calculation_service import CalculationContext
+    from core.services.handlers import handle_min_runoff
+
+    dates = pd.date_range("2001-01-01", "2005-12-31", freq="D")
+    values = np.where(
+        np.isin(dates.month, (11, 12, 1, 2, 3)), 50.0,
+        np.where(np.isin(dates.month, (6, 7, 8, 9, 10)), 5.0, 30.0),
+    )
+    df = pd.DataFrame({"year": dates.year, "value": values})
+
+    context = CalculationContext(
+        dataset=None, parameters={"daily_df": df}, methodology=None
+    )
+    with pytest.raises(ValueError) as excinfo:
+        handle_min_runoff(context)
+    assert _NO_CALENDAR_MESSAGE in str(excinfo.value)
+
+
+def test_handler_min_runoff_still_computes_with_calendar() -> None:
+    """С календарём production-путь работает и строит кривую обеспеченности."""
+    from core.services.calculation_service import CalculationContext
+    from core.services.handlers import handle_min_runoff
+
+    frame = _seasonal_frame()
+    context = CalculationContext(
+        dataset=None, parameters={"daily_df": frame}, methodology=None
+    )
+    result = handle_min_runoff(context)
+    assert result, "обработчик обязан вернуть кривую обеспеченности"
+    assert result["columns"] == ["P_%", "Q_min"], (
+        f"неожиданная форма кривой: {result.get('columns')}"
+    )
+    assert result["rows"], "кривая обеспеченности не должна быть пустой"

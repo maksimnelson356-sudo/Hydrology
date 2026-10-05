@@ -263,8 +263,33 @@ def extract_min_annual(
         df = df.copy()
         df['month'] = daily_df.loc[df.index].month
         month_col = 'month'
+    elif _calendar_order_key(daily_df.index) is not None:
+        # Тот же календарный путь, что и в _calendar_order_key: индекс уже
+        # признан несущим календарную дату, поэтому месяц берётся из временной
+        # шкалы. Нужно для object-индексов из Timestamp и из datetime.date —
+        # у них нет собственного .month, хотя календарь они несут.
+        df = df.copy()
+        if isinstance(daily_df.index, pd.PeriodIndex):
+            df['month'] = daily_df.index.to_timestamp().month.to_numpy()
+        else:
+            df['month'] = pd.DatetimeIndex(daily_df.index).month.to_numpy()
+        month_col = 'month'
     else:
         month_col = None
+
+    if season in ("winter", "summer") and month_col is None:
+        # Молчаливый переход сезонного расчёта к годовому минимуму запрещён:
+        # результат подписывался бы «30-суточные зимние минимумы», хотя был
+        # посчитан по всему году. production-путь handle_min_runoff передаёт
+        # daily_df из GUI, где календарь не гарантирован, поэтому отсутствие
+        # календаря обязано быть явной ошибкой, а не искажённым числом.
+        raise ValueError(
+            f"season={season!r} требует сведений о месяце, а они не найдены. "
+            f"Нужен столбец 'month' в DataFrame либо индекс-дата "
+            f"(DatetimeIndex/PeriodIndex). Без них сезон определить нельзя: "
+            f"расчёт молча выродился бы в годовой минимум. "
+            f"Для расчёта за весь год укажите season='annual'."
+        )
 
     # Q2 (пособие 1984, п. 2.33, с. 31): некалендарное N-суточное окно не
     # привязано к календарному году, поэтому в seasonal-режиме при доступном
