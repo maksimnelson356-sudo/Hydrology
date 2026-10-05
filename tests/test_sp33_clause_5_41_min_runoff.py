@@ -1390,3 +1390,308 @@ def test_handler_min_runoff_still_computes_with_calendar() -> None:
         f"неожиданная форма кривой: {result.get('columns')}"
     )
     assert result["rows"], "кривая обеспеченности не должна быть пустой"
+
+
+# --------------------------------------------------------------------------
+# Параметризация границ сезонов
+#
+# Нормативного предписания месяцев XI–III / VI–X не существует. Закреплено
+# другое: границы сезонов едины для всех лет и округляются до месяца, а
+# состав сезона зависит от типа режима реки (СНиП 2.01.14-83 п. 2.15, 2.16;
+# СП 529.1325800.2023 п. 5.2.3). Поэтому XI–III и VI–X — инженерные значения
+# по умолчанию, а расчётная методика задаёт границы для конкретной реки.
+# ---------------------------------------------------------------------------
+
+
+def test_default_season_months_are_unchanged() -> None:
+    """A. Без параметров поведение прежнее: XI–III и VI–X."""
+    frame = _seasonal_frame()
+    default_winter = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    default_summer = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="summer"
+    )
+    explicit_winter = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter",
+        winter_months=[11, 12, 1, 2, 3], summer_months=[6, 7, 8, 9, 10],
+    )
+    explicit_summer = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="summer",
+        winter_months=[11, 12, 1, 2, 3], summer_months=[6, 7, 8, 9, 10],
+    )
+    assert default_winter.equals(explicit_winter)
+    assert default_summer.equals(explicit_summer)
+    # прежние значения сезонного отбора сохраняются
+    assert float(default_winter.min()) == pytest.approx(50.0)
+    assert float(default_summer.min()) == pytest.approx(5.0)
+
+
+def test_custom_season_months_are_actually_used() -> None:
+    """B. winter=[12,1,2,3], summer=[7,8,9,10,11] — расчёт их применяет."""
+    # month=11 входит в пользовательский summer, но не в winter
+    dates = pd.date_range("2001-01-01", "2005-12-31", freq="D")
+    values = np.where(
+        np.isin(dates.month, (12, 1, 2, 3)), 40.0,
+        np.where(np.isin(dates.month, (11,)), 4.0,
+                 np.where(np.isin(dates.month, (7, 8, 9, 10)), 8.0, 90.0)),
+    )
+    frame = pd.DataFrame({"year": dates.year.to_numpy(), "value": values}, index=dates)
+
+    winter = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter",
+        winter_months=[12, 1, 2, 3], summer_months=[7, 8, 9, 10, 11],
+    )
+    summer = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="summer",
+        winter_months=[12, 1, 2, 3], summer_months=[7, 8, 9, 10, 11],
+    )
+    # ноябрь (4.0) не попал в winter, июнь (90.0) не попал в summer
+    assert float(winter.min()) == pytest.approx(40.0), f"winter: {winter.to_dict()}"
+    assert float(summer.min()) == pytest.approx(4.0), f"summer: {summer.to_dict()}"
+
+    # при стандартных границах тот же ряд даёт другие значения
+    std_winter = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    assert float(std_winter.min()) == pytest.approx(4.0), (
+        "стандартные XI–III обязаны включать ноябрь — иначе default тоже изменился"
+    )
+
+
+def test_another_valid_custom_month_set() -> None:
+    """C. winter=[11,12,1,2], summer=[6,7,8,9,10] — тоже допустимо."""
+    dates = pd.date_range("2001-01-01", "2005-12-31", freq="D")
+    values = np.where(
+        np.isin(dates.month, (11, 12, 1, 2)), 40.0,
+        np.where(np.isin(dates.month, (6, 7, 8, 9, 10)), 4.0, 90.0),
+    )
+    frame = pd.DataFrame({"year": dates.year.to_numpy(), "value": values}, index=dates)
+    winter = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter",
+        winter_months=[11, 12, 1, 2], summer_months=[6, 7, 8, 9, 10],
+    )
+    summer = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="summer",
+        winter_months=[11, 12, 1, 2], summer_months=[6, 7, 8, 9, 10],
+    )
+    assert float(winter.min()) == pytest.approx(40.0)
+    assert float(summer.min()) == pytest.approx(4.0)
+
+
+@pytest.mark.parametrize("months, fragment", [
+    ([0, 1, 2], "1..12"),
+    ([13, 1, 2], "1..12"),
+    ([-1, 1, 2], "1..12"),
+    ([], "пустым"),
+    ([11, 12, 1, 11], "уникальны"),
+    (["XI", "XII"], "целым числом"),
+    ("11-3", "строк"),
+    ([11.5, 12], "целым числом"),
+    ([True, False], "целым числом"),
+], ids=["month0", "month13", "month_minus1", "empty", "duplicate",
+        "roman_strings", "range_string", "float", "bool"])
+def test_invalid_winter_months_are_rejected(months, fragment) -> None:
+    """D. Строгая валидация пользовательских месяцев."""
+    frame = _seasonal_frame()
+    with pytest.raises(ValueError) as excinfo:
+        mre.extract_min_annual(
+            frame, year_col="year", value_col="value", period_days=30,
+            season="winter", winter_months=months,
+        )
+    assert fragment in str(excinfo.value), f"неожиданное сообщение: {excinfo.value}"
+
+
+def test_overlapping_seasons_are_rejected() -> None:
+    """D. Пересечение winter/summer запрещено: месяц принадлежит одному сезону."""
+    frame = _seasonal_frame()
+    with pytest.raises(ValueError, match="не должны пересекаться"):
+        mre.extract_min_annual(
+            frame, year_col="year", value_col="value", period_days=30, season="winter",
+            winter_months=[11, 12, 1, 2], summer_months=[6, 7, 8, 9, 10, 11],
+        )
+
+
+def test_custom_seasons_work_without_calendar_guard_being_bypassed() -> None:
+    """F. Параметризация не обходит guard «нет календаря»."""
+    no_calendar = _seasonal_frame().reset_index(drop=True)
+    for season in ("winter", "summer"):
+        with pytest.raises(ValueError, match=_NO_CALENDAR_MESSAGE):
+            mre.extract_min_annual(
+                no_calendar, year_col="year", value_col="value", period_days=30,
+                season=season, winter_months=[12, 1, 2, 3], summer_months=[7, 8, 9, 10, 11],
+            )
+
+
+@pytest.mark.parametrize("index_factory", [
+    lambda d: pd.DatetimeIndex(d),
+    lambda d: pd.PeriodIndex(d, freq="D"),
+    lambda d: pd.Index([x.date() for x in d], dtype=object),
+    lambda d: pd.Index(list(d), dtype=object),
+], ids=["datetime", "period", "object_date", "object_timestamp"])
+def test_custom_seasons_on_every_calendar_variant(index_factory) -> None:
+    """G. Все поддерживаемые календарные индексы работают с параметрами."""
+    frame = _seasonal_frame().set_axis(index_factory(_seasonal_frame().index))
+    winter = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter",
+        winter_months=[12, 1, 2, 3], summer_months=[7, 8, 9, 10, 11],
+    )
+    assert float(winter.min()) == pytest.approx(50.0)
+
+
+def test_string_index_still_refused_with_custom_months() -> None:
+    """G. Строковый индекс по-прежнему отвергается, месяцы из строк не выдумываются."""
+    base = _seasonal_frame()
+    frame = base.set_axis(pd.Index([x.strftime("%Y-%m-%d") for x in base.index]))
+    with pytest.raises(ValueError, match=_NO_CALENDAR_MESSAGE):
+        mre.extract_min_annual(
+            frame, year_col="year", value_col="value", period_days=30, season="winter",
+            winter_months=[12, 1, 2, 3], summer_months=[7, 8, 9, 10, 11],
+        )
+
+
+def test_annual_is_unaffected_by_season_months() -> None:
+    """H. annual не зависит от параметров границ сезонов."""
+    frame = _seasonal_frame()
+    default = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="annual"
+    )
+    customised = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="annual",
+        winter_months=[12, 1, 2], summer_months=[7, 8, 9],
+    )
+    assert default.equals(customised)
+    assert float(default.min()) == pytest.approx(5.0)
+
+
+def test_only_one_season_group_may_be_overridden() -> None:
+    """Переопределение ОДНОЙ группы не ломает вторую — в обе стороны.
+
+    Регрессия строгого ревью: проверка пересечения выполнялась по фактическим
+    спискам, поэтому summer_months=[7..11] отвергался из-за месяца XI,
+    пришедшего из значения по умолчанию winter_months. Пользователь XI не
+    передавал, а НС = VII–XI — реальный пример из МР ГГИ 2005 (р. Унжа) и
+    СП 33-101-2003, Приложение А.
+    """
+    # ноябрь входит в пользовательский summer, но не в пользовательский winter
+    dates = pd.date_range("2001-01-01", "2005-12-31", freq="D")
+    values = np.where(
+        np.isin(dates.month, (7, 8, 9, 10, 11)), 5.0,
+        np.where(dates.month == 6, 1.0,
+                 np.where(np.isin(dates.month, (12, 1, 2, 3)), 50.0, 30.0)),
+    )
+    frame = pd.DataFrame({"year": dates.year.to_numpy(), "value": values},
+                         index=dates)
+
+    # A) переопределён только winter -> default summer сохраняется
+    a_w = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter",
+        winter_months=[12, 1, 2, 3],
+    )
+    a_s = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="summer",
+        winter_months=[12, 1, 2, 3],
+    )
+    assert float(a_w.min()) == pytest.approx(50.0), f"winter: {a_w.to_dict()}"
+    assert float(a_s.min()) == pytest.approx(1.0), (
+        f"default summer VI–X обязан сохраниться и дать 1,0: {a_s.to_dict()}"
+    )
+
+    # B) переопределён только summer -> default winter сохраняется
+    b_w = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter",
+        summer_months=[7, 8, 9, 10, 11],
+    )
+    b_s = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="summer",
+        summer_months=[7, 8, 9, 10, 11],
+    )
+    # default winter XI–III не изменился: в нём есть ноябрь, а в контрастном
+    # ряде XI = 5,0, поэтому min равен 5,0 — ровно как при полном default
+    pure_w = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter",
+    )
+    assert b_w.equals(pure_w), (
+        f"default winter XI–III обязан сохраниться: {b_w.to_dict()} vs {pure_w.to_dict()}"
+    )
+    assert float(b_w.min()) == pytest.approx(5.0)
+    assert float(b_s.min()) == pytest.approx(5.0), (
+        f"custom summer VII–XI обязан дать 5,0: {b_s.to_dict()}"
+    )
+    # custom summer действительно VII–XI: июнь (1,0) исключён
+    assert float(b_s.min()) != pytest.approx(1.0), (
+        "параметр summer_months=[7..11] не применился — использован старый VI–X"
+    )
+
+
+def test_summer_only_vii_xi_matches_normative_example() -> None:
+    """A (blocking regression). summer_months=[7..11] в одиночку — рабочий сценарий.
+
+    Доказательство не только отсутствия исключения: контрастный ряд даёт
+    разные значения для custom VII–XI и для default VI–X, поэтому тест падает,
+    если код примет параметр, но продолжит считать по старому default.
+    """
+    dates = pd.date_range("2001-01-01", "2005-12-31", freq="D")
+    values = np.where(
+        np.isin(dates.month, (7, 8, 9, 10, 11)), 5.0,
+        np.where(dates.month == 6, 1.0,
+                 np.where(np.isin(dates.month, (12, 1, 2, 3)), 50.0, 30.0)),
+    )
+    frame = pd.DataFrame({"year": dates.year.to_numpy(), "value": values},
+                         index=dates)
+
+    custom = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="summer",
+        summer_months=[7, 8, 9, 10, 11],
+    )
+    default = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="summer",
+    )
+
+    assert float(custom.min()) == pytest.approx(5.0), (
+        f"VII–XI должны дать 5,0: {custom.to_dict()}"
+    )
+    assert float(default.min()) == pytest.approx(1.0), (
+        f"default VI–X должен дать 1,0: {default.to_dict()}"
+    )
+    assert not custom.equals(default), (
+        "результат совпал с default — пользовательские месяцы не применены"
+    )
+
+
+def test_explicit_overlap_still_rejected() -> None:
+    """D. Оба набора заданы ЯВНО и пересекаются -> ValueError остаётся."""
+    frame = _seasonal_frame()
+    with pytest.raises(ValueError, match="не должны пересекаться"):
+        mre.extract_min_annual(
+            frame, year_col="year", value_col="value", period_days=30,
+            season="winter",
+            winter_months=[11, 12, 1, 2, 3], summer_months=[6, 7, 8, 9, 10, 11],
+        )
+    # пересечение ровно по одному месяцу тоже запрещено
+    with pytest.raises(ValueError, match="не должны пересекаться"):
+        mre.extract_min_annual(
+            frame, year_col="year", value_col="value", period_days=30,
+            season="summer",
+            winter_months=[12, 1, 2, 3], summer_months=[3, 7, 8],
+        )
+
+
+def test_tuple_and_range_are_accepted() -> None:
+    """Любая последовательность целых допустима, не только list."""
+    frame = _seasonal_frame()
+    base = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    as_tuple = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter",
+        winter_months=(11, 12, 1, 2, 3),
+    )
+    as_range = mre.extract_min_annual(
+        frame, year_col="year", value_col="value", period_days=30, season="winter",
+        winter_months=range(6, 11), summer_months=range(11, 13),
+    )
+    assert base.equals(as_tuple)
+    assert float(as_range.min()) == pytest.approx(5.0), (
+        "range(6, 11) = VI–X обязан дать тот же летне-осенний минимум"
+    )

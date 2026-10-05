@@ -93,6 +93,8 @@ core/hydrorash/min_runoff_extended.py
 """
 
 
+from collections.abc import Sequence
+
 import numpy as np
 import pandas as pd
 
@@ -130,12 +132,77 @@ def _calendar_order_key(index: pd.Index) -> np.ndarray | None:
         return None
 
 
+def _validated_season_months(months: Sequence[int], name: str) -> list[int]:
+    """Проверка пользовательского набора месяцев сезона.
+
+    Принимаются только целые номера месяцев 1..12. Строковые диапазоны вида
+    "XI-X" или "11-3" не разбираются: молчаливое эвристическое разбирание
+    строки скрыло бы опечатку в расчётных границах сезона.
+    """
+    if isinstance(months, (str, bytes)):
+        raise ValueError(
+            f"{name}: ожидается последовательность целых номеров месяцев 1..12, "
+            f"а получена строка {months!r}. Строковые диапазоны не разбираются — "
+            f"передайте месяцы числами, например [11, 12, 1, 2, 3]."
+        )
+    try:
+        values = list(months)
+    except TypeError as exc:
+        raise ValueError(
+            f"{name}: ожидается последовательность целых номеров месяцев 1..12, "
+            f"получено значение типа {type(months).__name__}."
+        ) from exc
+
+    if not values:
+        raise ValueError(f"{name}: список месяцев сезона не может быть пустым.")
+
+    result: list[int] = []
+    for value in values:
+        if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
+            raise ValueError(
+                f"{name}: месяц должен быть целым числом 1..12, "
+                f"получено {value!r} типа {type(value).__name__}."
+            )
+        month = int(value)
+        if not 1 <= month <= 12:
+            raise ValueError(
+                f"{name}: номер месяца должен быть в диапазоне 1..12, получено {month}."
+            )
+        result.append(month)
+
+    duplicates = sorted({m for m in result if result.count(m) > 1})
+    if duplicates:
+        raise ValueError(
+            f"{name}: месяцы сезона должны быть уникальны, повторяются {duplicates}."
+        )
+    return result
+
+
+def _reject_overlapping_seasons(
+    winter_months: Sequence[int], summer_months: Sequence[int]
+) -> None:
+    """Месяц не может входить в оба маловодных сезона сразу.
+
+    Вызывается только когда оба набора заданы вызывающим кодом: набор,
+    переданный пользователем, не отвергается из-за пересечения со значением
+    по умолчанию другой группы.
+    """
+    overlap = sorted(set(winter_months) & set(summer_months))
+    if overlap:
+        raise ValueError(
+            f"winter_months и summer_months не должны пересекаться; общие месяцы: "
+            f"{overlap}. Каждый месяц должен принадлежать ровно одному сезону."
+        )
+
+
 def extract_min_annual(
     daily_df: pd.DataFrame,
     year_col: str = 'year',
     value_col: str = 'value',
     period_days: int = 7,
-    season: str = "winter"
+    season: str = "winter",
+    winter_months: Sequence[int] | None = None,
+    summer_months: Sequence[int] | None = None,
 ) -> pd.Series:
     """
     Извлечение средних минимальных расходов за period_days суток для каждого года.
@@ -217,15 +284,41 @@ def extract_min_annual(
     вариант, усечённые (5.3.4) и составные (5.1.11) кривые распределения в этой
     функции НЕ РЕАЛИЗОВАНЫ. Полная нормативная реализация п. 5.5 не заявляется.
 
+    ГРАНИЦЫ СЕЗОНОВ. Нормативно закреплено следующее: границы сезонов
+    назначаются едиными для всех лет с округлением до месяца, а состав
+    сезонов зависит от типа режима реки и преобладающего вида использования
+    стока (СНиП 2.01.14-83 п. 2.15 и 2.16; СП 529.1325800.2023 п. 5.2.3).
+    Конкретные номера месяцев ни одним из этих документов не предписаны.
+    Поэтому значения по умолчанию — инженерная интерпретация, а не
+    универсальная норма: расчётная методика обязана задавать границы для
+    конкретной реки через winter_months / summer_months.
+
     Parameters:
         daily_df: DataFrame с суточными расходами (должен содержать year_col и value_col)
         year_col: название столбца с годами
         value_col: название столбца с расходами
         period_days: длительность периода (7 или 10 суток)
         season: сезон поиска минимума:
-            - "winter" — зимний период (XII–II или XI–III)
-            - "summer" — летне-осенний период (VI–X)
+            - "winter" — зимний период (XI–III) по умолчанию
+            - "summer" — летне-осенний период (VI–X) по умолчанию
             - "annual" — весь год
+            Перечень месяцев каждого сезона задаётся winter_months /
+            summer_months; указанные выше диапазоны — значения по
+            умолчанию, а не нормативное предписание.
+        winter_months: номера месяцев зимнего сезона. None — значение по
+            умолчанию [11, 12, 1, 2, 3] (XI–III), принятое как инженерная
+            интерпретация, а не как нормативное предписание.
+        summer_months: номера месяцев летне-осеннего сезона. None — значение
+            по умолчанию [6, 7, 8, 9, 10] (VI–X), принятое как инженерная
+            интерпретация, а не как нормативное предписание.
+
+    Raises:
+        ValueError: каждый переданный набор проверяется независимо — месяцы
+            должны быть целыми числами 1..12, список не должен быть пустым или
+            содержать дубликаты; строковые диапазоны не разбираются.
+            Пересечение запрещено только когда ОБА набора заданы явно.
+            Если задан лишь один набор, второй получает значение по
+            умолчанию, и пересечение с ним допускается.
 
     Returns:
         Series с минимальными средними расходами, индексированная по годам
@@ -236,6 +329,32 @@ def extract_min_annual(
     if period_days not in (7, 10, 30):
         raise ValueError("Допустимые значения period_days: 7, 10, 30")
 
+    # ГРАНИЦЫ СЕЗОНОВ — ПАРАМЕТРЫ, А НЕ НОРМАТИВНЫЕ КОНСТАНТЫ. Значения по
+    # умолчанию (XI–III и VI–X) — инженерная интерпретация: ни СНиП 2.01.14-83,
+    # ни СП 529.1325800.2023, ни СП 33-101-2003 не предписывают конкретные
+    # месяцы зимнего и летне-осеннего сезонов. Нормативно закреплено другое:
+    # границы назначаются едиными для всех лет с округлением до месяца, а
+    # состав сезонов зависит от типа режима реки и вида использования стока
+    # (СНиП 2.01.14-83 п. 2.15 и 2.16, СП 529.1325800.2023 п. 5.2.3). Поэтому
+    # расчётная методика обязана задавать границы для конкретной реки.
+    # Пересечение проверяется только когда ОБА набора заданы явно: набор,
+    # заданный пользователем, не должен отвергаться из-за значения по
+    # умолчанию другой группы — иначе, например, summer_months=[7..11]
+    # (НС = VII–XI из МР ГГИ 2005 и СП 33, Приложение А) оказался бы
+    # недостижим в одиночку. Значения по умолчанию между собой не
+    # пересекаются, поэтому при отсутствии обоих параметров проверка не нужна.
+    winter_explicit = winter_months is not None
+    summer_explicit = summer_months is not None
+
+    if winter_months is None:
+        winter_months = [11, 12, 1, 2, 3]
+    if summer_months is None:
+        summer_months = [6, 7, 8, 9, 10]
+    winter_months = _validated_season_months(winter_months, "winter_months")
+    summer_months = _validated_season_months(summer_months, "summer_months")
+    if winter_explicit and summer_explicit:
+        _reject_overlapping_seasons(winter_months, summer_months)
+
     df = daily_df[[year_col, value_col]].copy()
     df = df.dropna(subset=[value_col])
     df[value_col] = pd.to_numeric(df[value_col], errors='coerce')
@@ -243,9 +362,6 @@ def extract_min_annual(
 
     if len(df) == 0:
         return pd.Series(dtype=float)
-
-    winter_months = [11, 12, 1, 2, 3]
-    summer_months = [6, 7, 8, 9, 10]
 
     if 'month' in daily_df.columns:
         # Выше df сведён к [year_col, value_col], поэтому колонку 'month' нужно
