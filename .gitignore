@@ -30,7 +30,13 @@ coverage.xml
 
 # --- OpenCode / local artifacts ---
 .omo/
-.opencode/
+.opencode/*
+!.opencode/skills/
+.opencode/skills/*
+!.opencode/skills/normative-audit/
+!.opencode/skills/hydrology-audit/
+!.opencode/skills/regression-fix/
+!.opencode/skills/release-check/
 *.bak
 _independent_validation.py
 TOOL_TEST.md
