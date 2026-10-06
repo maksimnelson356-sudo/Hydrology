@@ -874,6 +874,7 @@ def reservoir_storage_calculation(
     H_list: list[float],
     A_list: list[float],
     method: str = 'trapezoid',
+    H_dead: float | None = None,
 ) -> dict:
     """
     Геометрический расчёт накопленного объёма по дискретным значениям
@@ -888,7 +889,13 @@ def reservoir_storage_calculation(
     Множитель 1/1000 переводит произведение «км² · м» в км³, поскольку
     1 км² · 1 м = 10⁻³ км³. Без него результат был бы в единицах «км²·м».
     Накопление ведётся от нижнего переданного уровня, поэтому V_total включает
-    мёртвый объём; полезный и мёртвый объёмы функцией НЕ разделяются.
+    мёртвый объём.
+
+    Параметр `H_dead` (опционально) — отметка дна мёртвого объёма, м.
+    Если задана, возвращаются:
+      - V_dead_km3 — объём ниже H_dead (мёртвый)
+      - V_useful_km3 = V_total - V_dead (полезный)
+    Интерполяция площади на отметке H_dead делается линейно между соседними узлами.
 
     Параметр `method` в текущей реализации не используется: всегда применяется
     трапеция. Это технический долг, здесь только фиксируется; параметр и
@@ -901,12 +908,15 @@ def reservoir_storage_calculation(
     Parameters:
         H_list: уровни, м (по возрастанию)
         A_list: площади зеркала, км²
+        H_dead: отметка дна мёртвого объёма, м (опционально).
+                Должна быть >= H[0] и <= H[-1].
 
     Returns:
-        Dict: cumulative_volumes, table_df
+        Dict: cumulative_volumes, table_df, V_total_km3,
+              V_dead_km3 (если H_dead задан), V_useful_km3 (если H_dead задан)
     """
-    H = np.array(H_list)
-    A = np.array(A_list)
+    H = np.array(H_list, dtype=float)
+    A = np.array(A_list, dtype=float)
 
     # Валидация: H должен быть строго возрастающим
     if len(H) < 2:
@@ -915,11 +925,38 @@ def reservoir_storage_calculation(
         raise ValueError("Длины списков H и A должны совпадать")
     if not np.all(np.diff(H) > 0):
         raise ValueError("Уровни H должны быть строго возрастающими")
+    if H_dead is not None:
+        if not (H[0] <= H_dead <= H[-1]):
+            raise ValueError(f"H_dead={H_dead} должен быть в диапазоне [{H[0]}, {H[-1]}]")
 
     V_cumulative = [0.0]
     for i in range(1, len(H)):
         dV = (A[i - 1] + A[i]) / 2 * (H[i] - H[i - 1]) / 1000.0
         V_cumulative.append(V_cumulative[-1] + dV)
+
+    V_total = V_cumulative[-1]
+
+    # Если задан H_dead — интерполируем площадь и вычисляем мёртвый объём
+    V_dead = 0.0
+    if H_dead is not None:
+        # Находим интервал, в который попадает H_dead
+        if H_dead == H[0]:
+            V_dead = 0.0
+        elif H_dead == H[-1]:
+            V_dead = V_total
+        else:
+            # Индекс i: H[i] <= H_dead < H[i+1]
+            idx = np.searchsorted(H, H_dead, side='right') - 1
+            H_low, H_high = H[idx], H[idx + 1]
+            A_low, A_high = A[idx], A[idx + 1]
+            # Линейная интерполяция площади на H_dead
+            t = (H_dead - H_low) / (H_high - H_low)
+            A_dead = A_low + t * (A_high - A_low)
+            # Объём от H[0] до H_dead: накопленный до idx + трапеция до H_dead
+            V_before = V_cumulative[idx]
+            V_dead = V_before + (A_low + A_dead) / 2 * (H_dead - H_low) / 1000.0
+
+    V_useful = V_total - V_dead
 
     df = pd.DataFrame({
         'H_m': H,
@@ -927,16 +964,25 @@ def reservoir_storage_calculation(
         'V_cumulative_km3': [round(v, 4) for v in V_cumulative],
     })
 
-    return {
+    result = {
         'table': df,
-        'V_total_km3': round(float(V_cumulative[-1]), 4),
+        'V_total_km3': round(float(V_total), 4),
     }
+    if H_dead is not None:
+        result['V_dead_km3'] = round(float(V_dead), 4)
+        result['V_useful_km3'] = round(float(V_useful), 4)
+        result['H_dead_m'] = float(H_dead)
+
+    return result
 
 
 def annual_regulation_table(
     Q_monthly: np.ndarray,
     demand_m3_s: float,
     V_useful_km3: float = 1.0,
+    S_0_km3: float = 0.0,
+    losses_km3: list[float] | np.ndarray | None = None,
+    regulated: bool = False,
 ) -> pd.DataFrame:
     """
     Инженерный месячный водохозяйственный баланс.
@@ -949,28 +995,47 @@ def annual_regulation_table(
     регулирования водохранилища п. 5.2.4 не даёт, и настоящая функция её не
     реализует. Искусственные соответствия п. 5.2.4 искать не следует.
 
-    ФАКТИЧЕСКИ ДЕЛАЕТ. Помесячно накапливает разность притока и забора:
-        dV = (Q_in - Q_out) * дней * 86400 / 1e9   [км³]
+    ФАКТИЧЕСКИ ДЕЛАЕТ. Помесячно накапливает разность притока, забора и
+    (заданных пользователем) потерь:
+        dV = (Q_in - Q_out) * дней * 86400 / 1e9 - losses_i   [км³]
     Единицы: [м³/с] · [сут] · 86400 [с/сут] -> м³; / 1e9 -> км³.
     Длины месяцев заданы списком с суммой 365 сут.
 
-    ЗАФИКСИРОВАННЫЕ ОГРАНИЧЕНИЯ, НЕ ИСПРАВЛЯЮТСЯ здесь. Функция не является
-    полноценной методикой регулирования, поскольку:
-      - объём водохранилища НЕ ограничивается величиной V_useful_km3: баланс
-        накапливается без клампинга, и при V_in < V_out он уходит в отрицательные
-        значения, а колонка «Заполнен_%» может выходить за 0…100;
-      - начальный объём не задаётся: расчёт начинается с нуля в январе;
-      - длины месяцев фиксированы (февраль всегда 28 сут, високосные годы не
-        учитываются).
+    ДВА РЕЖИМА. `regulated=False` (по умолчанию) — ЛЕГАСИ, поведение прежней
+    функции сохранено дословно: баланс есть накопительный СЧЁТЧИК от S_0_km3
+    (по умолчанию 0), без клампинга по V_useful_km3, без сброса и недобора.
+    При V_in < V_out счётчик уходит в отрицательные значения, а «Заполнен_%»
+    может выходить за 0…100 — это следствие конструкции, а не ошибка
+    (зафиксировано тестами test_annual_regulation_table.py, менять нельзя).
 
-    ВХОДНОЙ КОНТРАКТ ПРОВЕРЯЕТСЯ. Раньше ряд произвольной длины, включая
-    пустой и укороченный, молча дополнялся нулевым притоком, а пропуск данных
-    становился неотличим от физически допустимого Q = 0. Теперь отказ явный:
-    ровно 12 значений, без NaN, все расходы неотрицательны, полезный объём
-    положителен. NaN не удаляется и не превращается в ноль, а отвергается:
-    отсутствие месяца — отдельная ошибка, и подменять его нулём нельзя.
-    Перечисленные ниже методологические ограничения (отсутствие S_0, клампинга,
-    сброса и недобора) проверками входа НЕ устраняются и остаются в силе.
+    `regulated=True` — ИНЖЕНЕРНАЯ МОДЕЛЬ ЗАПАСА (opt-in; та же логика, что в
+    _calculate_regulation_year_metrics, но с помесячным шагом):
+        raw  = S_{i-1} + dV_i
+        S_i  = min(V_useful_km3, max(0, raw))
+        Сброс_i   = max(0, raw - V_useful_km3)   — излишек сверх ёмкости
+        Недобор_i = max(0, -raw)                 — невозможность покрыть забор
+    «Заполнен_%» при этом гарантированно в 0…100. Добавляются три колонки:
+    «Сброс_km3», «Недобор_km3», «Запас_на_конец_km3» (итого 9 колонок).
+
+    НОРМАТИВНЫЙ СТАТУС РЕЖИМА regulated=True: SOURCE_MISSING / ENGINEERING.
+    Определения регулировочного правила, сброса и недобора в локальном
+    нормативном корпусе не верифицированы (см. шапку модуля: «Риппл» и
+    «массовая кривая» не найдены ни в одном из девяти PDF). Модель —
+    инженерная конструкция текущей реализации, а не пункт стандарта.
+
+    ПОТЕРИ (`losses_km3`). Задаются ПОЛЬЗОВАТЕЛЕМ как 12 месячных объёмов в
+    км³ (испарение + фильтрация + ледовые — всё вместе). Функция их ТОЛЬКО
+    ВЫЧИТАЕТ из баланса; собственной модели потерь (по метео- и
+    гидрогеологическим данным) модуль не содержит — она NOT_IMPLEMENTED
+    в шапке модуля. Вычитание выполняется ДО клампинга, то есть потери
+    уменьшают запас так же, как забор. None (по умолчанию) — потерь нет.
+
+    ВХОДНОЙ КОНТРАКТ ПРОВЕРЯЕТСЯ. Ровно 12 значений Q, без NaN, все расходы
+    неотрицательны, полезный объём положителен. NaN не удаляется и не
+    превращается в ноль, а отвергается: отсутствие месяца — отдельная ошибка,
+    и подменять его нулём нельзя. Дополнительно: S_0_km3 неотрицателен, а при
+    regulated=True не превышает V_useful_km3; losses_km3 — ровно 12 значений,
+    без NaN, только неотрицательные. Новые проверки НЕ ослабляют прежние.
 
     Функция не связана с multi_year_regulation: это отдельная реализация
     баланса с другой логикой ограничения объёма.
@@ -978,11 +1043,19 @@ def annual_regulation_table(
     Parameters:
         Q_monthly: 12 средних месячных расходов, м3/с
         demand_m3_s: средний забор, м3/с
-        V_useful_km3: полезный объём, км³. В текущей реализации используется
-            ТОЛЬКО как делитель в колонке «Заполнен_%» и не ограничивает баланс.
+        V_useful_km3: полезный объём, км³. В легаси-режиме используется
+            ТОЛЬКО как делитель в колонке «Заполнен_%» и не ограничивает
+            баланс; при regulated=True ограничивает запас.
+        S_0_km3: начальный запас на начало января, км³ (по умолчанию 0 —
+            прежнее поведение). При regulated=True не больше V_useful_km3.
+        losses_km3: 12 месячных объёмов потерь, км³ (по умолчанию None —
+            потерь нет), вычитаются из баланса до клампинга.
+        regulated: True — модель запаса с клампингом, сбросом и недобором;
+            False (по умолчанию) — прежний накопительный счётчик.
 
     Returns:
-        DataFrame с месячным балансом
+        DataFrame с месячным балансом: легаси — 6 прежних колонок,
+        regulated — 9 колонок
     """
     if len(Q_monthly) != 12:
         raise ValueError(
@@ -1006,6 +1079,30 @@ def annual_regulation_table(
             "Полезный объём должен быть положительным"
         )
 
+    # Начальный запас: общий контракт обоих режимов.
+    if S_0_km3 < 0:
+        raise ValueError("Начальный запас S_0_km3 не может быть отрицательным")
+    if regulated and S_0_km3 > V_useful_km3:
+        raise ValueError(
+            f"Начальный запас S_0_km3={S_0_km3} км³ больше полезного "
+            f"объёма {V_useful_km3} км³"
+        )
+
+    # Потери: 12 месячных объёмов, неотрицательные, без NaN.
+    if losses_km3 is None:
+        losses = np.zeros(12)
+    else:
+        losses = np.asarray(losses_km3, dtype=float)
+        if len(losses) != 12:
+            raise ValueError(
+                "Потери losses_km3 должны содержать 12 значений, "
+                f"получено {len(losses)}"
+            )
+        if np.any(np.isnan(losses)):
+            raise ValueError("Потери losses_km3 не должны содержать NaN")
+        if np.any(losses < 0):
+            raise ValueError("Потери losses_km3 не могут быть отрицательными")
+
     months = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
               'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
 
@@ -1014,20 +1111,52 @@ def annual_regulation_table(
     days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
     rows = []
-    V_balance = 0
+    V_balance = float(S_0_km3)
     for i, (m, d) in enumerate(zip(months, days)):
         Q_in = Q_monthly[i] if i < len(Q_monthly) else 0
         Q_out = demand_m3_s
-        dV = (Q_in - Q_out) * d * 86400 / 1e9
-        V_balance += dV
+        dV = (Q_in - Q_out) * d * 86400 / 1e9 - float(losses[i])
+        raw = V_balance + dV
 
-        rows.append({
-            'Месяц': m,
-            'Q_приток': round(Q_in, 2),
-            'Q_забор': round(Q_out, 2),
-            'dV_km3': round(dV, 4),
-            'V_баланс_km3': round(V_balance, 4),
-            'Заполнен_%': round(V_balance / V_useful_km3 * 100, 1) if V_useful_km3 > 0 else 0,
-        })
+        if regulated:
+            # ИНЖЕНЕРНАЯ МОДЕЛЬ ЗАПАСА (opt-in): клампинг по ёмкости и нулю,
+            # сброс излишка и недобор покрытия забора.
+            if raw > V_useful_km3:
+                spill = raw - V_useful_km3
+                unmet = 0.0
+                V_balance = V_useful_km3
+            elif raw < 0.0:
+                spill = 0.0
+                unmet = -raw
+                V_balance = 0.0
+            else:
+                spill = 0.0
+                unmet = 0.0
+                V_balance = raw
+            row = {
+                'Месяц': m,
+                'Q_приток': round(Q_in, 2),
+                'Q_забор': round(Q_out, 2),
+                'dV_km3': round(dV, 4),
+                'V_баланс_km3': round(V_balance, 4),
+                'Заполнен_%': round(V_balance / V_useful_km3 * 100, 1),
+                'Сброс_km3': round(spill, 4),
+                'Недобор_km3': round(unmet, 4),
+                'Запас_на_конец_km3': round(V_balance, 4),
+            }
+        else:
+            # ЛЕГАСИ: накопительный счётчик от S_0 без клампинга — прежнее
+            # поведение сохранено дословно (зафиксировано тестами
+            # test_annual_regulation_table.py).
+            V_balance = raw
+            row = {
+                'Месяц': m,
+                'Q_приток': round(Q_in, 2),
+                'Q_забор': round(Q_out, 2),
+                'dV_km3': round(dV, 4),
+                'V_баланс_km3': round(V_balance, 4),
+                'Заполнен_%': round(V_balance / V_useful_km3 * 100, 1) if V_useful_km3 > 0 else 0,
+            }
+        rows.append(row)
 
     return pd.DataFrame(rows)
