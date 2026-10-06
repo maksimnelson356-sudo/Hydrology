@@ -62,23 +62,30 @@ def test_clauses_526_531_exist_but_are_about_something_else() -> None:
 
 
 def test_docstring_no_longer_attributes_gts_to_clauses_526_531() -> None:
-    """Регрессия: ложная атрибуция не должна вернуться в докстринг."""
+    """Регрессия: ложная атрибуция не должна вернуться в докстринг.
+
+    Теперь докстринг должен ссылаться на СП 529.1325800.2023, а не на СП 33/СП 58.
+    """
     doc = mr.max_runoff_frequency_curve.__doc__ or ""
-    assert "СП 58.13330" in doc, "докстринг должен называть настоящий источник"
-    assert "НЕ содержит расчётных обеспеченностей" in doc
-    # и никаких обещаний, что 0,33 % даёт пункт 5.26–5.31 СП 33
+    assert "СП 529.1325800.2023" in doc, "докстринг должен называть СП 529"
+    assert "п. 5.3" in doc, "должен быть указан раздел 5.3"
+    # Проверяем, что нет ложной атрибуции ГТС к СП 33
     assert not re.search(r"5\.26[–-]5\.31[^.]*0,33\s*%", doc), (
         "докстринг снова приписывает 0,33 % пунктам 5.26–5.31"
     )
+    assert "ГТС" not in doc or "СП 529" in doc, "нет ложной атрибуции к СП 33/СП 58"
 
 
 def test_cs_rule_is_documented_as_not_from_sp33() -> None:
     """Cs = 2Cv — условие для (5.28), а не правило вычисления Cs."""
     doc = mr.compute_max_runoff_stats.__doc__ or ""
     module_src = Path(mr.__file__).read_text(encoding="utf-8")
-    assert "НЕ ИЗ СП 33" in module_src, "правило Cs должно быть помечено как чужое"
-    assert "5.28" in module_src, "должно быть сказано, где Cs = 2Cv встречается"
-    assert "разрывается при Cv = 0,5" in module_src, (
+    # Теперь мы проверяем, что правильно задокументировано отличие от СП 529
+    assert "СП 529" in module_src, "должно быть указание на СП 529"
+    assert "НЕТ в СП 529" in module_src or "не в СП 529" in module_src.lower(), (
+        "должно быть сказано, что правило Cs=2·Cv/3·Cv нет в СП 529"
+    )
+    assert "разрывается при Cv = 0,5" in module_src or "разрыв кривой при Cv = 0.5" in module_src, (
         "разрыв в точке Cv = 0,5 должен быть назван явно"
     )
     assert doc is not None
@@ -95,11 +102,11 @@ def test_cs_rule_really_is_discontinuous_at_half() -> None:
 
 
 def test_curve_carries_no_guarantee_correction_544() -> None:
-    """Поправки (5.44) п. 5.31 в проекте нет — фиксируем текущее поведение.
+    """Поправки (5.45)-(5.46) СП 529 п. 5.3.6 в проекте реализованы отдельно через guarantee_correction().
 
-    Кривая строится по Пирсону III без добавления ΔQ. Проверка фиксирует, что
-    результат НЕ содержит поправки, и напоминает, что до её добавления Q при
-    P = 0,01 % использовать как расчётный нельзя.
+    Кривая max_runoff_frequency_curve строится по Пирсону III/усечённому гамма
+    БЕЗ добавления ΔQ. Гарантийная поправка применяется отдельно.
+    Проверка фиксирует, что результат НЕ содержит поправки автоматически.
     """
     series = np.linspace(50.0, 400.0, 40)
     frame = mr.max_runoff_frequency_curve(series, P_values=[0.01])
@@ -108,7 +115,9 @@ def test_curve_carries_no_guarantee_correction_544() -> None:
     # поправки в выводе нет ни в каком виде
     blob = " ".join(map(str, frame.columns)) + " " + str(frame.to_dict())
     assert "delta" not in blob.lower() and "ΔQ" not in blob
-    # и это зафиксировано в докстринге как отсутствующее
+    # и это зафиксировано в докстринге
     doc = mr.max_runoff_frequency_curve.__doc__ or ""
-    assert "(5.44)" in doc and "гарантийная поправка" in doc
-    assert "усечённ" in doc.lower(), "отсутствие (5.40)–(5.43) должно быть заявлено"
+    assert "гарантийная поправка" in doc.lower()
+    assert "guarantee_correction" in doc
+    assert "усечённ" in doc.lower(), "усечённое распределение должно быть заявлено"
+    assert "truncated_gamma" in doc
