@@ -1,0 +1,36 @@
+# Pre-commit хуки HydroSphere.
+#
+# ЛОКАЛЬНЫЕ хуки (language: system): используют инструменты, уже
+# установленные в окружении разработки, без скачивания окружений хуками
+# и без запиненных версий в конфиге — правило «повторять pyproject.toml».
+# Требуемые пакеты:  python -m pip install pre-commit ruff black isort
+#
+# Активация в репозитории:  pre-commit install
+# Ручной запуск:            pre-commit run --files <путь...>
+#
+# Порядок: ruff (lint + безопасные автоисправления, включая импорты) →
+# isort → black (формат последним — он не конфликтует с предыдущими).
+# Хуки не запускаются «на весь репозиторий»: только на staged-файлы, то есть
+# накопленный линтинг-долг не трогается до тех пор, пока файл не меняется.
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff (lint + safe autofix)
+        entry: python -m ruff check --fix
+        language: system
+        types: [python]
+        require_serial: true
+
+      - id: isort
+        name: isort (import order)
+        entry: python -m isort
+        language: system
+        types: [python]
+
+      - id: black
+        name: black (format)
+        entry: python -m black
+        language: system
+        types: [python]
