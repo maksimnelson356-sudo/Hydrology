@@ -299,16 +299,23 @@ def test_ten_percent_rule_from_sp33_is_absent() -> None:
 
 
 def test_every_ten_percent_mention_is_about_the_ecological_norm() -> None:
-    """Все «10 %» в модуле — экологический норматив, а не правило п. 5.42.
+    """Все «10 %» в модуле — экологический норматив (0,1·Qср),
+    за исключением документированной реализации правила 10 % из СП 33 п. 5.42.
 
     Проверяются абзацы, а не строки: маркер норматива («ЭКОЛОГИЧЕСКОМУ
     нормативу 0,1·Qср») физически стоит на следующей строке после вхождения,
     и построчная проверка давала бы ложный отказ на любом переносе.
 
-    Абзацы, где «10 %» встречается как раз В ДОКУМЕНТАЦИИ отсутствия
-    правила, исключаются: иначе проверка ловила бы собственное описание.
+    Абзацы, где «10 %» встречается в ДОКУМЕНТАЦИИ отсутствия правила
+    (маркеры: «не установлено», «не реализовано») ИЛИ в реализации правила
+    СП 33 п. 5.42 (маркеры: «СП 33 5.42», «п. 5.42»), исключаются.
     """
-    prose_markers = ("не установлено", "не реализовано", "правило 10 %")
+    prose_markers = (
+        "не установлено",
+        "не реализовано",
+        "сп 33 5.42",
+        "п. 5.42",
+    )
     paragraphs = [
         re.sub(r"\s+", " ", para).strip()
         for para in re.split(r"\n\s*\n", SOURCE)
@@ -403,7 +410,10 @@ def test_module_still_extracts_the_three_periods() -> None:
     })
     for period in (7, 10, 30):
         series = mre.extract_min_annual(
-            daily, period_days=period, season="winter"
+            daily,
+            period_days=period,
+            season="winter",
+            allow_non_normative=(period == 7),
         )
         assert len(series) == 9, (
             f"период {period} сут дал {len(series)} значений вместо 9 "
@@ -430,11 +440,12 @@ def _contrasting_seasons_years(first: int = 2000, last: int = 2002) -> pd.DataFr
     остальные месяцы = 30. Годовой минимум 5,0, зимний 50,0 — расхождение
     в 10 раз, поэтому ошибка отбора не может остаться незамеченной.
 
-    Состав летне-осеннего сезона VI-X обязателен по источникам: п. 2.33
-    Пособия 1984, п. 5.5.1 СП 529.1325800.2023 и п. 5.42 СП 33-101-2003
-    (исторический источник) называют сезон «летне-осенним», поэтому сентябрь
-    и октябрь входят в отбор. При составе VI-VIII этот ряд давал бы seasonal
-    минимум 30,0 вместо 5,0.
+    Состав летне-осеннего сезона VI-X — инженерная интерпретация названия
+    «летне-осенний» (ГОСТ 19179-73 термин 70): п. 5.5.1 СП 529.1325800.2023
+    и п. 5.42 СП 33-101-2003 (исторический источник) называют сезон
+    «летне-осенним», поэтому сентябрь и октябрь входят в отбор как осенние
+    месяцы. При составе VI-VIII этот ряд давал бы seasonal минимум 30,0
+    вместо 5,0.
 
     Ряд намеренно multi-year: расчётный цикл 1 апреля — 31 марта требует
     XI-XII одного года вместе с I-III следующего, поэтому один календарный
@@ -460,7 +471,7 @@ def test_season_filter_applies_when_month_column_is_supplied() -> None:
     assert "month" in df.columns, "исходный DataFrame обязан содержать месяц"
 
     winter = mre.extract_min_annual(
-        df, year_col="year", value_col="value", period_days=7, season="winter"
+        df, year_col="year", value_col="value", period_days=7, season="winter", allow_non_normative=True
     )
     assert len(winter) > 0, "полные расчётные циклы обязаны давать значения"
     assert np.allclose(winter.to_numpy(dtype=float), 50.0), (
@@ -468,7 +479,7 @@ def test_season_filter_applies_when_month_column_is_supplied() -> None:
     )
 
     summer = mre.extract_min_annual(
-        df, year_col="year", value_col="value", period_days=7, season="summer"
+        df, year_col="year", value_col="value", period_days=7, season="summer", allow_non_normative=True
     )
     assert np.allclose(summer.to_numpy(dtype=float), 5.0), (
         f"летне-осенний отбор (VI-X) дал не 5,0: {summer.to_dict()}"
@@ -491,10 +502,10 @@ def test_season_filter_by_column_agrees_with_datetime_index() -> None:
 
     for season, expected in (("winter", 50.0), ("summer", 5.0)):
         by_column = mre.extract_min_annual(
-            df, year_col="year", value_col="value", period_days=7, season=season
+            df, year_col="year", value_col="value", period_days=7, season=season, allow_non_normative=True
         )
         by_idx = mre.extract_min_annual(
-            by_index, year_col="year", value_col="value", period_days=7, season=season
+            by_index, year_col="year", value_col="value", period_days=7, season=season, allow_non_normative=True
         )
         assert np.allclose(by_column.to_numpy(dtype=float), expected)
         assert by_column.to_dict() == by_idx.to_dict()
@@ -505,7 +516,7 @@ def test_season_filter_survives_shuffled_rows_and_missing_values() -> None:
     with_nan = _contrasting_seasons_years()
     with_nan.loc[with_nan.index[:20], "value"] = np.nan
     got = mre.extract_min_annual(
-        with_nan, year_col="year", value_col="value", period_days=7, season="winter"
+        with_nan, year_col="year", value_col="value", period_days=7, season="winter", allow_non_normative=True
     )
     assert np.allclose(got.to_numpy(dtype=float), 50.0), (
         f"после dropna зимний отбор изменился: {got.to_dict()}"
@@ -523,7 +534,7 @@ def test_season_filter_applies_per_cycle_independently() -> None:
     )
 
     got = mre.extract_min_annual(
-        df, year_col="year", value_col="value", period_days=7, season="winter"
+        df, year_col="year", value_col="value", period_days=7, season="winter", allow_non_normative=True
     )
     assert got.to_dict() == {
         2001: pytest.approx(50.0),
@@ -551,7 +562,7 @@ def test_absent_calendar_is_an_explicit_error_not_annual() -> None:
     for season in ("winter", "summer"):
         with pytest.raises(ValueError, match=_NO_CALENDAR_MESSAGE):
             mre.extract_min_annual(
-                df, year_col="year", value_col="value", period_days=7, season=season
+                df, year_col="year", value_col="value", period_days=7, season=season, allow_non_normative=True
             )
 
 
@@ -594,13 +605,13 @@ def test_sliding_window_returns_none_when_series_shorter_than_window() -> None:
 # --------------------------------------------------------------------------
 # Q2. Некалендарное окно не обрывается на границе 31 декабря
 #
-# Основание: «Пособие по определению расчётных гидрологических
-# характеристик», Л.: Гидрометеоиздат, 1984, п. 2.33, с. 31 — 30-суточные
-# некалендарные расходы фиксируются «независимо от привязки этих
-# 30-суточных периодов к календарному году». Конвенция обозначения года —
-# табл. 68, с. 107: «Осень» = X, XI, XII, «Зима» = I, II, III, годы вида
-# 1897-98. Расчётный цикл реализации — 1 апреля — 31 марта, метка = год
-# окончания.
+# Основание: СП 529.1325800.2023 п. 5.5.1, СП 33-101-2003 п. 5.42,
+# СНиП 2.01.14-83 п. 2.32 — 30-суточные (некалендарные) расходы берутся
+# «за 30 дней/суток с наименьшим стоком», независимо от календарного года.
+# Конвенция обозначения года: «Осень» = X, XI, XII, «Зима» = I, II, III,
+# годы вида 1897-98 (пример формы представления). Расчётный цикл
+# реализации — 1 апреля — 31 марта (инженерная конвенция для ЕТР),
+# метка = год окончания.
 #
 # Тестовый ряд покрывает 2000-01-01 … 2003-12-31, то есть три полных
 # расчётных цикла (2001, 2002, 2003) и два неполных по краям (2000 и 2004).
@@ -630,7 +641,7 @@ SPELL_CROSS_YEAR = (("2000-12-22", "2001-01-10", 5.0),)
 
 
 def test_minimum_window_crosses_31_december() -> None:
-    """Ключевой случай п. 2.33: окно через 31 декабря должно существовать.
+    """Ключевой случай: окно через 31 декабря должно существовать.
 
     22-31.12.2000 и 01-10.01.2001 по 5 м³/с, остальное по 30 м³/с.
     Истинное 30-суточное окно 22.12.2000-20.01.2001 = (20·5 + 10·30)/30.
@@ -735,7 +746,11 @@ def test_short_periods_use_same_cross_year_capable_mechanism(period) -> None:
     """period_days = 7 и 10 идут тем же алгоритмом, что и 30."""
     got = mre.extract_min_annual(
         _q2_frame(SPELL_CROSS_YEAR),
-        year_col="year", value_col="value", period_days=period, season="winter",
+        year_col="year",
+        value_col="value",
+        period_days=period,
+        season="winter",
+        allow_non_normative=(period == 7),
     )
     assert float(got.loc[2001]) == pytest.approx(5.0)
     assert sorted(got.index) == [2001, 2002, 2003]
@@ -827,7 +842,7 @@ def test_summer_season_covers_october() -> None:
     """Октябрь — конец летне-осеннего сезона — обязан входить в отбор."""
     got = mre.extract_min_annual(
         _summer_autumn_frame(10),
-        year_col="year", value_col="value", period_days=7, season="summer",
+        year_col="year", value_col="value", period_days=7, season="summer", allow_non_normative=True,
     )
     assert sorted(got.index) == [2001, 2002], "два полных цикла дают две метки"
     assert np.allclose(got.to_numpy(dtype=float), 1.0), (
@@ -839,7 +854,7 @@ def test_summer_season_covers_september() -> None:
     """Сентябрь — начало осенней половины сезона — обязан входить в отбор."""
     got = mre.extract_min_annual(
         _summer_autumn_frame(9),
-        year_col="year", value_col="value", period_days=7, season="summer",
+        year_col="year", value_col="value", period_days=7, season="summer", allow_non_normative=True,
     )
     assert sorted(got.index) == [2001, 2002]
     assert np.allclose(got.to_numpy(dtype=float), 1.0), (
@@ -851,7 +866,7 @@ def test_summer_season_still_excludes_april_and_winter_months() -> None:
     """Расширение до VI-X не должно захватывать IV, V и зимние месяцы."""
     df = _q2_frame((("2001-04-15", "2001-04-25", 1.0), ("2001-05-15", "2001-05-25", 1.0)))
     got = mre.extract_min_annual(
-        df, year_col="year", value_col="value", period_days=7, season="summer"
+        df, year_col="year", value_col="value", period_days=7, season="summer", allow_non_normative=True
     )
     assert sorted(got.index) == [2001, 2002, 2003, 2004]
     # В цикле 2002 апрель и май 2001 лежат вне сезона: минимум остаётся 30,0.
@@ -885,8 +900,9 @@ def test_sliding_window_itself_is_unchanged() -> None:
 # --------------------------------------------------------------------------
 # Порядок входных строк
 #
-# Основание: п. 2.33 Пособия 1984, с. 31 — 30-суточные расходы берутся «за
-# 30 сут с наименьшим стоком», то есть за ПОДРЯД ИДУЩИЕ календарные сутки.
+# Основание: СП 529.1325800.2023 п. 5.5.1, СП 33-101-2003 п. 5.42,
+# СНиП 2.01.14-83 п. 2.32 — 30-суточные расходы берутся «за 30 сут с
+# наименьшим стоком», то есть за ПОДРЯД ИДУЩИЕ календарные сутки.
 # Окно строится по соседним строкам (np.convolve), поэтому перестановка строк
 # меняла найденное окно при неизменном наборе суток: расхождение до 5.53 м³/с
 # на одном и том же ряде. Набор дней от перестановки не меняется, поэтому и
@@ -936,9 +952,9 @@ def test_shuffled_input_window_matches_calendar_consecutive_days() -> None:
 
     Ожидаемое значение вычисляется независимо: сезонные месяцы каждого цикла
     отбираются, сортируются по дате и перебираются все окна длиной 30 суток.
-    Так утверждается буквальное требование п. 2.33 — «за 30 сут с наименьшим
-    стоком», то есть за ПОДРЯД ИДУЩИЕ календарные сутки, а не соседние строки
-    входной таблицы.
+    Так утверждается требование СП 529 п. 5.5.1, СП 33 п. 5.42, СНиП п. 2.32 —
+    «за 30 сут с наименьшим стоком», то есть за ПОДРЯД ИДУЩИЕ календарные
+    сутки, а не соседние строки входной таблицы.
     """
     frame = _order_sensitive_frame()
     shuffled = frame.sample(frac=1.0, random_state=42)
@@ -1695,3 +1711,250 @@ def test_tuple_and_range_are_accepted() -> None:
     assert float(as_range.min()) == pytest.approx(5.0), (
         "range(6, 11) = VI–X обязан дать тот же летне-осенний минимум"
     )
+
+
+def test_period_days_7_requires_explicit_opt_in() -> None:
+    """period_days=7 требует allow_non_normative=True (нет нормативного источника)."""
+    df = _q2_frame(SPELL_CROSS_YEAR)
+
+    # Без флага -- ошибка
+    with pytest.raises(ValueError, match="period_days=7 не имеет нормативного источника"):
+        mre.extract_min_annual(
+            df, year_col="year", value_col="value", period_days=7, season="winter"
+        )
+
+    # С флагом -- работает
+    got = mre.extract_min_annual(
+        df, year_col="year", value_col="value", period_days=7, season="winter",
+        allow_non_normative=True
+    )
+    assert len(got) == 3
+    assert float(got.loc[2001]) == pytest.approx(5.0)
+
+
+def test_period_days_normative_values_work_without_opt_in() -> None:
+    """Нормативные period_days (1, 5, 10, 30) работают без allow_non_normative."""
+    df = _q2_frame(SPELL_CROSS_YEAR)
+    for period in (1, 5, 10, 30):
+        got = mre.extract_min_annual(
+            df, year_col="year", value_col="value", period_days=period, season="winter"
+        )
+        assert len(got) >= 1, f"period_days={period} должен работать"
+
+
+def test_period_days_invalid_value_raises() -> None:
+    """Недопустимые period_days вызывают ValueError с понятным сообщением."""
+    df = _q2_frame(SPELL_CROSS_YEAR)
+    with pytest.raises(ValueError, match="Недопустимое значение period_days"):
+        mre.extract_min_annual(
+            df, year_col="year", value_col="value", period_days=15, season="winter"
+        )
+
+
+def test_daily_minimum_extraction() -> None:
+    """period_days=1 возвращает минимальный среднесуточный расход за сезон (СП 529 5.5.1, СНиП 2.32)."""
+    # Создаём ряд с низкими значениями (5.0) в зимние месяцы каждого цикла
+    # и высокими (30.0) в остальные месяцы
+    dates = pd.date_range("2000-01-01", "2003-12-31", freq="D")
+    values = np.full(len(dates), 30.0)
+    # Зимние месяцы (XI, XII, I, II, III) = 5.0
+    winter_mask = np.isin(dates.month, [11, 12, 1, 2, 3])
+    values[winter_mask] = 5.0
+    # Летне-осенние месяцы (VI, VII, VIII, IX, X) = 5.0 тоже для проверки summer
+    summer_mask = np.isin(dates.month, [6, 7, 8, 9, 10])
+    values[summer_mask] = 5.0
+
+    df = pd.DataFrame(
+        {"year": dates.year, "month": dates.month, "value": values},
+        index=pd.DatetimeIndex(dates),
+    )
+
+    # period_days=1 должен дать минимум за отдельный день = 5.0
+    got = mre.extract_min_annual(
+        df, year_col="year", value_col="value", period_days=1, season="winter"
+    )
+    assert len(got) == 3, "три полных зимних цикла (2001, 2002, 2003)"
+    # Минимальный дневной расход в сезоне = 5.0
+    assert all(float(v) == pytest.approx(5.0) for v in got.values), f"got {got.to_dict()}"
+
+    # Для летне-осеннего сезона тоже 5.0
+    got_summer = mre.extract_min_annual(
+        df, year_col="year", value_col="value", period_days=1, season="summer"
+    )
+    # Летне-осенний сезон VI-X: циклы 2001, 2002, 2003, 2004 (4 полных цикла в данных 2000-2003)
+    assert len(got_summer) == 4, "четыре полных летне-осенных цикла (2001, 2002, 2003, 2004)"
+    assert all(float(v) == pytest.approx(5.0) for v in got_summer.values)
+
+
+def test_calendar_monthly_minimum() -> None:
+    """period_type='calendar_month' возвращает минимальный среднемесячный расход (СП 529 5.5.1, СНиП 2.32)."""
+    # Создаём ряд где каждый месяц имеет разные значения
+    # Зима: XI=10, XII=15, I=5, II=8, III=12 -> минимум = 5 (январь)
+    # Лето: VI=7, VII=6, VIII=9, IX=11, X=8 -> минимум = 6 (июль)
+    dates = pd.date_range("2000-01-01", "2003-12-31", freq="D")
+    values = np.full(len(dates), 30.0)
+    df = pd.DataFrame(
+        {"year": dates.year, "month": dates.month, "value": values},
+        index=pd.DatetimeIndex(dates),
+    )
+
+    # Устанавливаем разные значения для каждого месяца зимы
+    for label in [2001, 2002, 2003]:
+        for m, val in [(11, 10.0), (12, 15.0), (1, 5.0), (2, 8.0), (3, 12.0)]:
+            mask = (df.index.year + (df.index.month >= 4).astype(int) == label) & (df.index.month == m)
+            df.loc[mask, "value"] = val
+
+    # Устанавливаем разные значения для каждого месяца лета
+    for label in [2001, 2002, 2003, 2004]:
+        for m, val in [(6, 7.0), (7, 6.0), (8, 9.0), (9, 11.0), (10, 8.0)]:
+            mask = (df.index.year + (df.index.month >= 4).astype(int) == label) & (df.index.month == m)
+            df.loc[mask, "value"] = val
+
+    # Calendar month minimum for winter
+    got_winter = mre.extract_min_annual(
+        df, year_col="year", value_col="value", period_days=30,  # period_days игнорируется
+        season="winter", period_type="calendar_month"
+    )
+    assert len(got_winter) == 3
+    # Минимум среднемесячного = 5.0 (январь)
+    assert all(float(v) == pytest.approx(5.0) for v in got_winter.values), f"got {got_winter.to_dict()}"
+
+    # Calendar month minimum for summer
+    got_summer = mre.extract_min_annual(
+        df, year_col="year", value_col="value", period_days=30,
+        season="summer", period_type="calendar_month"
+    )
+    assert len(got_summer) == 4
+    # Минимум среднемесячного = 6.0 (июль)
+    assert all(float(v) == pytest.approx(6.0) for v in got_summer.values), f"got {got_summer.to_dict()}"
+
+    # Calendar_month требует month_col
+    df_no_month = df.drop(columns=["month"])
+    # Также убираем DatetimeIndex
+    df_no_month = df_no_month.reset_index(drop=True)
+    with pytest.raises(ValueError, match="требует сведений о месяце"):
+        mre.extract_min_annual(
+            df_no_month, year_col="year", value_col="value", period_days=30,
+            season="winter", period_type="calendar_month"
+        )
+
+
+def test_5_day_minimum() -> None:
+    """period_days=5 возвращает 5-суточный минимум (СП 529 5.5.1 — районы с частыми паводками)."""
+    # Ряд с низкими значениями 5.0 в 5-дневных окнах
+    dates = pd.date_range("2000-01-01", "2003-12-31", freq="D")
+    values = np.full(len(dates), 30.0)
+    df = pd.DataFrame(
+        {"year": dates.year, "month": dates.month, "value": values},
+        index=pd.DatetimeIndex(dates),
+    )
+
+    # Устанавливаем 5-дневный провал в каждом цикле
+    # Зима: 5 дней подряд по 5.0 в январе каждого цикла
+    for label in [2001, 2002, 2003]:
+        mask = (
+            (df.index.year + (df.index.month >= 4).astype(int) == label) &
+            (df.index.month == 1) & (df.index.day <= 5)
+        )
+        df.loc[mask, "value"] = 5.0
+
+    # Лето: 5 дней подряд по 5.0 в июле каждого цикла
+    for label in [2001, 2002, 2003, 2004]:
+        mask = (
+            (df.index.year + (df.index.month >= 4).astype(int) == label) &
+            (df.index.month == 7) & (df.index.day <= 5)
+        )
+        df.loc[mask, "value"] = 5.0
+
+    # 5-суточный минимум (нормативный, не требует allow_non_normative)
+    got_winter = mre.extract_min_annual(
+        df, year_col="year", value_col="value", period_days=5, season="winter"
+    )
+    assert len(got_winter) == 3
+    # 5-дневный скользящий минимум = 5.0
+    assert all(float(v) == pytest.approx(5.0) for v in got_winter.values), f"got {got_winter.to_dict()}"
+
+    got_summer = mre.extract_min_annual(
+        df, year_col="year", value_col="value", period_days=5, season="summer"
+    )
+    assert len(got_summer) == 4
+    assert all(float(v) == pytest.approx(5.0) for v in got_summer.values)
+
+
+def test_10_percent_rule_application() -> None:
+    """apply_10_percent_rule: если месячный > 1.1 × 30-суточный, берём 30-суточный (СП 33 5.42)."""
+    # Создаём ряд где месячный минимум = 20.0, 30-суточный = 15.0
+    # 20.0 > 1.1 * 15.0 = 16.5 -> правило сработает, результат = 15.0
+    dates = pd.date_range("2000-01-01", "2003-12-31", freq="D")
+    values = np.full(len(dates), 30.0)
+    df = pd.DataFrame(
+        {"year": dates.year, "month": dates.month, "value": values},
+        index=pd.DatetimeIndex(dates),
+    )
+
+    # Зима: 30-суточный минимум = 15.0 (январь, дни 1-30)
+    # Месячный минимум = 20.0 (февраль среднее)
+    for label in [2001, 2002, 2003]:
+        # 30-дневное окно в январе = 15.0
+        mask_30d = (
+            (df.index.year + (df.index.month >= 4).astype(int) == label) &
+            (df.index.month == 1) & (df.index.day <= 30)
+        )
+        df.loc[mask_30d, "value"] = 15.0
+        # Февраль = 20.0 (среднемесячный минимум)
+        mask_feb = (
+            (df.index.year + (df.index.month >= 4).astype(int) == label) &
+            (df.index.month == 2)
+        )
+        df.loc[mask_feb, "value"] = 20.0
+
+    # Без правила 10%: sliding 30-day = 15.0
+    got_no_rule = mre.extract_min_annual(
+        df, year_col="year", value_col="value", period_days=30, season="winter"
+    )
+    assert all(float(v) == pytest.approx(15.0) for v in got_no_rule.values)
+
+    # С правилом 10%: monthly=20.0 > 1.1*15.0=16.5 -> используем 15.0
+    got_with_rule = mre.extract_min_annual(
+        df, year_col="year", value_col="value", period_days=30, season="winter",
+        apply_10_percent_rule=True
+    )
+    assert all(float(v) == pytest.approx(15.0) for v in got_with_rule.values)
+
+    # Тест когда правило НЕ срабатывает: monthly=15.0, 30-day=15.0
+    # 15.0 <= 1.1*15.0=16.5 -> правило не срабатывает
+    df2 = df.copy()
+    for label in [2001, 2002, 2003]:
+        mask_feb = (
+            (df2.index.year + (df2.index.month >= 4).astype(int) == label) &
+            (df2.index.month == 2)
+        )
+        df2.loc[mask_feb, "value"] = 15.0  # месячный = 15.0
+
+    got_no_trigger = mre.extract_min_annual(
+        df2, year_col="year", value_col="value", period_days=30, season="winter",
+        apply_10_percent_rule=True
+    )
+    assert all(float(v) == pytest.approx(15.0) for v in got_no_trigger.values)
+
+    # Валидация: правило требует period_days=30
+    with pytest.raises(ValueError, match="apply_10_percent_rule требует period_days=30"):
+        mre.extract_min_annual(
+            df, year_col="year", value_col="value", period_days=10, season="winter",
+            apply_10_percent_rule=True
+        )
+
+    # Валидация: правило требует season != annual
+    with pytest.raises(ValueError, match="apply_10_percent_rule применим только"):
+        mre.extract_min_annual(
+            df, year_col="year", value_col="value", period_days=30, season="annual",
+            apply_10_percent_rule=True
+        )
+
+    # Валидация: правило требует календарную информацию
+    df_no_cal = df.drop(columns=["month"]).reset_index(drop=True)
+    with pytest.raises(ValueError, match="apply_10_percent_rule требует сведений о месяце"):
+        mre.extract_min_annual(
+            df_no_cal, year_col="year", value_col="value", period_days=30, season="winter",
+            apply_10_percent_rule=True
+        )
