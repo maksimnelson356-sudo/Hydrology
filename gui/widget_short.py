@@ -259,6 +259,11 @@ class ShortWidget(QWidget):
         if not path:
             return
 
+        # Книга открывается в try, а закрывается в finally: без этого
+        # pd.ExcelFile держит дескриптор до сборки мусора, и на Windows
+        # загруженный .xlsx остаётся занятым. xls = None нужен, чтобы finally
+        # был безопасен, если само открытие упадёт.
+        xls = None
         try:
             xls = pd.ExcelFile(path)
             all_posts = {}
@@ -333,6 +338,9 @@ class ShortWidget(QWidget):
                     'Не удалось найти данные в файле.')
         except Exception as e:
             QMessageBox.critical(self, 'Ошибка', str(e))
+        finally:
+            if xls is not None:
+                xls.close()
 
     def _select_analogs(self):
         """Выбор расчётного поста и аналогов через диалог с галочками."""

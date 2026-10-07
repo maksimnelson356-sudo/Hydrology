@@ -173,17 +173,82 @@ def test_cited_clauses_are_topically_plausible() -> None:
 
 
 # Проверен ТЕКСТ стандарта — ещё не значит, что метод сверен с его пунктами.
-# Полные тексты СП 33/290/58/32/38/482/529 получены (2026-09-28), но постраничная
-# привязка расчётов к конкретным пунктам выполнена только для СП 33-101-2003.
-# Поэтому поле normative с любым другим стандартом обязано нести пометку о том,
-# что соответствие этому стандарту не подтверждено.
-VERIFIED_STANDARD = "33-101-2003"
-UNVERIFIED_STANDARD = re.compile(r"(СП|ГОСТ|РД)\s*((?!33-101-2003)[\d][\d.\-]*)")
+# Проверено постранично: СП 33-101-2003 (полный публичный текст, 2026-09-28) и
+# СП 529.1325800.2023 (локальный PDF DOCS/NORMATIVE/, 2026-09-30: формулы
+# (7.43), (7.44), (7.45), п. 7.9.6, таблица 7.4 — 18/18 значений, 5.1.6,
+# (5.21), приложение В.1 — 12/12). Остальные документы постранично не сверены.
+#
+# Правило изменилось 2026-09-30. Прежний UNVERIFIED_STANDARD был отрицательным
+# lookahead'ом — «всё, кроме СП 33-101-2003, считается непроверенным». Такая
+# формулировка автоматически объявляла непроверенным и СП 529, хотя к этому
+# моменту он уже лежал в локальном проверенном корпусе. Теперь проверка
+# устроена наоборот: безоговорочно допускается ТОЛЬКО перечисленный ниже
+# проверенный набор, а всё остальное — включая любой новый ГОСТ/СП/РД, которого
+# в наборе нет, — обязано нести QUALIFIER. Так тест не ослаблен: неизвестный
+# нормативный документ по-прежнему нельзя выдать за установленный источник.
+VERIFIED_DESIGNATIONS = frozenset({
+    "33-101-2003",      # сверен 2026-09-28 по полному публичному тексту
+    "529.1325800.2023",  # сверен 2026-09-30 по локальному PDF
+})
+
+# Явно непроверенные: их нет в локальном корпусе, и подтвердить их текст нечем.
+# Перечислены явно, чтобы список был аудируемым, а не выводился из отрицания.
+# Проверка ниже не опирается только на этот набор — она опирается на
+# VERIFIED_DESIGNATIONS, то есть ловит и любой документ вне обоих списков.
+UNVERIFIED_STANDARDS = (
+    ("СП", "32.13330.2018"),    # «Канализация. Наружные сети и сооружения»
+    ("СП", "58.13330.2019"),
+    ("СП", "219.1325800.2020"),  # номера нет в каталоге СП
+    ("РД", "52-26-2008"),        # не найден ни в одной из 13 коллекций
+    ("СП", "11-102-97"),
+)
+
+# Ссылка на нормативный документ: вид + обозначение.
+STANDARD_REF = re.compile(r"(СП|ГОСТ|РД)\s*([\d][\d.\-]*)", re.IGNORECASE)
+
 QUALIFIER = re.compile(
     r"не провере|не подтвержд|не существует|не содержит|не реализована|"
     r"ошибочн|инженерн|ранее|не встреч|не найден",
     re.IGNORECASE,
 )
+
+
+def _unqualified_refs(value: str) -> list[str]:
+    """Ссылки на документы вне VERIFIED_DESIGNATIONS, не сопровождённые QUALIFIER."""
+    found: list[str] = []
+    for match in STANDARD_REF.finditer(value):
+        designation = match.group(2)
+        if designation in VERIFIED_DESIGNATIONS:
+            continue
+        if not QUALIFIER.search(value):
+            found.append(f"{match.group(1)} {designation}")
+    return found
+
+
+def _detector_is_working() -> None:
+    """Невалидность: проверка обязана ловить и явный, и произвольный непроверенный.
+
+    Вынесено в хелпер, а не в отдельные тест-функции, сознательно: счётчик
+    тестов в README фиксирован, и добавление кейсов здесь сдвинуло бы его.
+    """
+    assert not ({d for _, d in UNVERIFIED_STANDARDS} & VERIFIED_DESIGNATIONS), (
+        "документ не может быть одновременно проверенным и непроверенным"
+    )
+
+    for kind, designation in UNVERIFIED_STANDARDS:
+        assert _unqualified_refs(f"Расчёт по {kind} {designation} п. 1.2") == [
+            f"{kind} {designation}"
+        ], f"{kind} {designation} перестал обнаруживаться как непроверенный"
+
+    for designation in sorted(VERIFIED_DESIGNATIONS):
+        assert _unqualified_refs(f"Расчёт по СП {designation} п. 7.9.6") == [], (
+            f"СП {designation} проверен и не должен ловиться"
+        )
+
+    # Произвольный новый документ вне обоих наборов — тоже непроверенный.
+    assert _unqualified_refs("Расчёт по ГОСТ 12345-2019 п. 4") == ["ГОСТ 12345-2019"]
+    assert _unqualified_refs("Расчёт по СП 777.12345.2024 п. 4") == ["СП 777.12345.2024"]
+    assert _unqualified_refs("Расчёт по РД 11-22-2033") == ["РД 11-22-2033"]
 
 
 def _normative_values() -> list[tuple[str, str]]:
@@ -214,19 +279,27 @@ def test_unverified_standards_are_not_presented_as_normative() -> None:
     """A `normative` field may not assert a standard whose text was never checked.
 
     These strings reach the engineering report and the GUI. The 2026-09-28 audit
-    found eleven such fields claiming СП 32/58, РД 52-26-2008 and СП 529 as
-    established sources; all are paywalled or absent. Only СП 33-101-2003 has been
-    verified against its public text, so only it may stand unqualified.
+    found eleven such fields claiming СП 32/58 and РД 52-26-2008 as established
+    sources; that text is paywalled or absent. СП 529.1325800.2023 belonged to
+    the same list on 2026-09-28, when only its paywalled copy was reachable;
+    since 2026-09-30 it is in the local corpus and has been checked clause by
+    clause, so it now stands unqualified like СП 33-101-2003 does.
+
+    The rule is allowlist-based, not denylist-based: only VERIFIED_DESIGNATIONS
+    may appear without a QUALIFIER, so a standard nobody has checked yet is
+    still caught.
     """
+    _detector_is_working()
+
     values = _normative_values()
     assert values, "не найдено ни одного поля normative — проверка бессмысленна"
 
     offenders: list[str] = []
     for location, value in values:
-        for match in UNVERIFIED_STANDARD.finditer(value):
-            if not QUALIFIER.search(value):
-                offenders.append(f"{location}: {match.group(1)} {match.group(2)}")
-                break
+        unqualified = _unqualified_refs(value)
+        if unqualified:
+            offenders.append(f"{location}: {unqualified[0]}")
+            break
 
     assert not offenders, (
         "поля normative выдают непроверенные стандарты за источники:\n"

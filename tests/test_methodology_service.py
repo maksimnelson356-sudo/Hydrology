@@ -19,6 +19,7 @@ import pytest
 
 from core.domain import CalculationStatus, Dataset, DatasetType
 from core.services.bootstrap import build_container
+from core.services.calculation_service import CalculationError
 
 # Deterministic clean series (numpy default_rng(6), mean=100, std=10):
 # verified homogeneous, stationary, no gaps, all positive.
@@ -42,14 +43,24 @@ def make_dataset() -> Dataset:
 
 
 def make_daily_frame() -> pd.DataFrame:
-    """Synthetic daily series for 3 years (max/min runoff methodologies)."""
+    """Synthetic daily series for 4 years (max/min runoff methodologies).
+
+    min_runoff считает ЗИМНИЙ минимум, поэтому кадр обязан нести календарь:
+    колонка month — разрешённый источник сезона в extract_min_annual. Ряд
+    непрерывный и достаточно длинный, чтобы набралось ≥ 3 полных
+    расчётных цикла (апрель—март): без этого кривая обеспеченности
+    законно отказывает из-за недостатка лет, и проверять тут нечего.
+    """
     rng = np.random.default_rng(7)
-    rows = []
-    for year in (2021, 2022, 2023):
-        for day in range(365):
-            seasonal = 60 + 40 * np.sin(day / 365 * 2 * np.pi)
-            rows.append((year, day, round(max(1.0, seasonal + rng.normal(0, 8)), 2)))
-    return pd.DataFrame(rows, columns=["year", "day", "value"])
+    dates = pd.date_range("2021-01-01", "2024-12-31", freq="D")
+    seasonal = 60 + 40 * np.sin(dates.dayofyear.to_numpy() / 365 * 2 * np.pi)
+    values = np.round(np.maximum(1.0, seasonal + rng.normal(0, 8, len(dates))), 2)
+    return pd.DataFrame({
+        "year": dates.year.to_numpy(),
+        "day": dates.dayofyear.to_numpy(),
+        "month": dates.month.to_numpy(),
+        "value": values,
+    })
 
 
 def execute(container, methodology_id: str, dataset: Dataset, parameters=None):
@@ -145,6 +156,32 @@ def test_min_runoff_completes_through_service():
 
     assert result.is_successful is True
     assert result.metadata.status == CalculationStatus.COMPLETED
+
+
+def test_min_runoff_without_calendar_fails_with_readable_reason():
+    """min_runoff без календаря обязан падать явно, а не считать годовой минимум.
+
+    Регрессия из read-only аудита: обработчик подписывал результат
+    «30-суточные зимние минимумы», фактически считая минимум по всему году.
+    GUI передаёт daily_df без month и без даты, поэтому пользователь должен
+    получать внятную причину, а не молчаливо неверное число.
+    """
+    container = make_container()
+    no_calendar = make_daily_frame().drop(columns=["month"])
+
+    with pytest.raises(CalculationError) as excinfo:
+        execute(
+            container,
+            "min_runoff",
+            make_dataset(),
+            parameters={"daily_df": no_calendar},
+        )
+
+    text = str(excinfo.value)
+    assert "требует сведений о месяце" in text, (
+        f"сообщение должно называть причину, получено: {text}"
+    )
+    assert "season='annual'" in text, "сообщение должно подсказывать выход"
 
 
 def test_reservoir_regulation_completes_through_service():

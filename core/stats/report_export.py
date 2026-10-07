@@ -163,12 +163,23 @@ def generate_txt_report(
 
     lines.append("10. ВЫВОДЫ И РЕКОМЕНДАЦИИ")
     lines.append("-" * 40)
-    if stats.get('reliability_class') == 'Ненадёжная':
+    # Класс надёжности приходит из utils.py / max_runoff.py / minimal_runoff.py.
+    # Раньше сработала ветка else, то есть «достаточная надёжность» печаталась
+    # и когда класс «Нормальная достаточная надёжность», и когда его вовсе не
+    # было в stats. Отсутствие проверки выдавалось за положительный вывод.
+    reliability = stats.get("reliability_class")
+    if reliability == "Ненадёжная":
         lines.append("  ⚠️ Ряд наблюдений ненадёжный. Рекомендуется удлинение.")
-    elif stats.get('reliability_class') == 'Пониженная надёжность':
+    elif reliability == "Пониженная надёжность":
         lines.append("  ⚠️ Ряд наблюдений пониженной надёжности.")
-    else:
+    elif reliability == "Нормальная достаточная надёжность":
         lines.append("  ✅ Ряд наблюдений достаточной надёжности.")
+    else:
+        lines.append(
+            f"  ℹ️ Класс надёжности не определён "
+            f"({reliability if reliability else 'поле reliability_class отсутствует'}); "
+            f"достаточность ряда не проверялась."
+        )
 
     if extension_info and extension_info.get('is_significant') is False:
         lines.append("  ⚠️ Корреляция с рекой-аналогом статистически незначима.")

@@ -86,8 +86,8 @@ class HydraulicUncertaintyPanel(QWidget):
         controls = QHBoxLayout(controls_box)
         form = QFormLayout()
         self.hydraulic_engine = QComboBox()
-        self.hydraulic_engine.addItem("Backwater: глубина / площадь / объём", "backwater")
-        self.hydraulic_engine.addItem("Routing: пики / attenuation / lag", "routing")
+        self.hydraulic_engine.addItem("Подпор: глубина / площадь / объём", "backwater")
+        self.hydraulic_engine.addItem("Трансформация стока: пики / снижение / запаздывание", "routing")
         form.addRow("Гидравлический движок:", self.hydraulic_engine)
 
         self.hydraulic_n = QSpinBox()

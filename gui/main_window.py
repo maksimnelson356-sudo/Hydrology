@@ -944,7 +944,6 @@ class MainWindow(QMainWindow):
         variant_layout.addWidget(self.btn_show_all)
         variant_layout.addWidget(self.btn_clear_variants)
         variant_layout.addStretch()
-        layout.addLayout(variant_layout)
 
         # Таблица сохранённых вариантов
         self.variant_table = QTableWidget()
@@ -954,7 +953,6 @@ class MainWindow(QMainWindow):
         self.variant_table.setMaximumHeight(120)
         self.variant_table.setVisible(False)
         auto_resize_table(self.variant_table)
-        layout.addWidget(self.variant_table)
 
         # Хранилище вариантов
         self._saved_variants = []
@@ -975,7 +973,6 @@ class MainWindow(QMainWindow):
         csv_layout.addWidget(self.btn_auto_cs_cv)
         csv_layout.addWidget(self.btn_add_extreme)
         csv_layout.addStretch()
-        layout.addLayout(csv_layout)
 
         # Текст результатов подбора Cs/Cv
         self.cs_cv_text = QTextEdit()
@@ -983,7 +980,6 @@ class MainWindow(QMainWindow):
         self.cs_cv_text.setMaximumHeight(100)
         self.cs_cv_text.setFont(QFont('Consolas', 9))
         self.cs_cv_text.setVisible(False)
-        layout.addWidget(self.cs_cv_text)
 
         # Хранилище исторических экстремумов
         self._historical_extremes = []
@@ -1527,6 +1523,11 @@ class MainWindow(QMainWindow):
 
     def load_data_from_path(self, filepath):
         """Загрузить данные из указанного файла (без диалога). Возвращает True при успехе."""
+        # Книга открывается в try, а закрывается в finally. Без закрытия
+        # pd.ExcelFile держит файловый дескриптор до сборки мусора, и на Windows
+        # загруженный .xlsx остаётся занятым. xls = None нужен для того, чтобы
+        # finally был безопасен, если само открытие упадёт.
+        xls = None
         try:
             loaded = []
             xls = pd.ExcelFile(filepath)
@@ -1579,6 +1580,9 @@ class MainWindow(QMainWindow):
             print(f"Error in {self.__class__.__name__}: {e}")
             QMessageBox.critical(self, "Ошибка загрузки", str(e))
             return False
+        finally:
+            if xls is not None:
+                xls.close()
 
     def _parse_main_posts(self, xls, loaded):
         """Распарсить основной лист с постами (шаблон или плоский файл)."""
@@ -3054,7 +3058,7 @@ class MainWindow(QMainWindow):
             path, _ = QFileDialog.getSaveFileName(
                 self, "Сохранить шаблон",
                 "unified_template.xlsx",
-                "Excel files (*.xlsx);;All files (*)"
+                "Файлы Excel (*.xlsx);;Все файлы (*)"
             )
             if not path:
                 return

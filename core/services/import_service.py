@@ -143,36 +143,43 @@ class ImportService:
             workbook = pd.ExcelFile(path)
         except (ValueError, OSError, ImportError) as error:
             raise ImportServiceError(f"Не удалось открыть Excel: {error}") from error
-        sheet_names = list(workbook.sheet_names)
-        if not sheet_names:
-            raise ImportServiceError(f"В книге нет листов: {path.name}")
-        sheet = sheet_names[0]
+        # Книга открыта здесь, значит закрывается здесь — в finally, а не на
+        # успешном пути: ниже три ранних raise, и при каждом дескриптор раньше
+        # оставался открытым до сборки мусора. На Windows из-за этого файл
+        # нельзя удалить сразу после предпросмотра.
         try:
-            frame = pd.read_excel(workbook, sheet_name=sheet, nrows=max_rows, dtype=str)
-        except (ValueError, OSError) as error:
-            raise ImportServiceError(f"Не удалось прочитать лист «{sheet}»: {error}") from error
-        if frame.empty and list(frame.columns) == [0]:
-            raise ImportServiceError(f"Лист «{sheet}» пуст")
-        # Excel often has an unnamed first row used as header — keep as-is;
-        # the mapping UI lets the user pick columns.
-        columns = [str(c) for c in frame.columns]
-        year_col = self._guess_year_column(columns, frame)
-        value_col = self._guess_value_column(columns, frame, year_col)
-        try:
-            full = pd.read_excel(workbook, sheet_name=sheet)
-            n_rows = max(0, len(full))
-        except (ValueError, OSError):
-            n_rows = 0
-        return ImportPreview(
-            path=str(path),
-            columns=columns,
-            rows=self._rows_as_lists(frame),
-            year_column=year_col,
-            value_column=value_col,
-            sheet_name=sheet,
-            sheet_names=sheet_names,
-            n_rows_estimate=n_rows,
-        )
+            sheet_names = list(workbook.sheet_names)
+            if not sheet_names:
+                raise ImportServiceError(f"В книге нет листов: {path.name}")
+            sheet = sheet_names[0]
+            try:
+                frame = pd.read_excel(workbook, sheet_name=sheet, nrows=max_rows, dtype=str)
+            except (ValueError, OSError) as error:
+                raise ImportServiceError(f"Не удалось прочитать лист «{sheet}»: {error}") from error
+            if frame.empty and list(frame.columns) == [0]:
+                raise ImportServiceError(f"Лист «{sheet}» пуст")
+            # Excel often has an unnamed first row used as header — keep as-is;
+            # the mapping UI lets the user pick columns.
+            columns = [str(c) for c in frame.columns]
+            year_col = self._guess_year_column(columns, frame)
+            value_col = self._guess_value_column(columns, frame, year_col)
+            try:
+                full = pd.read_excel(workbook, sheet_name=sheet)
+                n_rows = max(0, len(full))
+            except (ValueError, OSError):
+                n_rows = 0
+            return ImportPreview(
+                path=str(path),
+                columns=columns,
+                rows=self._rows_as_lists(frame),
+                year_column=year_col,
+                value_column=value_col,
+                sheet_name=sheet,
+                sheet_names=sheet_names,
+                n_rows_estimate=n_rows,
+            )
+        finally:
+            workbook.close()
 
     # ------------------------------------------------------------------
     # Import

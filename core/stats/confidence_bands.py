@@ -54,13 +54,37 @@ def pearson3_confidence_bands(
     params = calculate_statistical_parameters(data)
     Q_mean = pearson3_ppf(P_arr, params['mean'], params['corrected_cv'], params['corrected_cs'])
 
+    # При Cs/Cv < 2 поправки (5.6) и (5.7) не применяются: п. 5.6 требует для
+    # Крицкого-Менкеля коэффициенты a1...a6 и b1...b6 из [4], которого нет в
+    # СП 33. Полосы по неверным Cv и Cs были бы неверны так же, как и центральная
+    # кривая, поэтому признаки выносятся в результат.
+    cs_correction_applied = bool(params.get('cs_correction_applied', True))
+    cv_correction_applied = bool(params.get('cv_correction_applied', True))
+    bias_coefficients_applicable = bool(
+        params.get('bias_coefficients_applicable', True)
+    )
+
     Q_boot = np.zeros((n_bootstrap, len(P_arr)))
     rng = np.random.default_rng(42)
 
+    # Счётчик перевыборок, не прошедших проверку достаточности ряда по п. 5.1.
+    #
+    # ПОЧЕМУ show_warnings=False. Перевыборка СИНТЕТИЧЕСКАЯ, а нормативное
+    # сообщение звучит как «погрешность 13,1 % превышает предел 10 % для ряда
+    # n=40» — то есть ложно приписывает исходному ряду пользователя то, что
+    # относится к ресемплу. На n_bootstrap = 1000 это до тысячи предупреждений,
+    # и среди них невозможно увидеть настоящий диагноз. Сами бутстреп-вычисления
+    # от этого не меняются: меняется только поток предупреждений.
+    n_series_check_failed = 0
     for b in range(n_bootstrap):
         sample = rng.choice(data, size=n, replace=True)
         try:
-            sp = calculate_statistical_parameters(sample)
+            sp = calculate_statistical_parameters(sample, show_warnings=False)
+            # length_warnings непусто ровно тогда, когда предел 10 % не пройден
+            # ИЛИ погрешность не вычислилась (r(1) >= 1). Оба случая означают,
+            # что по (5.26)/(5.27) перевыборка не обслуживается.
+            if sp['length_warnings']:
+                n_series_check_failed += 1
             Q_boot[b] = pearson3_ppf(P_arr, sp['mean'], sp['corrected_cv'], sp['corrected_cs'])
         except (ValueError, TypeError, ZeroDivisionError):
             Q_boot[b] = Q_mean
@@ -77,7 +101,28 @@ def pearson3_confidence_bands(
         'Q_upper': Q_upper.tolist(),
         'confidence': confidence,
         'n_bootstrap': n_bootstrap,
+        # Диагностика бутстрепа вместо потока предупреждений. Смысл полей:
+        # n_bootstrap — всего перевыборок, n_series_check_failed — сколько из них
+        # не прошли проверку достаточности ряда по п. 5.1 (относительная СКП
+        # превысила нормативный предел 10 % либо не вычислилась из-за r(1) >= 1).
+        # Это СВОЙСТВО БУТСТРЕПА, а не диагноз исходному ряду: по исходному ряду
+        # предупреждение (если оно нужно) выдаёт calculate_statistical_parameters
+        # на строке выше, вне цикла.
+        'n_series_check_failed': n_series_check_failed,
         'n': n,
+        # Нормативные признаки: при Cs/Cv < 2 обе поправки не применены, и полосы
+        # посчитаны по несмещенным Cv и Cs. Без этого пользователь видел бы числа,
+        # полученные по коэффициентам Пирсона III там, где стандарт требует
+        # коэффициенты Крицкого-Менкеля из источника [4].
+        'cs_correction_applied': cs_correction_applied,
+        'cv_correction_applied': cv_correction_applied,
+        'bias_coefficients_applicable': bias_coefficients_applicable,
+        'normativity_note': (
+            "п. 5.6/Б.1: поправки (5.6) и (5.7) применены"
+            if cs_correction_applied and cv_correction_applied else
+            "п. 5.6: Cs/Cv < 2, поправки (5.6) и (5.7) НЕ ПРИМЕНЕНЫ — требуются "
+            "коэффициенты из [4], вне СП 33; полосы по несмещенным Cv и Cs"
+        ),
     }
 
 

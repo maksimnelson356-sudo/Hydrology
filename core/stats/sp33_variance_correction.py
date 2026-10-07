@@ -1,4 +1,4 @@
-"""Поправки дисперсии по СП 33-101-2003, п. 6.17."""
+"""Поправки дисперсии по СП 529.1325800.2023, формулы (6.9) и (6.10)."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def apply_formula_6_9(
     mean_n: float,
     correlation: float,
 ) -> NDArray[np.float64]:
-    """``Q'ᵢ = (Qᵢ - Q̄n) / R + Q̄n`` — формула 6.9 СП 33."""
+    """``Q'ᵢ = (Qᵢ - Q̄n) / R + Q̄n`` — формула (6.9) СП 529.1325800.2023."""
     restored = _finite_vector(values, "Массив восстановленных значений")
     if not np.isfinite(mean_n):
         raise ValueError("Среднее Q̄n должно быть конечным")
@@ -38,7 +38,7 @@ def apply_formula_6_10(
     sigma: float,
     phi: NDArray[np.float64],
 ) -> NDArray[np.float64]:
-    """``Q'ᵢ = Qᵢ + φσ√(1 - R²)`` — формула 6.10 СП 33."""
+    """``Q'ᵢ = Qᵢ + φσ√(1 - R²)`` — формула (6.10) СП 529.1325800.2023."""
     restored = _finite_vector(values, "Массив восстановленных значений")
     normal_draws = _finite_vector(phi, "Массив φ")
     if normal_draws.size != restored.size:

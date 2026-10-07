@@ -45,8 +45,10 @@ def create_unified_template(path="unified_template.xlsx"):
 
     def style_cell(ws, row, col, value, font=None, fill=None):
         cell = ws.cell(row=row, column=col, value=value)
-        if font: cell.font = font
-        if fill: cell.fill = fill
+        if font:
+            cell.font = font
+        if fill:
+            cell.fill = fill
         cell.border = thin
         cell.alignment = Alignment(horizontal='center')
         return cell

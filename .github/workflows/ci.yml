@@ -1,0 +1,42 @@
+# HydroSphere CI: полный прогон pytest при каждом push и pull request.
+#
+# Линтинг (ruff/black) СЮДА НЕ ВКЛЮЧЁН: по состоянию на 2026-10-06
+# `ruff check .` даёт 1219 ошибок по накопленному коду — как гейт он сразу
+# сделал бы CI красным. Линтинг применяется постепенно через
+# .pre-commit-config.yaml к затрагиваемым файлам; перевод CI на ruff —
+# отдельная задача после расчистки базовой линии (см. AGENTS.md: минимальность
+# изменений, никаких mass-реформатов «заодно»).
+#
+# Среда: windows-latest — паритет с рабочей разработкой (Windows, cp1251,
+# PyQt6, CRLF); тесты GUI идут в обычной Qt-платформе runners-сессии.
+
+name: CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      # Русские строки в выводе тестов: форсируем UTF-8 вместо cp1251.
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      # Полный состав: tests/ + корневые test_*.py регрессии — та же
+      # инструкция, что и в README («Ожидаемый результат: 1636 passed…»).
+      - name: Run full test suite
+        run: python -m pytest -q

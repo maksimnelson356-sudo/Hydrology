@@ -130,8 +130,13 @@ EXPECTED_NORMATIVE_METADATA = {
         False,
     ),
     "intra_annual": ("HydroRash", None, False),
-    "max_runoff": ("СП 33-101-2003", "п. 5.26–5.31", True),
-    "min_runoff": ("СП 33-101-2003", "п. 5.41–5.43", True),
+    "max_runoff": ("СП 529.1325800.2023", "п. 5.3", True),
+    # min_runoff: после текстового нормативного remap 2026-09-30 реестр указывает
+    # действующую норму. Сверка по DOCS/NORMATIVE/SP-529.1325800.2023.pdf:
+    # нормативная область минимального стока — СП 529 разд. 5.5, подтверждён
+    # п. 5.5.1 (30-суточные некалендарные минимумы, кривые обеспеченности).
+    # Прежняя привязка СП 33 п. 5.41–5.43 была исторической.
+    "min_runoff": ("СП 529.1325800.2023", "п. 5.5 (частично: п. 5.5.1)", True),
     "snowmelt": ("Градусно-суточный метод (инженерный расчёт, источник не подтверждён)", None, False),
     "baseflow": ("Boughton (1968), Eckhardt (2005), Lyne & Hollick (1979)", None, False),
     "composite_curves": ("СП 33-101-2003", "п. 5.12, формулы 5.21–5.25", True),
@@ -171,4 +176,36 @@ def test_registry_does_not_apply_false_fixed_year_minimum() -> None:
 
     assert registry.get("stats_parameters").min_points == 0
     assert registry.get("max_runoff").required_parameters == ("daily_df",)
-    assert registry.get("min_runoff").required_parameters == ("daily_df",)
+
+
+# Требуемая нормативная привязка min_runoff по сверке 2026-09-30 с локальным
+# экземпляром СП 529.1325800.2023.pdf. Признак is_normative остаётся True:
+# соответствие подтверждено п. 5.5.1 (30-суточные некалендарные минимумы,
+# кривые обеспеченности), но лишь частично.
+EXPECTED_MIN_RUNOFF_BASIS = (
+    "СП 529.1325800.2023",
+    "п. 5.5 (частично: п. 5.5.1)",
+    True,
+)
+
+
+def test_min_runoff_module_declares_sp529_clause_55() -> None:
+    """Реализация объявляет ту же норму, что и реестр: СП 529 п. 5.5, частично.
+
+    Сверяются обе стороны: реестр (EXPECTED_NORMATIVE_METADATA) и шапка
+    core/hydrorash/min_runoff_extended.py. Расхождение между ними означало бы,
+    что приложение сообщает пользователю одну норму, а реализация — другую.
+    """
+    from core.hydrorash import min_runoff_extended as mre
+
+    doc = mre.__doc__ or ""
+    assert "СТАТУС НОРМАТИВНОЙ ПРИВЯЗКИ" in doc
+    assert EXPECTED_MIN_RUNOFF_BASIS[0] in doc
+    assert "5.5.1" in doc, "модуль должен называть п. 5.5.1 как подтверждённый участок"
+    assert "НЕ УСТАНОВЛЕНО" in doc, "модуль не должен заявлять соответствие в целом"
+    assert "НЕ РЕАЛИЗОВАНЫ" in doc, "формулы (7.41)/(7.42) должны быть помечены как нереализованные"
+
+
+def test_registry_min_runoff_required_parameters_unchanged() -> None:
+    """Правка нормативной привязки не должна была задеть интерфейс методики."""
+    assert build_default_registry().get("min_runoff").required_parameters == ("daily_df",)

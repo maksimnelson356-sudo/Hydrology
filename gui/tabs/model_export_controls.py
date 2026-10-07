@@ -52,6 +52,6 @@ class ModelExportButton(QPushButton):
             self,
             self._dialog_title,
             str(Path.cwd() / self._default_name),
-            "JSON model (*.json)",
+            "Модель JSON (*.json)",
         )
         return Path(selected) if selected else None
