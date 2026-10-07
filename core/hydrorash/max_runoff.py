@@ -124,11 +124,8 @@ def compute_max_runoff_stats(
     Cv = std / mean if mean != 0 else 0.0
     Cs_emp = float(pd.Series(data).skew())
 
-    if use_normative_Cs:
-        # DEPRECATED: инженерное правило (нет в СП 529)
-        Cs = 2.0 * Cv if Cv <= 0.5 else 3.0 * Cv
-    else:
-        Cs = Cs_emp
+    # DEPRECATED: инженерное правило (нет в СП 529)
+    Cs = (2.0 * Cv if Cv <= 0.5 else 3.0 * Cv) if use_normative_Cs else Cs_emp
 
     # r(1) из нормативного источника (Б.1)-(Б.3) приложения Б СП 529
     lag1 = sp33_lag1_autocorrelation(data)
@@ -475,11 +472,11 @@ def truncated_gamma_frequency_curve(
     Returns:
         DataFrame: P_%, Q_max, kp
     """
+    from core.stats.frequency import pearson3_ppf
     from core.stats.kritsky_tables import (
         get_Cv_from_lambda2_table_B6,
         get_phi_Cv_table_B5,
     )
-    from core.stats.frequency import pearson3_ppf
 
     data = np.asarray(data, dtype=float)
     data = data[~np.isnan(data)]

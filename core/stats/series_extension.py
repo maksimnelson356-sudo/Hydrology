@@ -884,7 +884,7 @@ def multi_analog_extension(
     coeffs = {'k0': round(k0, 4)}
     sigma_coeffs = {'s_k0': round(float(sigma_k[0]), 4)}
     ratios = {'r_k0': round(float(ratio_k[0]), 2)}
-    for i, name in enumerate(analog_names):
+    for i, _ in enumerate(analog_names):
         coeffs[f'k{i + 1}'] = round(float(k[i]), 4)
         sigma_coeffs[f's_k{i + 1}'] = round(float(sigma_k[i + 1]), 4)
         ratios[f'r_k{i + 1}'] = round(float(ratio_k[i + 1]), 2)
@@ -991,10 +991,7 @@ def compute_integral_curves(data: pd.Series) -> dict:
     integral = np.cumsum(ki)
 
     # Разностно-интегральная кривая: нарастающая сумма (ki-1)/Cv
-    if cv > 1e-12:
-        diff_integral = np.cumsum((ki - 1) / cv)
-    else:
-        diff_integral = np.cumsum(ki - 1)
+    diff_integral = np.cumsum((ki - 1) / cv) if cv > 1e-12 else np.cumsum(ki - 1)
 
     # Поиск переломов (экстремумы разностно-интегральной кривой)
     breakpoints = []

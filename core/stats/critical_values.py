@@ -105,22 +105,34 @@ def get_grubbs_critical(n: int, alpha: float = 0.05, cs: float = 0.0) -> float:
     """
     # Стандартные значения критерия Граббса (приближение по таблицам)
     if alpha == 0.01:
-        if n <= 10:   return 2.41
-        if n <= 15:   return 2.65
-        if n <= 20:   return 2.80
-        if n <= 30:   return 3.03
+        if n <= 10:
+            return 2.41
+        if n <= 15:
+            return 2.65
+        if n <= 20:
+            return 2.80
+        if n <= 30:
+            return 3.03
         return 3.24
     elif alpha == 0.10:
-        if n <= 10:   return 1.76
-        if n <= 15:   return 1.91
-        if n <= 20:   return 1.99
-        if n <= 30:   return 2.11
+        if n <= 10:
+            return 1.76
+        if n <= 15:
+            return 1.91
+        if n <= 20:
+            return 1.99
+        if n <= 30:
+            return 2.11
         return 2.18
     else:  # 0.05
-        if n <= 10:   return 2.03
-        if n <= 15:   return 2.21
-        if n <= 20:   return 2.32
-        if n <= 30:   return 2.48
+        if n <= 10:
+            return 2.03
+        if n <= 15:
+            return 2.21
+        if n <= 20:
+            return 2.32
+        if n <= 30:
+            return 2.48
         return 2.62
 
 

@@ -63,7 +63,7 @@ def normal_depth(
     while residual(h_max) < 0 and iteration < max_iterations:
         h_max *= 2
         iteration += 1
-    
+
     # Защита: если не нашли знак смену
     if residual(h_max) < 0:
         # Фоллбек: используем аналитическое приближение для широкого русла
@@ -173,8 +173,6 @@ def backwater_curve_step(
     h = max(H_downstream, h_n * 1.1)
     distances = [0.0]
     depths = [h]
-    velocities = []
-    energy_heads = []
 
     n_steps = int(L_total / dx)
 
@@ -190,7 +188,8 @@ def backwater_curve_step(
 
         # Решаем уравнение: E2(h2) - E1 = dx * (I - Sf_avg(h2))
         # через brentq (bracketing метод) вместо итераций.
-        def _residual(h2):
+        # default-args захватывают текущие значения переменных цикла (фикс B023).
+        def _residual(h2, Sf=Sf, E=E, dx=dx, I=I, Q=Q, n=n, B=B, m=m):
             omega2 = B * h2 + m * h2 ** 2
             P2 = B + 2 * h2 * np.sqrt(1 + m ** 2)
             R2 = omega2 / P2 if P2 > 0 else 0.01
